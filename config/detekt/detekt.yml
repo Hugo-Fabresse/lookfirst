@@ -1,0 +1,90 @@
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+config:
+  validation: true
+  warningsAsErrors: false
+
+complexity:
+  LongMethod:
+    active: true
+    threshold: 60
+  LongParameterList:
+    active: true
+    functionThreshold: 9
+    constructorThreshold: 8
+    ignoreDefaultParameters: true
+    ignoreAnnotated: ['Composable', 'HiltViewModel']
+  CyclomaticComplexMethod:
+    active: true
+    threshold: 15
+  NestedBlockDepth:
+    active: true
+    threshold: 5
+  TooManyFunctions:
+    active: true
+    thresholdInFiles: 20
+    thresholdInClasses: 20
+    thresholdInInterfaces: 20
+    ignoreAnnotatedFunctions: ['Composable', 'Preview']
+
+style:
+  MagicNumber:
+    active: true
+    ignoreNumbers: ['-1', '0', '1', '2', '100']
+    ignoreHashCodeFunction: true
+    ignoreEnums: true
+    ignoreAnnotation: true
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    excludes: ['**/ui/**', '**/theme/**', '**/test/**', '**/androidTest/**']
+  ForbiddenComment:
+    active: true
+    comments:
+      - reason: 'Track it in an issue, not the source'
+        value: 'FIXME:'
+  ReturnCount:
+    active: true
+    max: 4
+  UnusedPrivateMember:
+    active: true
+    ignoreAnnotated: ['Preview', 'PreviewParameter']
+  UnusedPrivateProperty:
+    active: true
+  UnusedParameter:
+    active: true
+  UnusedPrivateClass:
+    active: true
+  UnusedImports:
+    active: true
+  MaxLineLength:
+    active: true
+    maxLineLength: 120
+    excludeCommentStatements: true
+  UnnecessaryAbstractClass:
+    active: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: true
+    exceptionNames: ['Throwable']
+  SwallowedException:
+    active: true
+
+empty-blocks:
+  EmptyCatchBlock:
+    active: true
+    allowedExceptionNameRegex: '_|(ignore|expected).*'
+
+naming:
+  FunctionNaming:
+    active: true
+    ignoreAnnotated: ['Composable']
+  TopLevelPropertyNaming:
+    active: true
+    constantPattern: '[A-Z][_A-Za-z0-9]*'
+
+potential-bugs:
+  UnsafeCallOnNullableType:
+    active: true

@@ -11,7 +11,7 @@ Contexte commun :
 - Règles produit LookFirst : aucune action automatique après un scan ; tout contenu de QR est une entrée non fiable ; aucune URL envoyée à un tiers (D3, D9) ; jamais « sûr », plutôt « aucun signal de risque détecté ».
 - Ne fais que le périmètre du ticket. S'il est flou, arrête-toi et rends la question.
 - Git : branche courante uniquement (jamais main), un commit = une intention, jamais refactoring et feature mélangés, message terminé par la ligne Co-Authored-By fournie par la session. Ne pousse pas, n'ouvre pas de PR.
-- Règles communes : Gradle uniquement sous `flock /tmp/memlearn-gradle-test.lock ./gradlew … --max-workers=4` (verrou partagé avec MemLearn, même PC), et `./gradlew --stop` aussi sous ce verrou ; commits `type(LF-n): summary` (anglais, minuscule, <= 72 caractères) ; une PR par ticket, jamais de commit sur main ; pas d'adb ni d'`installDebug` (installation sur le téléphone à la main, aux jalons) ; ne touche jamais `.github/workflows/security.yml`.
+- Règles communes : Gradle uniquement sous `flock /tmp/memlearn-gradle-test.lock ./gradlew … --max-workers=4` (verrou partagé avec les autres projets du PC), et `./gradlew --stop` aussi sous ce verrou ; commits `type(LF-n): summary` (anglais, minuscule, <= 72 caractères) ; une PR par ticket, jamais de commit sur main ; pas d'adb ni d'`installDebug` (installation sur le téléphone à la main, aux jalons) ; ne touche jamais `.github/workflows/security.yml`.
 - Pas d'émulateur : liste à la fin ce que Hugo doit vérifier sur son téléphone.
 - Compte rendu court (fait / fichiers / vérifications / points ouverts), sans explication pédagogique.
 

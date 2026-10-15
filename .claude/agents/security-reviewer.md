@@ -11,7 +11,7 @@ Contexte commun :
 - CLAUDE.md est déjà dans ton contexte (ne le relis pas). Lis seulement ce qui touche le ticket parmi : docs/design/threat-model.md, docs/design/reputation-sources.md, docs/adr/ (si présents).
 - Commence par `git diff main...HEAD`.
 - Règles produit LookFirst : aucune action automatique après un scan ; tout contenu de QR est une entrée non fiable ; aucune URL envoyée à un tiers (D3, D9) ; jamais « sûr », plutôt « aucun signal de risque détecté ».
-- Règles communes : Gradle uniquement sous `flock /tmp/memlearn-gradle-test.lock ./gradlew … --max-workers=4` (verrou partagé avec MemLearn, même PC), et `./gradlew --stop` aussi sous ce verrou ; commits `type(LF-n): summary` (anglais, minuscule, <= 72 caractères) ; une PR par ticket, jamais de commit sur main ; pas d'adb ni d'`installDebug` (installation sur le téléphone à la main, aux jalons) ; ne touche jamais `.github/workflows/security.yml`.
+- Règles communes : Gradle uniquement sous `flock /tmp/memlearn-gradle-test.lock ./gradlew … --max-workers=4` (verrou partagé avec les autres projets du PC), et `./gradlew --stop` aussi sous ce verrou ; commits `type(LF-n): summary` (anglais, minuscule, <= 72 caractères) ; une PR par ticket, jamais de commit sur main ; pas d'adb ni d'`installDebug` (installation sur le téléphone à la main, aux jalons) ; ne touche jamais `.github/workflows/security.yml`.
 - Tu n'écris aucun code et ne modifies aucun fichier du dépôt.
 
 Règles techniques :

@@ -38,7 +38,7 @@ Qualité, sécurité, build, suivi :
 
 - **Un chantier à la fois**, discuté avec Hugo ; une branche, un ticket et une PR par étape.
 - Les agents de conception (`product-designer`, `architect` pour une nouvelle architecture) livrent un document ou une spécification, **validé par Hugo avant tout code**.
-- Les agents de relecture (`code-reviewer`, `security-reviewer`, `product-designer`) n'écrivent pas de code : pas d'outil d'écriture.
+- Les agents de relecture (`code-reviewer`, `security-reviewer`, `product-designer`) n'écrivent pas de code : Bash en lecture seule, par consigne.
 - Toute PR qui touche des données non fiables (contenu de QR), le manifeste, les Intents, le réseau, les listes de réputation ou la CI passe par `security-reviewer`.
 - Règles produit pour tous : aucune action automatique après un scan ; contenu de QR = entrée non fiable ; aucune URL envoyée à un tiers ; jamais « sûr », plutôt « aucun signal de risque détecté ».
 - Une suggestion d'agent n'est pas une décision de Hugo : en cas de doute, « à valider ».
@@ -49,7 +49,7 @@ Qualité, sécurité, build, suivi :
 
 - **Le gate de PR tourne une fois, en CI** (runners GitHub `ubuntu-latest`) : `ktlintCheck detekt cpdCheck testDebugUnitTest assembleDebug`. En local : compilation, ktlint, detekt et les tests du ticket seulement.
 - **Le gate complet n'est pas sur chaque PR.** Il se lance à la main (`workflow_dispatch` sur `main`) : quand aucune PR n'attend, avant toute installation sur le téléphone et à la fin de chaque jalon. Il ajoute `lintDebug` et `assembleRelease`.
-- Les agents lancent Gradle uniquement ainsi, sur le verrou partagé avec MemLearn (même PC), pour passer l'un après l'autre :
+- Les agents lancent Gradle uniquement ainsi, sur le verrou partagé avec les autres projets du PC, pour passer l'un après l'autre :
 
   ```
   flock /tmp/memlearn-gradle-test.lock ./gradlew … --max-workers=4
@@ -63,7 +63,7 @@ Qualité, sécurité, build, suivi :
 - **Sonnet** pour l'implémentation, la conception et la relecture de code.
 - **Opus** seulement pour `security-reviewer` (failles : là où une erreur coûte cher).
 - **Une seule relecture par ticket** (`code-reviewer`, ou `security-reviewer` quand le ticket touche des données externes, le manifeste, la CI ou le réseau ; les deux seulement si le ticket relève des deux). Les correctifs demandés sont appliqués puis vérifiés par les tests et la CI, **sans seconde relecture**, sauf si la relecture a trouvé un problème **bloquant** : dans ce cas, une relecture ciblée de ce seul point.
-- Au plus **2 agents en parallèle**, MemLearn compris (le PC est partagé), sur des tickets indépendants (dossiers de travail isolés).
+- Au plus **2 agents en parallèle**, autres projets du PC compris, sur des tickets indépendants (dossiers de travail isolés).
 
 Enchaînement type : périmètre validé → agent de conception (document validé par Hugo) → agent(s) de code → `test-engineer` → relecteur → vérifications locales légères → PR → **gate de PR en CI** → fusion → `project-manager`.
 

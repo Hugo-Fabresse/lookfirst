@@ -1,0 +1,35 @@
+# Gradle / Android
+.gradle/
+build/
+*/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+
+# Local config and secrets
+local.properties
+keystore.properties
+*.jks
+*.keystore
+*.pem
+.env
+.env.*
+google-services.json
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Claude Code (local)
+.claude/settings.local.json
+.claude/worktrees/

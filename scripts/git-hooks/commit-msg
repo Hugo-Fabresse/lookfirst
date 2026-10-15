@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# LookFirst commit-msg hook — checks the `type(LF-n): summary` format.
+# Install once:  git config core.hooksPath scripts/git-hooks
+exec scripts/check-commit-format.sh --commit-msg "$1"

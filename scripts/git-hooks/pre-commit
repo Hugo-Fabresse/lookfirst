@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# LookFirst pre-commit hook — runs ktlint on the whole module.
+# Install once:  git config core.hooksPath scripts/git-hooks
+#
+# detekt + tests are left to CI (too slow for every commit).
+
+set -e
+
+if git diff --cached --name-only --diff-filter=ACM | grep -qE '\.kts?$'; then
+    echo "› ktlint…"
+    flock /tmp/memlearn-gradle-test.lock ./gradlew --quiet ktlintCheck --max-workers=4 || {
+        echo
+        echo "✗ ktlint failed. Fix with:  flock /tmp/memlearn-gradle-test.lock ./gradlew ktlintFormat --max-workers=4"
+        exit 1
+    }
+    echo "✓ ktlint"
+fi

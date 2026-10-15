@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# LookFirst pre-push hook — light local checks before anything reaches CI.
+# Install once:  git config core.hooksPath scripts/git-hooks
+#
+# The PR gate (ktlint, detekt, cpd, unit tests, assembleDebug) runs once, in CI (CLAUDE.md, workflow step 6).
+# Pushes without Android code (docs, scripts, workflows, agents) skip Gradle, and so does a repo
+# that has no Gradle wrapper yet. Bypass in an emergency with:  git push --no-verify
+
+set -e
+
+if [ ! -x ./gradlew ]; then
+    echo "✓ no Gradle wrapper yet, Gradle checks skipped"
+    exit 0
+fi
+
+remote_ref_base=$(git rev-parse --verify --quiet origin/main || true)
+if [ -n "$remote_ref_base" ] && ! git diff --name-only "$remote_ref_base"...HEAD | grep -qvE '(\.md$|^docs/|^\.claude/|^scripts/|^\.github/)'; then
+    echo "✓ no Android code in this push, Gradle checks skipped"
+    exit 0
+fi
+
+echo "› compile + ktlint + detekt…"
+flock /tmp/memlearn-gradle-test.lock ./gradlew --quiet compileDebugUnitTestKotlin ktlintCheck detekt --max-workers=4 || {
+    echo
+    echo "✗ local checks failed (ktlint: ./gradlew ktlintFormat, under the same flock). Push aborted."
+    exit 1
+}
+echo "✓ local checks"

@@ -8,7 +8,7 @@ Constraint (ADR-0002): lists are downloaded in full to the phone and queried loc
 
 | Source | Licence / terms found | Use inside an app? Redistribution? | Format | Size | Update frequency | API key |
 |---|---|---|---|---|---|---|
-| **Phishing.Database** (github.com/Phishing-Database/Phishing.Database) | MIT licence (README/LICENSE page) | Yes. MIT allows use and redistribution if the copyright notice is kept. Upstream sources it aggregates have their own terms (not stated by the project) | Plain text: domains, links, IPs; ACTIVE / INACTIVE / NEW variants | `ALL-phishing-domains.tar.gz` 4.4 MB; `ALL-phishing-links.tar.gz` 14 MB (README). Other files: not listed | "Updated regularly", retested regularly; fixed schedule not found | No |
+| **Phishing.Database** (github.com/Phishing-Database/Phishing.Database) | MIT licence (README/LICENSE page) | MIT covers the repository's own work only. The README does not name its upstream feeds (community submissions through a "Phishing Source Repository" and validation with PyFunceble are described; third-party aggregators such as Robtex say it uses "multiple upstream feeds" without naming them). Provenance and terms of the data itself: **not found, to confirm** | Plain text: domains, links, IPs; ACTIVE / INACTIVE / NEW variants | `ALL-phishing-domains.tar.gz` 4.4 MB; `ALL-phishing-links.tar.gz` 14 MB (README). Other files: not listed | "Updated regularly", retested regularly; fixed schedule not found | No |
 | **URLhaus (abuse.ch)** | Free "under fair use principles"; page says for-profit use may require the paid commercial API. A CC0 statement was **not found** on the pages I could read; Terms of Use and Fair Use pages were not readable | Unclear. Redistribution not addressed on the pages read | CSV/JSON dumps, text URL list, host file, RPZ, etc. | Not found | Dumps refresh every 5 min, asked not to fetch more often than every 5 min | **Yes**, free Auth-Key from the abuse.ch portal, sent in the request URL. A key cannot be embedded in a public app or repo |
 | **OpenPhish Community feed** (openphish.com) | Terms of Use: use "solely for your personal use"; commercial use (including threat intelligence, detection, product development) needs prior written consent; no redistribution, no derivative works without written permission | **No** for a distributed app without a written agreement | Text file (CSV/JSON only on paid tiers) | Not found ("limited" coverage) | Every 12 h (community), 5 min (paid) | No for community feed |
 | **PhishTank** (phishtank.org) | Licence not stated on the developer page (links to an EULA I could not read); the terms page redirected to the home page | Unclear. Redistribution not addressed | XML, CSV, PHP, JSON, each plain or gz/bz2 | Not found | Hourly | Application key needed for regular downloads (without it only a few per day) |
@@ -18,12 +18,13 @@ Constraint (ADR-0002): lists are downloaded in full to the phone and queried loc
 
 | Data | Source | Terms | Note |
 |---|---|---|---|
-| RDAP bootstrap (which server answers for a TLD) | IANA `https://data.iana.org/rdap/dns.json` (RFC 9224) | IANA registry; licence not checked, public registry data | Needed for the optional domain-age action. Small JSON |
+| RDAP bootstrap (which server answers for a TLD) | IANA `https://data.iana.org/rdap/dns.json` (RFC 9224) | IANA registry; licence not checked, public registry data | Needed for the optional domain-age action. Small JSON; shipped inside the signed bundle |
+| Public Suffix List | publicsuffix.org | Terms not checked in this review | Needed to compute the registrable domain for RDAP; shipped in the signed bundle |
 | Brand/typosquat list, shortener list | Own curated asset | Own | No external dependency; maintained in the repo |
 
 ## Findings and risks
 
-- Only Phishing.Database has an explicit, permissive licence. Its limits: it is itself an aggregate, so its provenance is out of our hands, and its false positives are handled by GitHub issues rather than an SLA.
+- Only Phishing.Database has an explicit, permissive licence, but that MIT licence cannot grant rights on upstream data it does not own, and the upstream sources are not documented. Before publishing a derived bundle: ask the maintainers which feeds are included, and filter out any feed with restrictive terms (OpenPhish in particular). Until answered, redistribution is "to confirm" (threat model T-LST-7). Its false positives are handled by GitHub issues rather than an SLA.
 - URLhaus is high quality for malware distribution URLs, but the mandatory Auth-Key and the unclear redistribution make it a poor fit for a public repo and a serverless app. If the maintainers confirm in writing that a CI job may fetch it with a project key and republish a derived list, it becomes usable. Not found: explicit statement either way.
 - OpenPhish community is excluded by its terms for this use.
 - PhishTank: unclear terms, key required, and registration for new users has historically been unreliable. Not recommended without clarification.
@@ -32,8 +33,8 @@ Constraint (ADR-0002): lists are downloaded in full to the phone and queried loc
 
 ## Recommendation
 
-1. **MVP: Phishing.Database domain list only** (MIT, no key, no registration). Use `ALL-phishing-domains` (or ACTIVE domains only, which is smaller and fresher).
-2. **Do not have each phone download from GitHub raw directly.** Build a CI job in the LookFirst repository (a build job, not a server) that downloads the list, validates it, reduces it to a compact index, signs it (Ed25519) and publishes it as a GitHub Release asset. Phones fetch that asset. This gives integrity (ADR-0002, T-LST-2/3/4), a stable format and fewer upstream hits. Keep the MIT notice in the bundle and in the app's licences screen.
+1. **MVP: Phishing.Database domain list only** (MIT for the repository, no key, no registration; upstream provenance to confirm). Use `ALL-phishing-domains` (or ACTIVE domains only, which is smaller and fresher).
+2. **Do not have each phone download from the upstream repository directly.** A separate, minimal repository with its own workflow (not the app's build CI) downloads a pinned upstream snapshot, validates it, reduces it to a compact index, adds the Public Suffix List, the IANA RDAP bootstrap and the top-domains allow-list, writes a manifest with a monotonic version and generation date, signs it (Ed25519, key held only as that workflow's environment secret) and publishes it on **Codeberg** (decisions D10, D13). Phones fetch from Codeberg, which therefore sees their IP (privacy notice). The app rejects a version lower than or equal to the installed one. Keep the MIT notice in the bundle and in the licences screen.
 3. **Ship a seed index in the APK** so a verdict works offline on first launch.
 4. **Evaluate URLhaus second:** ask abuse.ch whether a CI-republished, derived domain list is acceptable for a free, open-source app. Do not add it before a written answer.
 5. Excluded: OpenPhish (terms), Safe Browsing (D3), PhishTank (unclear, key).

@@ -23,12 +23,12 @@ Gradle modules are suggested; they can start as packages and be split later. Dep
 | Data | `data.scan.camera` | CameraX + `BarcodeDecoder`, frame analysis, torch |
 | Data | `data.scan.image` | Photo Picker / `ACTION_OPEN_DOCUMENT`, bounded bitmap decoding, same decoder |
 | Data | `data.reputation` | Compact on-disk index, `ReputationStore`, `ListUpdater` (WorkManager) |
-| Data | `data.network` | The only package that talks to the network: `ListDownloader`, `RedirectTracer`, `RdapClient` (OkHttp, no cookies, no auth, fixed generic UA) |
+| Data | `data.network` | The only package that talks to the network: `ListDownloader`, `RedirectTracer`, `RdapClient` (OkHttp, no cookies, no auth, fixed generic UA, `Proxy.NO_PROXY`, filtering `Dns`, see Network rules) |
 | Data | `data.history` | Optional local history (Room, off by default) |
 | Data | `data.launcher` | `ActionExecutor`: builds and fires Intents, clipboard, Wi-Fi suggestion. Only reachable from a UI tap |
 | DI | Hilt modules | Bind interfaces; test fakes swap in |
 
-Decoder choice: ML Kit barcode scanning works on-device but the bundled variant adds a few MB and the unbundled one needs Google Play services. ZXing-core is Apache-2.0, small, fully offline, works at minSdk 23. Recommendation: ZXing-core behind a `BarcodeDecoder` interface so ML Kit can be swapped in if accuracy disappoints. To confirm in a spike.
+Decoder choice (decision D11): ZXing-core (Apache-2.0, small, fully offline, works at minSdk 23) behind a `BarcodeDecoder` interface. ML Kit is ruled out.
 
 ## End-to-end flow
 
@@ -83,23 +83,29 @@ Rules:
 
 | Use | Trigger | Data sent | Seen by | Default |
 |---|---|---|---|---|
-| Reputation list update | WorkManager periodic (unmetered, daily) + manual "update now" | Nothing about scans: a plain GET (IP, generic UA) | Host of the list bundle | On, explained at first run; can be disabled |
+| Reputation list update | WorkManager periodic (unmetered, daily) + manual "update now" | Nothing about scans: a plain GET (IP, generic UA) | Codeberg (hosts the bundle; sees the phone's IP, to mention in the privacy notice) | On, explained at first run; can be disabled |
 | Redirect tracing | User taps "Trace redirects" after a warning | Requests to the scanned URL and each hop | **The attacker's server** (IP, timing, proof the QR was scanned) | Off, per use |
-| Domain age (RDAP) | User taps "Check domain age" after a warning | Registrable domain only, to the RDAP server given by the IANA bootstrap (`https://data.iana.org/rdap/dns.json`) | RDAP registry | Off, per use |
+| Domain age (RDAP) | User taps "Check domain age" after a warning | Registrable domain only (computed with the Public Suffix List), to the `https` RDAP server given by the IANA bootstrap | RDAP registry | Off, per use |
 
 Everything else works in airplane mode. An instrumented test should assert that a scan with the network blocked still yields a verdict.
 
-Redirect tracer constraints: max 5 hops, 5 s total, no cookies, no body download (HEAD, fallback `GET` with `Range: bytes=0-0`), http/https only (other schemes are shown, not followed), refuse hops resolving to private, loopback or link-local addresses, generic User-Agent.
+### Network rules (redirect tracer and RDAP)
+
+- Global Network Security Config forbids cleartext. A hop to `http://` is **not followed**: it is displayed as a risk signal ("this link redirects to an unencrypted address").
+- OkHttp with `followRedirects(false)` and `followSslRedirects(false)`; hops are followed manually (max 5, 5 s total), `https` only.
+- `Proxy.NO_PROXY`, no cookies, generic User-Agent, no body read (HEAD, fallback `GET` with `Range: bytes=0-0`).
+- A custom `Dns` implementation resolves the host, checks every returned address and returns only those checked, so the checked IP is the connected IP (no DNS rebinding gap). Blocked ranges: IPv4 private (10/8, 172.16/12, 192.168/16), 0.0.0.0/8, 100.64/10 (CGNAT), loopback, link-local (169.254/16, fe80::/10), multicast, IPv6 ULA (fc00::/7) and loopback, and IPv4-mapped IPv6 (`::ffff:a.b.c.d`, checked as the embedded IPv4).
+- The same client rules apply to RDAP. RDAP URLs must be `https`.
 
 ## Opening content (Android specifics)
 
 `ActionExecutor` rules (details in the threat model):
 - Build Intents from parsed fields, never from the raw string via `Intent.parseUri`.
-- http/https: `ACTION_VIEW` with a scheme-checked `Uri`, `CATEGORY_BROWSABLE`. Custom Tab if a browser supports it, else the default browser. No WebView inside LookFirst.
+- http/https: the analysed URL is converted to canonical form (host as punycode, URL percent-encoded) and `Uri.getHost()` is re-checked to equal the analysed host just before the Intent. `ACTION_VIEW` with `CATEGORY_BROWSABLE`. A verified App Link could be captured by a non-browser app, so LookFirst resolves the default browser and calls `setPackage` on it; if a non-browser handler exists for the URL, the verdict says so. Custom Tab if the browser supports it (declare `<queries>` for `CustomTabsService`); never call `warmup()`, `mayLaunchUrl()` or any prefetch with scanned data. No WebView inside LookFirst.
 - tel/sms/mailto: `ACTION_DIAL` (never `ACTION_CALL`), `ACTION_SENDTO` with `smsto:` or `mailto:`; the user still presses send in the target app.
-- Wi-Fi: API 29+ `ACTION_WIFI_ADD_NETWORKS` (system confirmation). Below 29, show credentials and send the user to Wi-Fi settings; never reconfigure silently.
-- otpauth: offer Copy, or `ACTION_VIEW` to an authenticator after a dedicated confirmation.
-- App deep links and unknown schemes: not openable by default; show text, offer Copy. An advanced setting may allow opening after resolving the target app (needs `<queries>` on API 30+) and showing its name.
+- Wi-Fi: API 30+ `ACTION_WIFI_ADD_NETWORKS` (system confirmation, Intent restricted to system packages). Below 30, show the credentials and open the Wi-Fi settings; never reconfigure silently. No `WifiNetworkSuggestion`.
+- otpauth: **Copy only** at MVP (sensitive clip flag). Never an implicit Intent: the URI contains the seed.
+- App deep links and unknown schemes (decision D12): **Copy only**, no Open button, no advanced setting.
 - No URI permission grants, no `PendingIntent` from scan data, no extras taken from scan data.
 
 ## History (optional)
@@ -111,9 +117,24 @@ Off by default. When on: Room database with scheme, host, level and timestamp; n
 - `CAMERA` (requested at first camera scan; image scan works without it).
 - `INTERNET` (list updates and optional actions).
 - No storage permission (Photo Picker / SAF), no location, no contacts, no `QUERY_ALL_PACKAGES`.
-- `usesCleartextTraffic="false"` globally; the redirect tracer uses a dedicated client (see threat model T-NET-4).
+- `usesCleartextTraffic="false"` globally via the Network Security Config, no exception anywhere (see threat model T-NET-4).
+- Overlays: `filterTouchesWhenObscured` on the Compose root view and `setHideOverlayWindows(true)` on API 31+.
+
+## Reputation bundle pipeline
+
+Lists are produced by a **separate, minimal repository and workflow** (not the app's build CI): pinned upstream fetch -> validation -> reduction to a compact index -> Ed25519 signature -> publication on Codeberg (decisions D10, D13). The signing key is a secret of that workflow's environment only. Details and risks: `threat-model.md` (CI / supply chain) and ADR-0002.
+
+The bundle contains: the reputation index, the Public Suffix List, the IANA RDAP bootstrap file, the top-domains allow-list, and a signed manifest `{version (monotonic integer), generatedAt, files with hashes}`. The app rejects a manifest whose version is lower than or equal to the installed one (anti-rollback), and shows the lists' age on every verdict.
+
+## Verdict immutability
+
+While a verdict is displayed, scanning is paused. A second QR in front of the camera never replaces the displayed content; the user must dismiss or act first. The action buttons always apply to the content on screen.
+
+## IDN handling
+
+`java.net.IDN` implements IDNA2003 and `android.icu.text.IDNA` needs API 24+ (minSdk is 23). The app embeds a UTS #46 implementation (ICU4J or equivalent; choice confirmed in LF-3). The browser always receives the canonical form.
 
 ## Open points
 
-- Where the list bundle is hosted without a server of our own (proposal: GitHub Releases built by CI; see `reputation-sources.md`).
-- Brand list for typosquatting: shipped asset (top brands plus FR/EU banks and public services), refreshed with app releases or inside the signed bundle.
+- Brand list for typosquatting: shipped asset (top brands plus FR/EU banks and public services), refreshed inside the signed bundle.
+- Choice of the UTS #46 library (LF-3).

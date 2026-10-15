@@ -12,7 +12,7 @@ set -u
 export LC_ALL=C
 
 TYPES='feat|fix|refactor|test|docs|ci|build|perf|style|chore'
-RE="^(${TYPES})\\(LF-[0-9]+\\): [a-z0-9]([^.]*[^. ])?\$"
+RE="^(${TYPES})\\(LF-[0-9]+\\): [a-z0-9](.*[^. ])?\$"
 MAX=72
 
 # Exit 0 if the subject is valid (or exempt: GitHub-generated revert), 1 otherwise.
@@ -49,6 +49,8 @@ fix(LF-12): handle empty content
 feat(LF-71): add wifi parser
 ci(LF-76): enforce the commit and PR title format
 chore(LF-1): 2nd pass on deps
+fix(LF-1): bump gradle to 8.5
+docs(LF-2): add rules in claude.md
 Revert "fix(LF-12): handle empty content"
 OK
   while IFS= read -r s; do
@@ -105,6 +107,8 @@ case ${1:-} in
     valid "$s" || { report subject "$s"; expected; exit 1; }; exit 0 ;;
   --range)
     base=${2:?base}; head=${3:?head}; shift 3
+    git rev-parse --verify --quiet "$base^{commit}" >/dev/null || { echo "unknown base: $base"; exit 2; }
+    git rev-parse --verify --quiet "$head^{commit}" >/dev/null || { echo "unknown head: $head"; exit 2; }
     title=; has_title=0; pr_author=
     while [ $# -gt 0 ]; do
       case $1 in

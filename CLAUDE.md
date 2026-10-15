@@ -17,7 +17,7 @@ Règles produit (non négociables) :
 - **Architecture** : MVVM + Clean Architecture (UseCase layer)
 - **DI** : Hilt
 - **Navigation** : Navigation Compose
-- **Caméra / scan** : CameraX + lecteur de codes-barres sur l'appareil (choix précisé dans `docs/design/architecture.md`)
+- **Caméra / scan** : CameraX + ZXing (D11, sans Google)
 - **Tests** : JUnit4 + Mockk + Turbine + Compose Testing
 - **Build** : Gradle (Kotlin DSL)
 - **Min SDK** : 23 (Android 6.0, D8)
@@ -59,7 +59,7 @@ GitHub ; rien n'est commité directement sur `main`.
 Les alertes de sécurité de la CI (semgrep, gitleaks, osv-scanner, en mode rapport) deviennent des issues pour Hugo : on ne les corrige ni ne les ferme dans un autre ticket. Ne jamais toucher `.github/workflows/security.yml`.
 
 ### Gradle
-Toujours sous le verrou partagé avec MemLearn (même PC) : `flock /tmp/memlearn-gradle-test.lock ./gradlew … --max-workers=4`. `./gradlew --stop` aussi sous ce verrou.
+Toujours sous le verrou partagé avec les autres projets du PC : `flock /tmp/memlearn-gradle-test.lock ./gradlew … --max-workers=4`. `./gradlew --stop` aussi sous ce verrou.
 
 ### Refactoring
 Seulement quand une relecture signale un problème structurel. Jamais mélangé à un commit de feature.
@@ -78,7 +78,7 @@ Un seul format, pour chaque commit et chaque titre de PR : `type(LF-n): summary`
 - Chaque commit d'agent se termine par la ligne `Co-Authored-By: …` fournie par la session.
 - Exemptés : commits de fusion et `Revert "..."` générés par GitHub.
 - Vérifié en CI par `scripts/check-commit-format.sh` ; en local : `scripts/check-commit-format.sh --range origin/main HEAD` ou `--message "fix(LF-12): ..."` (`--self-test` pour les exemples).
-- Hooks locaux optionnels : `git config core.hooksPath scripts/git-hooks` (pre-commit : ktlint ; pre-push : compilation + ktlint + detekt, ignoré pour un push de docs seulement).
+- Hooks locaux optionnels : `git config core.hooksPath scripts/git-hooks` (pre-commit : ktlint ; commit-msg : `scripts/check-commit-format.sh --commit-msg` ; pre-push : compilation + ktlint + detekt, ignoré pour un push sans code Android).
 
 ---
 

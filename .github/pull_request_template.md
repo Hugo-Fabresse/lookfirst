@@ -2,7 +2,7 @@
 
 ## Ticket
 
-LF-<n> — <lien Notion>
+LF-<n> (lien Notion facultatif)
 
 ## Résumé
 

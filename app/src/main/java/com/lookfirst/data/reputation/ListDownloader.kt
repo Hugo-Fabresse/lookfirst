@@ -60,6 +60,7 @@ class ListDownloader internal constructor(
 
     /** Runs one download and installation. Blocking I/O: call it from an I/O dispatcher. */
     internal suspend fun download(): DownloadOutcome {
+        if (!store.keysTrusted) return DownloadOutcome.Rejected(RejectReason.BAD_SIGNATURE)
         val job = currentCoroutineContext()[Job]
         val active = { job?.isActive != false }
         var retriedOnce = false
@@ -111,7 +112,15 @@ class ListDownloader internal constructor(
             val url = endpoint.bundleUrl(tag, kind.path) ?: return DownloadOutcome.Rejected(RejectReason.BAD_MANIFEST)
             // A file longer than the manifest says (or than its own cap) is refused as soon as the cap is passed.
             val failure = fetch(url, candidate, minOf(declared.size, kind.maxSize), active, kind.path)
-            if (failure != null) return failure
+            if (failure != null) {
+                if (failure is DownloadOutcome.Rejected) {
+                    store.rejectCandidate(
+                        inspection.manifestSha256,
+                        failure.reason,
+                    )
+                }
+                return failure
+            }
         }
         return when (val result = store.install(candidate)) {
             is InstallResult.Installed -> DownloadOutcome.Installed(result.version.bundle)

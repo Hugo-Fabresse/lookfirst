@@ -24,7 +24,8 @@ internal class ListsSnapshot(val version: Long, val ageDays: Int)
 /** Result of looking at a downloaded manifest before any other file is fetched. */
 internal sealed interface ManifestInspection {
     /** Signature, shape and ordering are fine and the bundle is newer: fetch [needed], the rest is already in place. */
-    class Proceed(val manifest: BundleManifest, val needed: List<ManifestFile>) : ManifestInspection
+    class Proceed(val manifest: BundleManifest, val manifestSha256: String, val needed: List<ManifestFile>) :
+        ManifestInspection
 
     data object UpToDate : ManifestInspection
 
@@ -62,7 +63,7 @@ class ReputationStore internal constructor(
      * Fail closed: while the pinned keys are the test keys (anyone can sign with them) a non-debug build trusts no
      * bundle at all, installed, embedded or downloaded; lookups then say "lists missing".
      */
-    private val keysTrusted = PinnedKeys.KEYS_ARE_PRODUCTION || acceptTestKeys
+    internal val keysTrusted = PinnedKeys.KEYS_ARE_PRODUCTION || acceptTestKeys
     private val lock = ReentrantLock()
 
     /** Candidate directories handed to a downloader and not yet installed or released: clean-up leaves them alone. */
@@ -138,6 +139,10 @@ class ReputationStore internal constructor(
     internal fun isKnownRejected(manifestSha256: String): Boolean =
         lock.withLock { StoreState.read(disk.stateFile).rejectedManifestSha == manifestSha256 }
 
+    /** Remembers a candidate refused outside [install] (for instance a file longer than declared). */
+    internal fun rejectCandidate(manifestSha256: String, reason: RejectReason) =
+        lock.withLock { recordFailure(reason, manifestSha256) }
+
     internal fun lastFailure(): Pair<RejectReason, Long>? = lock.withLock {
         val state = StoreState.read(disk.stateFile)
         val reason = state.lastFailure
@@ -177,6 +182,7 @@ class ReputationStore internal constructor(
             outcome is VerifyOutcome.Accepted ->
                 ManifestInspection.Proceed(
                     outcome.manifest,
+                    outcome.manifestSha256,
                     CandidateFiles.reuseUnchanged(disk, outcome.manifest, installed, candidate),
                 )
             else -> ManifestInspection.Rejected(RejectReason.BAD_MANIFEST)

@@ -339,4 +339,25 @@ class ListDownloaderTest {
             assertNull(it, endpoint.bundleUrl(it, "a.idx"))
         }
     }
+
+    @Test
+    fun aTooLargeFileRejectionIsRememberedByManifestHash() {
+        val bundle = publish(day10)
+        val tag = BundleBuilder.version(day10.generatedAt).toString()
+        val real = bundle.file(BundleFile.PHISHING_INDEX).readBytes()
+        server.put(server.urlOf(tag, BundleFile.PHISHING_INDEX.path), real + ByteArray(1))
+        assertEquals(RejectReason.TOO_LARGE, (download() as DownloadOutcome.Rejected).reason)
+        server.requests.clear()
+        assertEquals(DownloadOutcome.AlreadyRejected, download())
+        assertEquals(listOf("/latest/manifest.sig", "/latest/manifest.json"), server.paths())
+    }
+
+    @Test
+    fun withoutTrustedKeysNothingIsRequested() {
+        publish(day10)
+        val release = ReputationStore(root, null, { NOW }, directorySync = {})
+        val outcome = runBlocking { ListDownloader(server, server.endpoint, release, pause = {}).download() }
+        assertEquals(RejectReason.BAD_SIGNATURE, (outcome as DownloadOutcome.Rejected).reason)
+        assertTrue(server.requests.isEmpty())
+    }
 }

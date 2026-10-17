@@ -161,3 +161,5 @@ DECISION [clipboard] : le label aléatoire du clip sensible est persisté (Share
 DECISION [clipboard] : extra IS_SENSITIVE posé dès l'API 24 (littéral android.content.extra.IS_SENSITIVE, constante officielle dès 33) ; son respect dépend du clavier / système — avant l'API 28 l'effacement remplace le clip par un clip vide (LF-37)
 DECISION [clipboard] : une rotation (isChangingConfigurations) n'arme pas l'effacement : le secret copié reste collable (LF-37)
 DECISION [payload] : toString de chaque ScanPayload = type + longueur de raw seulement ; un when exhaustif sans else dans le test casse la compilation si un sous-type est ajouté sans être couvert (LF-37)
+DECISION [icon] : œil blanc (amande) sur fond bleu #1F4E79, iris bleu portant 5 modules de QR blancs (motif de dé) — « regarder avant d'ouvrir », lisible en petit, aucun logo tiers ; monochrome = mêmes formes en une couleur (LF-45)
+DECISION [icon] : API 23-25 = PNG mdpi..xxxhdpi générés par scripts/generate-launcher-icons.py (Python + numpy, sans dépendance Gradle), fond bleu à coins arrondis / rond ; API 26+ = adaptive-icon (LF-45)

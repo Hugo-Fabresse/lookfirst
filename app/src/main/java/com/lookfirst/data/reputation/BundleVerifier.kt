@@ -208,7 +208,18 @@ private object FileChecks {
         if (lines == null || BundleVerifier.icannRules(lines).isEmpty()) return RejectReason.BAD_FORMAT
         val phishing = indexFormat(directory, manifest, BundleFile.PHISHING_INDEX, SourceIds.PHISHING_DATABASE, psl)
         val allowlist = indexFormat(directory, manifest, BundleFile.ALLOWLIST, SourceIds.ALLOWLIST, psl)
-        return phishing ?: allowlist
+        return phishing ?: allowlist ?: rdapFormat(directory, manifest)
+    }
+
+    /**
+     * The optional RDAP bootstrap: strict JSON under its own bounds, every TLD and every server URL conforming
+     * (`https`, no IP literal, no port, no userinfo). One bad URL refuses the bundle (section 6, step 6).
+     */
+    private fun rdapFormat(directory: File, manifest: BundleManifest): RejectReason? {
+        if (manifest.fileFor(BundleFile.RDAP) == null) return null
+        val data = BundleVerifier.readBounded(File(directory, BundleFile.RDAP.path), BundleFile.RDAP.maxSize)
+        val parsed = (data as? BundleVerifier.Bounded.Data)?.let { RdapBootstrap.parseStrict(it.bytes) }
+        return if (parsed == null) RejectReason.BAD_FORMAT else null
     }
 
     private fun indexFormat(

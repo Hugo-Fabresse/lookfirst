@@ -367,4 +367,41 @@ class BundleVerifierTest {
         )
         assertEquals(RejectReason.BAD_FORMAT, reasonOf(verify(build(BundleSpec(pslLines = listOf("com", "café"))))))
     }
+
+    private fun rdap(vararg urls: String) =
+        """{"version":"1.0","services":[[["com","net"],[${urls.joinToString(",") { "\"$it\"" }}]]]}"""
+
+    @Test
+    fun aBundleWithAConformingRdapBootstrapIsAccepted() {
+        assertTrue(
+            verify(build(BundleSpec(rdapJson = rdap("https://rdap.verisign.com/com/v1/")))) is VerifyOutcome.Accepted,
+        )
+    }
+
+    @Test
+    fun aBundleWithoutRdapBootstrapIsStillAccepted() {
+        assertTrue(verify(build(BundleSpec(rdapJson = null))) is VerifyOutcome.Accepted)
+    }
+
+    @Test
+    fun aBundleWithANonConformingRdapUrlIsRefusedAsBadFormat() {
+        listOf(
+            "http://rdap.example.com/",
+            "https://203.0.113.9/",
+            "https://[2001:db8::1]/",
+            "https://rdap.example.com:8443/",
+            "https://user:pw@rdap.example.com/",
+            "https://rdap.example.com/path?x=1",
+        ).forEach { url ->
+            val outcome = verify(build(BundleSpec(rdapJson = rdap("https://rdap.ok.example/", url))))
+            assertEquals(url, RejectReason.BAD_FORMAT, reasonOf(outcome))
+        }
+    }
+
+    @Test
+    fun aBundleWhoseRdapFileIsNotTheBootstrapShapeIsRefused() {
+        listOf("not json", "{}", """{"services":"x"}""", "[" + "[".repeat(100)).forEach {
+            assertEquals(it, RejectReason.BAD_FORMAT, reasonOf(verify(build(BundleSpec(rdapJson = it)))))
+        }
+    }
 }

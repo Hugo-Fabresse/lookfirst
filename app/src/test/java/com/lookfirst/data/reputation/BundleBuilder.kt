@@ -29,6 +29,8 @@ internal data class BundleSpec(
     val extraManifestFields: String = "",
     val phishingKeys: List<Long>? = null,
     val allowlistKeys: List<Long>? = null,
+    /** The content of the optional `rdap-dns.json`; null: the bundle has no such file. */
+    val rdapJson: String? = null,
 )
 
 internal class BuiltBundle(val directory: File, val spec: BundleSpec) {
@@ -54,11 +56,13 @@ internal object BundleBuilder {
         File(directory, BundleFile.PHISHING_INDEX.path).writeBytes(phishing)
         File(directory, BundleFile.ALLOWLIST.path).writeBytes(allowlist)
         File(directory, BundleFile.PUBLIC_SUFFIX_LIST.path).writeBytes(psl)
+        val rdap = spec.rdapJson?.toByteArray(Charsets.UTF_8)
+        rdap?.let { File(directory, BundleFile.RDAP.path).writeBytes(it) }
         val entries = mapOf(
             BundleFile.PHISHING_INDEX.path to Triple(phishing, phishingKeys.size, true),
             BundleFile.ALLOWLIST.path to Triple(allowlist, allowlistKeys.size, true),
             BundleFile.PUBLIC_SUFFIX_LIST.path to Triple(psl, 0, false),
-        )
+        ) + (if (rdap == null) emptyMap() else mapOf(BundleFile.RDAP.path to Triple(rdap, 0, false)))
         val files = entries.entries.joinToString(",") { (path, value) ->
             val (bytes, count, hasEntries) = value
             val size = spec.declaredSizeOverride[path] ?: bytes.size.toLong()

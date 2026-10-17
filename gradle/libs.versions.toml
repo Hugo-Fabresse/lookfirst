@@ -11,6 +11,7 @@ navigationCompose = "2.9.5"
 composeBom = "2025.09.01"
 camerax = "1.4.2"
 zxing = "3.5.3"
+work = "2.10.0"
 turbine = "1.2.1"
 
 junit = "4.13.2"
@@ -44,6 +45,7 @@ androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "
 androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 

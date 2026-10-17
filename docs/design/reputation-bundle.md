@@ -212,6 +212,17 @@ Code: `app/src/main/java/com/lookfirst/data/reputation/`. Where it differs from 
 - Variation of `allowlist.idx` uses the same tolerance as the index. The "allow-listed domain becomes a public suffix" check stays in the pipeline (hashes only in the app). RDAP and brands formats/thresholds are not checked yet (only size and SHA-256).
 - The embedded bundle is read from `assets/reputation/<fixed names>` (none yet), verified with the epoch-0 pinned keys, installed when newer than the installed bundle or when none loads, and never lowers the stored floor.
 
+## 11c. Implementation notes (LF-24: download and update)
+
+Code: `data/reputation/` (`ListsEndpoint`, `ListTransport`, `ListDownloader`, `ListUpdateRunner`, `ListUpdateControl`, `ListsStartup`) and `data/platform/` (`UpdateScheduler`, `AppPreferences`). Where it differs from section 6:
+- Transport is `HttpURLConnection` behind the `ListTransport` seam (no OkHttp). The downloader lives in `data/reputation`, not `data.network`. Request headers are exactly `User-Agent: LookFirst` and `Accept-Encoding: identity`.
+- The endpoint is `https://codeberg.org/<owner>/<repository>/releases/download/<tag>/<file>`. Owner and repository (`Hugo-Fabresse/lookfirst-lists`) are provisional until LF-25. The manifest and signature come from tag `latest`; every other file from the decimal `bundleVersion` of the verified manifest.
+- `ReputationStore.inspectManifest` runs steps 2 to 4 (signature, shape, anti-rollback, "up to date", remembered rejection) before any bundle file is fetched; files that did not change are copied from the installed bundle (name, size, SHA-256).
+- A signature mismatch on the manifest is retried once after 60 s inside the same run; any other security or format rejection is final for that manifest (`Result.success()`, rejection remembered by manifest hash).
+- Backoff is WorkManager's exponential from 1 h (the platform caps it at 5 h, not 8 h) and the worker stops asking for retries at the fourth attempt of a period.
+- "Update now" runs in the app scope through the same `ListUpdateRunner` (one download at a time), 15 minutes after a success the tap does nothing. A lookup never waits for an installation: until the bundle is loaded (preloaded off the main thread at start) it answers "lists missing".
+- Not done: `keyset.json` / `keyset.sig` are not downloaded yet (open point of section 13).
+
 ### Production keys (for LF-25)
 `PinnedKeys.kt` currently pins **test keys** whose private halves are in `app/src/test/.../TestKeys.kt`; `PinnedKeys.KEYS_ARE_PRODUCTION` is `false`, and three guards apply until it is `true`: (a) at run time `ReputationStore` refuses every bundle (installed, embedded, downloaded) in a non-debug build, so lookups say `ListsMissing`; (b) the version name ends in `-testkeys`; (c) the Gradle task `verifyPinnedKeysAreProduction` fails a release build meant for publication, i.e. one run with `-Plookfirst.publish=true` or with a `signingConfig` on the release build type (an unsigned `assembleRelease`, as in the full gate, stays possible). The task reads `PinnedKeys.kt` with comments removed. To go to production:
 1. Generate S (CI secret) and R (offline) outside the repository: `openssl ecparam -name prime256v1 -genkey -noout`, then `openssl ec -in key.pem -pubout -outform DER | base64 -w0` gives the SPKI to paste. Private keys never enter any repository.

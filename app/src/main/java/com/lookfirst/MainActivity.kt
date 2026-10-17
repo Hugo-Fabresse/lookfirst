@@ -8,13 +8,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import com.lookfirst.data.platform.AppPreferences
 import com.lookfirst.data.platform.ClipboardWriter
+import com.lookfirst.data.reputation.ListUpdateControl
 import com.lookfirst.data.scan.camera.QrAnalyzerFactory
 import com.lookfirst.ui.components.TouchGuard
 import com.lookfirst.ui.components.isPartiallyObscured
 import com.lookfirst.ui.navigation.LookFirstNavHost
 import com.lookfirst.ui.screens.result.ResultViewModel
 import com.lookfirst.ui.screens.scan.ScanViewModel
+import com.lookfirst.ui.screens.settings.SettingsViewModel
 import com.lookfirst.ui.theme.LookFirstTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -23,6 +26,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     private val scanViewModel: ScanViewModel by viewModels()
     private val resultViewModel: ResultViewModel by viewModels()
+    private val settingsViewModel: SettingsViewModel by viewModels()
 
     @Inject
     lateinit var analyzerFactory: QrAnalyzerFactory
@@ -30,15 +34,25 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var clipboard: ClipboardWriter
 
+    @Inject
+    lateinit var preferences: AppPreferences
+
+    @Inject
+    lateinit var listUpdates: ListUpdateControl
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val showFirstLaunch = !preferences.firstLaunchDone()
         setContent {
             LookFirstTheme {
                 LookFirstNavHost(
                     scanViewModel = scanViewModel,
                     resultViewModel = resultViewModel,
+                    settingsViewModel = settingsViewModel,
                     analyzerFactory = analyzerFactory,
+                    showFirstLaunch = showFirstLaunch,
+                    onFirstLaunchDone = listUpdates::completeFirstLaunch,
                 )
             }
         }

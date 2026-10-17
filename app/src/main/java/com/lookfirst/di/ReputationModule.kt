@@ -4,6 +4,8 @@ import android.content.Context
 import com.lookfirst.BuildConfig
 import com.lookfirst.data.reputation.AndroidDirectorySync
 import com.lookfirst.data.reputation.AssetEmbeddedBundle
+import com.lookfirst.data.reputation.DefaultListUpdateControl
+import com.lookfirst.data.reputation.ListUpdateControl
 import com.lookfirst.data.reputation.LocalReputationLookup
 import com.lookfirst.data.reputation.ReputationStore
 import com.lookfirst.domain.analysis.ReputationLookup
@@ -21,6 +23,9 @@ import javax.inject.Singleton
 abstract class ReputationModule {
     @Binds
     abstract fun bindReputationLookup(impl: LocalReputationLookup): ReputationLookup
+
+    @Binds
+    abstract fun bindListUpdateControl(impl: DefaultListUpdateControl): ListUpdateControl
 
     companion object {
         /**

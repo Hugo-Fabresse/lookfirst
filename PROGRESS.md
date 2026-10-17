@@ -11,3 +11,4 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-7 — parcours et écrans (docs/design/ux.md)
 - [🔄 WIP] LF-8 — décodage sûr de tous les types de contenu QR (PR ouverte, CI à confirmer) — tests: 98 passed
 - [🔄 WIP] LF-14 — alertes semgrep ouvertes triées (#5 faux positif accepté, #6/#10/#11 minimumReleaseAge par règle Renovate)
+- [🔄 WIP] LF-15 — signaux de risque par type de contenu (analyseurs purs, PR ouverte, CI à confirmer) — tests: 58 ajoutés

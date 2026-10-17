@@ -7,7 +7,7 @@ import org.junit.Assume
 import org.junit.Test
 import java.io.File
 
-/** The network surface of the app, read from the files that define it (LF-24: INTERNET is the first and only one). */
+/** The network surface of the app, read from the files that define it (LF-24: INTERNET; LF-26: ACCESS_NETWORK_STATE). */
 class ManifestNetworkTest {
     private val manifest = File("src/main/AndroidManifest.xml").readText()
         .replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")
@@ -28,6 +28,7 @@ class ManifestNetworkTest {
                 "android.permission.CAMERA",
                 "android.permission.HIDE_OVERLAY_WINDOWS",
                 "android.permission.INTERNET",
+                "android.permission.ACCESS_NETWORK_STATE",
             ),
             permissions,
         )

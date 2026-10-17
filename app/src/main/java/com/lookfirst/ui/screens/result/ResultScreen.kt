@@ -62,6 +62,7 @@ fun ResultScreen(
     onConfirmOpen: () -> Unit,
     onDismissOpen: () -> Unit,
     modifier: Modifier = Modifier,
+    checkActions: ChecksActions = ChecksActions.None,
 ) {
     val scope = rememberCoroutineScope()
     val overlayMessage = stringResource(R.string.overlay_blocked)
@@ -90,7 +91,12 @@ fun ResultScreen(
                 when (state) {
                     ResultUiState.NoContent, ResultUiState.Parsing -> Loading()
                     is ResultUiState.Unreadable -> UnreadableContent(state.reason)
-                    is ResultUiState.Content -> ContentBody(state.content, state.verdict)
+                    is ResultUiState.Content -> ContentBody(
+                        state.content,
+                        state.verdict,
+                        state.checks,
+                        checkActions.onTrace,
+                    )
                 }
             }
         }
@@ -101,6 +107,7 @@ fun ResultScreen(
                 onBlocked = notifyOverlay,
             )
         }
+        TraceSheet((state as? ResultUiState.Content)?.checks?.trace, checkActions, notifyOverlay)
         if (state is ResultUiState.Content && state.confirmingOpen) {
             OpenAnywayDialog(
                 dangerous = state.verdict?.level == VerdictLevel.DANGEROUS,
@@ -140,7 +147,7 @@ private fun Loading() {
 }
 
 @Composable
-private fun ContentBody(content: ResultContent, verdict: Verdict?) {
+private fun ContentBody(content: ResultContent, verdict: Verdict?, checks: OptionalChecks?, onTrace: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -172,6 +179,7 @@ private fun ContentBody(content: ResultContent, verdict: Verdict?) {
             HiddenCharsNote(content.hiddenCharCount)
         }
         verdict?.let { ReasonList(it) }
+        if (verdict != null && checks != null) OptionalChecksSection(checks, onTrace)
         ExactContent(text = content.exact.value, containsSecret = content.containsSecret)
         verdict?.listsInfo()?.let { ListsAgeLine(it) }
     }

@@ -33,6 +33,12 @@ enum class SignalCode(val severity: Severity) {
     UNPARSABLE(Severity.CAUTION),
     REDIRECT_HTTP(Severity.SUSPICIOUS),
     REDIRECT_FINAL(Severity.INFO),
+
+    /** New. A redirect leads to an address on the user's own network or a reserved range (nothing was sent to it). */
+    REDIRECT_PRIVATE(Severity.SUSPICIOUS),
+
+    /** New. A redirect loop or more than five redirects: the chain was not followed to the end. */
+    REDIRECT_EXCESSIVE(Severity.CAUTION),
     DOMAIN_RECENT(Severity.SUSPICIOUS),
 
     /** New. Scheme missing, odd slashes or backslashes: the URL is not written the way a browser form expects. */

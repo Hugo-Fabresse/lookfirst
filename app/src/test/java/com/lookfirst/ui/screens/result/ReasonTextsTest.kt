@@ -49,6 +49,16 @@ class ReasonTextsTest {
     )
 
     @Test
+    fun `a private target that is the scanned address does not say redirect`() {
+        val direct = Signal(SignalCode.REDIRECT_PRIVATE, evidence = Untrusted("10.0.0.1"), count = 0)
+        val viaHop = direct.copy(count = 2)
+        val en = ReasonTexts(english)
+        assertTrue(en.sentence(direct).text.startsWith("This link points to"))
+        assertTrue(en.sentence(viaHop).text.startsWith("This link redirects to"))
+        assertTrue(ReasonTexts(french).sentence(direct).text.startsWith("Ce lien pointe vers"))
+    }
+
+    @Test
     fun everySignalCodeHasItsTexts() {
         assertEquals(emptyList<SignalCode>(), codesWithoutTexts())
     }

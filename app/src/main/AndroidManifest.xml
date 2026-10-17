@@ -11,13 +11,16 @@
     <uses-feature
         android:name="android.hardware.camera.any"
         android:required="false" />
-    <!-- Network: the reputation lists (one fixed https host, ListsEndpoint) and, later, the two optional checks the
+    <!-- Network: the reputation lists (one fixed https host, ListsEndpoint) and the optional redirect check the
          user starts by a tap. Cleartext is forbidden by network_security_config.xml. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Normal permission: WorkManager's network constraint, and knowing whether the device is offline so that the
+         optional checks can be disabled. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- WorkManager adds these through the manifest merger; none is needed (no foreground or expedited work, jobs are
-         not persisted and the schedule is re-applied at every start), so they are removed. WAKE_LOCK and
-         ACCESS_NETWORK_STATE stay: WorkManager needs them for the network constraint. -->
+         not persisted and the schedule is re-applied at every start), so they are removed. WAKE_LOCK stays:
+         WorkManager needs it. -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE"
         tools:node="remove" />

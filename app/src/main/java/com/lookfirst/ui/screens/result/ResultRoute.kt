@@ -59,6 +59,13 @@ fun ResultRoute(viewModel: ResultViewModel, onClose: () -> Unit) {
         onOpen = viewModel::onOpen,
         onConfirmOpen = viewModel::onConfirmOpen,
         onDismissOpen = viewModel::onDismissOpen,
+        checkActions = remember(viewModel) {
+            ChecksActions(
+                onTrace = viewModel::onTraceRequested,
+                onConfirmTrace = viewModel::onTraceConfirmed,
+                onCancelTrace = viewModel::onTraceCancelled,
+            )
+        },
     )
 }
 

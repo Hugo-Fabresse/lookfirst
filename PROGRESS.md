@@ -36,3 +36,4 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-42 — hôte probable d'un Text en forme d'adresse analysé (listes, marque, homographe, IP, local), sans Ouvrir (audit I-2) — branche fix/LF-42-address-like-text
 - [✅ DONE] LF-37 — label du clip sensible persisté (effacement après mort du processus) + toString des ScanPayload sans contenu — tests: ClipboardProcessDeathTest, ScanPayloadToStringTest
 - [✅ DONE] LF-45 — icône finale (adaptative + thématique, PNG de repli API 23-25) — branche feat/LF-45-app-icon
+- [🔄 WIP]  LF-33 — couverture de la liste annoncée (À propos, Réglages, verdict) + étude d'une seconde source (aucune retenue) — branche feat/LF-33-list-coverage

@@ -202,6 +202,24 @@ Actions pinned by SHA in A and C, minimal permissions, secret scanning (T-CI-1, 
 - App 3: update job (WorkManager, `ListDownloader` in `data.network`, retry rules, settings entry: age, last failure reason, update now, disable).
 - Hand tests for them: ECDSA verification on a real API 23 to 25 phone (unit tests run on the JDK provider, not the platform's); airplane-mode first launch; kill the app during an update; corrupt a file on a test server.
 
+## 11b. Implementation notes (LF-23: App 1 and App 2)
+
+Code: `app/src/main/java/com/lookfirst/data/reputation/`. Where it differs from or fills in the text above:
+- The manifest is read by a small strict JSON reader (`StrictJson`: duplicate keys, floats, leading zeros, depth > 6, more than 2000 values refused), not `org.json`, and only after the signature. File `path` allows capitals (`NOTICE.txt`).
+- `keyset.json`: `{"formatVersion":1,"epoch":N,"keys":[{"spki":"<base64 SPKI>"}]}` with `keyset.sig` (same line format, prefix `LookFirst keyset v1\n`), signed by R only, epoch strictly above the stored one, 1 to 8 distinct strict P-256 keys. The accepted ring for epoch N is the keyset keys plus R. An epoch-0 bundle already installed stays usable after a keyset (verified with the pinned keys); new bundles need the new epoch.
+- Layout under `filesDir/reputation` (excluded from backup and device transfer by `data_extraction_rules.xml`, `allowBackup=false`): `bundles/<epoch>-<version>/`, `tmp/` (candidates), `current` (pointer: `epoch version manifest-sha256`), `state` (highest accepted pair, latest validated `generatedAt`, keyset, last failure and rejected manifest hash). The downloader (LF-24) gets a directory from `ReputationStore.newCandidateDirectory()`, puts `manifest.json`, `manifest.sig` and the files in it (copying unchanged files from the installed bundle), and calls `install`. Files not listed in the manifest are deleted before the swap.
+- Directory fsync is not available in the Java API used (minSdk 23); files and the pointer are synced, the rename order gives old-or-new.
+- Variation of `allowlist.idx` uses the same tolerance as the index. The "allow-listed domain becomes a public suffix" check stays in the pipeline (hashes only in the app). RDAP and brands formats/thresholds are not checked yet (only size and SHA-256).
+- The embedded bundle is read from `assets/reputation/<fixed names>` (none yet), verified with the epoch-0 pinned keys, installed when newer than the installed bundle or when none loads, and never lowers the stored floor.
+
+### Production keys (for LF-25)
+`PinnedKeys.kt` currently pins **test keys** whose private halves are in `app/src/test/.../TestKeys.kt`; `PinnedKeys.KEYS_ARE_PRODUCTION` is `false`, and the Gradle task `verifyPinnedKeysAreProduction` (wired to `preReleaseBuild`) fails every release build until it is `true`. To go to production:
+1. Generate S (CI secret) and R (offline) outside the repository: `openssl ecparam -name prime256v1 -genkey -noout`, then `openssl ec -in key.pem -pubout -outform DER | base64 -w0` gives the SPKI to paste. Private keys never enter any repository.
+2. Replace `SIGNING_KEY_S` and `RECOVERY_KEY_R` in `PinnedKeys.kt`, set `KEYS_ARE_PRODUCTION = true` in the same commit.
+3. Delete the test private keys from `TestKeys.kt` if production keys are used elsewhere in tests; keep the test signers for the unit tests, which build their own bundles and take the ring as a parameter (`PinnedKeysTest` fails if the flag is true while a test key is still pinned).
+4. Sign with the DER signature line format of section 4 and check with `openssl dgst -sha256 -verify` that the message is the prefix followed by the exact manifest bytes.
+5. Add the signed bundle under `app/src/main/assets/reputation/` (manifest.json, manifest.sig and the files); `AssetEmbeddedBundle` already reads it.
+
 ## 12. Threats and risks
 
 | Threat | Counter-measure here |

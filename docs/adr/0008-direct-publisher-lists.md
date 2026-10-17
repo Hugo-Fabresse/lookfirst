@@ -17,7 +17,7 @@ We lose authenticity (anyone who controls the publisher or the connection after 
 1. **A list can only add a warning.** It never lowers a verdict, never removes a built-in rule, never changes the PSL, the brand list or the RDAP server.
 2. **The embedded official-domain list is consulted first**: a hit on an official registrable domain or on any host under it (`accounts.google.com`) is ignored and not indexed; more than 100 such entries make the list refused as poisoned.
 3. Size cap (streamed), entry minimum and maximum, 2 % invalid-line limit, strict parser, index validated before the swap.
-4. **Variation limit** against the installed index: 10 % plus 2 points per day of age, none from 45 days.
+4. **Variation limit** against the installed index: entries removed and entries added (set difference), each at most 10 % plus 2 points per day of age of the installed count, none from 45 days (LF-32; a count alone let a full swap through). The publisher's `Date` header is never a reason to lift this limit.
 5. A refusal keeps the previous index and is remembered; sources are independent.
 6. `https` only, same-host redirects, no cookies, no identifier. `If-Modified-Since` carries only a date the app formats itself from the publisher's strictly parsed `Last-Modified` (never echoed), and only while the last full download is under 7 days old.
 

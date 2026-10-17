@@ -11,7 +11,7 @@ private const val READ_TIMEOUT_MILLIS = 30_000
 private const val STATUS_OK = 200
 
 /**
- * One answer: the status, the raw `Location` and `Last-Modified` headers and, for a 200 only, the body. Closing
+ * One answer: the status, the raw `Location`, `Last-Modified` and `Date` headers and, for a 200 only, the body. Closing
  * releases the connection.
  */
 internal class TransportResponse(
@@ -19,6 +19,7 @@ internal class TransportResponse(
     val location: String?,
     val body: InputStream?,
     val lastModified: String? = null,
+    val date: String? = null,
     private val onClose: () -> Unit = {},
 ) : Closeable {
     override fun close() {
@@ -61,6 +62,7 @@ internal class UrlConnectionTransport : ListTransport {
                 connection.getHeaderField("Location"),
                 body,
                 connection.getHeaderField("Last-Modified"),
+                connection.getHeaderField("Date"),
             ) { connection.disconnect() }
         } catch (failure: IOException) {
             connection.disconnect()

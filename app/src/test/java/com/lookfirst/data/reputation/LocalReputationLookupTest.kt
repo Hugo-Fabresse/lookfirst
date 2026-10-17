@@ -29,7 +29,7 @@ class LocalReputationLookupTest {
         officials: Set<String> = setOf("good.com"),
         second: Parsed? = null,
     ): LocalReputationLookup {
-        val store = ListStore(File(folder.root, "rep"), listOf(cert, other), { clock }, {})
+        val store = ListStore(File(folder.newFolder(), "rep"), listOf(cert, other), { clock }, {})
         if (entries != null) assertTrue(store.install(cert, entries, null) is ListInstallResult.Installed)
         if (second != null) assertTrue(store.install(other, second, null) is ListInstallResult.Installed)
         return LocalReputationLookup(store, officials) { TEST_PSL }

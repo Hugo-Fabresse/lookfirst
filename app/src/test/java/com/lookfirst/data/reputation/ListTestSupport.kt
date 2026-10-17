@@ -63,18 +63,19 @@ internal class FakePublisher : ListTransport {
     var onRequest: (URI) -> Unit = {}
     var failure: IOException? = null
 
-    fun put(url: URI, text: String, lastModified: String? = null) = putBytes(url, text.toByteArray(), lastModified)
+    fun put(url: URI, text: String, lastModified: String? = null, date: String? = null) =
+        putBytes(url, text.toByteArray(), lastModified, date)
 
-    fun putBytes(url: URI, bytes: ByteArray, lastModified: String? = null) {
-        routes[url.toString()] = { TransportResponse(200, null, ByteArrayInputStream(bytes), lastModified) }
+    fun putBytes(url: URI, bytes: ByteArray, lastModified: String? = null, date: String? = null) {
+        routes[url.toString()] = { TransportResponse(200, null, ByteArrayInputStream(bytes), lastModified, date) }
     }
 
     fun putStream(url: URI, open: () -> InputStream) {
         routes[url.toString()] = { TransportResponse(200, null, open()) }
     }
 
-    fun putStatus(url: URI, status: Int, location: String? = null) {
-        routes[url.toString()] = { TransportResponse(status, location, null) }
+    fun putStatus(url: URI, status: Int, location: String? = null, date: String? = null) {
+        routes[url.toString()] = { TransportResponse(status, location, null, null, date) }
     }
 
     override fun get(url: URI, headers: Map<String, String>): TransportResponse {

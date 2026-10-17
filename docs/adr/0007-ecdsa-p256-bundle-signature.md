@@ -18,7 +18,8 @@ D13 chose Ed25519 for the signed bundle (manifest). The app verifies, it never s
 - The manifest is signed with **ECDSA over P-256 with SHA-256**, verified on the phone with `Signature.getInstance("SHA256withECDSA")` and a public key loaded from an X.509 SubjectPublicKeyInfo (`KeyFactory.getInstance("EC")`). Available on every API level we support.
 - The signature is detached (`manifest.sig`) and covers a fixed domain-separation prefix followed by the exact bytes of `manifest.json`. Format and key handling: `docs/design/reputation-bundle.md`.
 - Signing happens only in the lists pipeline (LF-25), on a runner, with a key held as an environment secret. Nonce quality matters for ECDSA: the signing step uses a deterministic-nonce implementation (RFC 6979) when the tool offers it, otherwise the OS CSPRNG; it never uses a custom RNG.
-- Public keys are pinned in the APK. A second, offline recovery key is pinned too (rotation, see the design document).
+- Public keys are pinned in the APK: a signing key S and an offline recovery key R that no keyset can remove. Keys are accepted only as X.509 SubjectPublicKeyInfo with the named curve secp256r1 (explicit parameters refused, CurveBall) and compared byte for byte after selection by `keyId`.
+- Keys listed in a keyset sign manifests only; keysets are signed by R only. A keyset revoking S opens a new key epoch; the anti-rollback floor is `(keyEpoch, bundleVersion)` compared lexicographically, `bundleVersion` is derived from `generatedAt`, and `generatedAt` beyond the clock + 48 h is rejected, so a stolen S cannot lock the version counter for good (design document, sections 3, 4, 6).
 - D13's other parts stand: signed manifest, anti-rollback, atomic swap.
 
 ## Consequences

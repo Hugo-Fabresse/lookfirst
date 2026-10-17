@@ -10,7 +10,6 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.lookfirst.data.scan.camera.ZxingBarcodeDecoder
 import com.lookfirst.domain.scan.LuminanceFrame
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,58 +22,97 @@ class FinderGridGuardTest {
         val text = "https://example.com/" + "a1b2c3d4e5".repeat(MAX_TEXT / 10)
         val frame = qrFrame(text, modulePx = 4)
         assertEquals("version 40 expected (177 modules + quiet zone)", 185 * 4, frame.width)
-        assertFalse(isGrid(frame))
+        assertEquals(FinderGridGuard.Load.MULTI_OK, load(frame))
         assertEquals(text, decoder.decode(frame))
     }
 
     @Test
-    fun severalQrCodesOnOneFrameAreNotRefused() {
-        val frame = tile(listOf("https://a.example/1", "https://b.example/2", "WIFI:T:WPA;S:x;P:y;;", "tel:+33123"))
-        assertFalse(isGrid(frame))
+    fun twelveQrCodesOnOneFrameAreNotRefusedAndStillRead() {
+        val frame = page(codes = 12, columns = 4, modulePx = 6)
+        val counting = counting(frame)
+        println("LF-35 12 QR: ${counting.candidates} candidates, ${counting.checks} checks")
+        assertEquals(FinderGridGuard.Load.MULTI_OK, counting.load)
         assertNotNull(decoder.decode(frame))
     }
 
     @Test
-    fun aGridOfFinderPatternsIsRefusedWithoutCallingTheReader() {
+    fun aCrowdedPageGoesToThePlainReaderOnlyAndIsStillRead() {
+        val frame = page(codes = 40, columns = 8, modulePx = 3)
+        val counting = counting(frame)
+        println("LF-35 40 QR: ${counting.candidates} candidates, ${counting.checks} checks")
+        assertEquals(FinderGridGuard.Load.SIMPLE_ONLY, counting.load)
+        assertNotNull(decoder.decode(frame))
+    }
+
+    @Test
+    fun aGridOfFinderPatternsNeverReachesTheReader() {
         val frame = finderGrid(1280, 720, module = 2)
+        var reads = 0
         val started = System.nanoTime()
-        assertTrue(isGrid(frame))
-        val result = decoder.decode(frame)
+        val result = decoder.decode(frame) { reads++.let { null } }
         val millis = (System.nanoTime() - started) / NANOS_PER_MILLI
         println("LF-35 grid 1280x720 guard+decode: $millis ms")
         assertNull(result)
+        assertEquals(0, reads)
+        assertEquals(FinderGridGuard.Load.REFUSED, load(frame))
         assertTrue("took $millis ms", millis < GENEROUS_MS)
     }
 
     @Test
     fun aHugeGridIsRefusedToo() {
         val frame = finderGrid(4000, 3000, module = 2)
+        var reads = 0
         val started = System.nanoTime()
-        assertNull(decoder.decode(frame))
+        assertNull(decoder.decode(frame) { reads++.let { null } })
         val millis = (System.nanoTime() - started) / NANOS_PER_MILLI
         println("LF-35 grid 4000x3000 decode: $millis ms")
+        assertEquals(0, reads)
         assertTrue("took $millis ms", millis < GENEROUS_MS)
     }
 
     @Test
-    fun countingCostStaysLinearOnLargeFramesWithoutCandidates() {
-        for ((w, h) in listOf(1280 to 720, 4000 to 3000)) {
-            val stripes = LuminanceFrame(ByteArray(w * h) { i -> if ((i % w) / 3 % 2 == 0) 0 else 0xFF.toByte() }, w, h)
-            val matrix = BinaryBitmap(HybridBinarizer(source(stripes))).blackMatrix
+    fun countingCostIsBoundedOnLargeFrames() {
+        val cases = listOf(
+            "plain stripes 1280x720" to stripes(1280, 720, pattern = intArrayOf(3, 3)),
+            "plain stripes 4000x3000" to stripes(4000, 3000, pattern = intArrayOf(3, 3)),
+            "1:1:3:1:1 stripes 1280x720" to stripes(1280, 720, pattern = FINDER_RUNS),
+            "1:1:3:1:1 stripes 4000x3000" to stripes(4000, 3000, pattern = FINDER_RUNS),
+            "1:1:3:1:1 stripes 100x2048" to stripes(100, 2048, pattern = FINDER_RUNS),
+            "1:1:3:1:1 stripes 100x40000" to stripes(100, 40_000, pattern = FINDER_RUNS),
+        )
+        for ((name, frame) in cases) {
+            val matrix = BinaryBitmap(HybridBinarizer(source(frame))).blackMatrix
             val started = System.nanoTime()
-            val grid = FinderGridGuard.isGrid(matrix)
+            val counting = FinderGridGuard.count(matrix)
             val millis = (System.nanoTime() - started) / NANOS_PER_MILLI
-            println("LF-35 count ${w}x$h (no candidate, full scan): $millis ms")
-            assertFalse(grid)
-            assertTrue("took $millis ms", millis < GENEROUS_MS)
+            println("LF-35 count $name: $millis ms, ${counting.checks} checks, over budget ${counting.overBudget}")
+            assertTrue("$name took $millis ms", millis < GENEROUS_MS)
         }
     }
 
     private fun source(frame: LuminanceFrame) =
         PlanarYUVLuminanceSource(frame.luminance, frame.width, frame.height, 0, 0, frame.width, frame.height, false)
 
-    private fun isGrid(frame: LuminanceFrame) =
-        FinderGridGuard.isGrid(BinaryBitmap(HybridBinarizer(source(frame))).blackMatrix)
+    private fun load(frame: LuminanceFrame) = counting(frame).load
+
+    private fun counting(frame: LuminanceFrame) =
+        FinderGridGuard.count(BinaryBitmap(HybridBinarizer(source(frame))).blackMatrix)
+
+    /** Vertical stripes whose run lengths (in 2 px) repeat [pattern]: every row looks like a finder pattern. */
+    private fun stripes(w: Int, h: Int, pattern: IntArray): LuminanceFrame {
+        val column = ByteArray(w)
+        var x = 0
+        var index = 0
+        while (x < w) {
+            val run = pattern[index % pattern.size] * 2
+            for (i in 0 until run) if (x + i < w) column[x + i] = if (index % 2 == 0) 0 else 0xFF.toByte()
+            x += run
+            index++
+        }
+        val pixels = ByteArray(w * h)
+        for (y in 0 until h) System.arraycopy(column, 0, pixels, y * w, w)
+        return LuminanceFrame(pixels, w, h)
+    }
 
     private fun assertNotNull(value: Any?) = assertTrue(value != null)
 
@@ -87,17 +125,19 @@ class FinderGridGuardTest {
         return LuminanceFrame(pixels, w, h)
     }
 
-    private fun tile(texts: List<String>): LuminanceFrame {
-        val frames = texts.map { qrFrame(it, modulePx = 5) }
+    private fun page(codes: Int, columns: Int, modulePx: Int): LuminanceFrame {
+        val frames = List(codes) { qrFrame("https://example.com/code/$it", modulePx) }
         val cell = frames.maxOf { it.width }
-        val w = cell * 2
-        val pixels = ByteArray(w * w) { 0xFF.toByte() }
+        val rows = (codes + columns - 1) / columns
+        val w = cell * columns
+        val h = cell * rows
+        val pixels = ByteArray(w * h) { 0xFF.toByte() }
         frames.forEachIndexed { index, f ->
-            val ox = (index % 2) * cell
-            val oy = (index / 2) * cell
+            val ox = (index % columns) * cell
+            val oy = (index / columns) * cell
             for (y in 0 until f.height) System.arraycopy(f.luminance, y * f.width, pixels, (oy + y) * w + ox, f.width)
         }
-        return LuminanceFrame(pixels, w, w)
+        return LuminanceFrame(pixels, w, h)
     }
 
     /** Finder patterns (7 x 7 modules, 1:1:3:1:1) packed on a page: the shape that freezes the readers. */
@@ -126,5 +166,6 @@ class FinderGridGuardTest {
         const val MAX_TEXT = 2900
         const val NANOS_PER_MILLI = 1_000_000L
         const val GENEROUS_MS = 10_000L
+        val FINDER_RUNS = intArrayOf(1, 1, 3, 1, 1, 4)
     }
 }

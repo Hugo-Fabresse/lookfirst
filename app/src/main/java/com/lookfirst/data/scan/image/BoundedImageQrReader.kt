@@ -13,13 +13,11 @@ import com.google.zxing.NotFoundException
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.ReaderException
 import com.google.zxing.Result
-import com.google.zxing.common.BitMatrix
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.multi.qrcode.QRCodeMultiReader
 import com.google.zxing.qrcode.QRCodeReader
-import com.google.zxing.qrcode.detector.FinderPatternFinder
+import com.lookfirst.data.scan.FinderGridGuard
 import com.lookfirst.di.ImageReadDispatcher
-import com.lookfirst.domain.scan.BarcodeDecoder
 import com.lookfirst.domain.scan.LuminanceFrame
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -41,9 +39,10 @@ import javax.inject.Singleton
  * - at most [MAX_FILE_BYTES] are read, whatever the provider claims about the size; cancellable while reading;
  * - the magic bytes are checked before the platform decoder sees the file: jpeg, png, webp, heif only;
  * - the header is read first: at most [MAX_SOURCE_PIXELS] declared, then the bitmap is decoded sub-sampled to
- *   about [MAX_DECODE_PIXELS]; platform decoder only, one frame; the bitmap is recycled right after use;
- * - ZXing's multi-code reader is cubic in the number of finder patterns and cannot be cancelled: it only runs
- *   when at most [MAX_FINDER_CANDIDATES] candidates are found, otherwise the plain (fast-failing) reader is used;
+ *   about [MAX_DECODE_PIXELS] and [MAX_DECODE_SIDE] on the longest side (a very tall image makes the vertical
+ *   cross-check of ZXing quadratic); platform decoder only, one frame; the bitmap is recycled right after use;
+ * - ZXing's readers (multi-code and TRY_HARDER) are super-linear in the number of finder patterns and cannot be
+ *   cancelled: [FinderGridGuard] counts the candidates first and a grid is refused as unreadable, ZXing untouched;
  * - one read at a time on a dedicated single thread: while a read is still running (even if cancelled), a new
  *   one is refused with [ImageFailure.BUSY];
  * - nothing is written to disk.
@@ -51,7 +50,6 @@ import javax.inject.Singleton
 @Singleton
 class BoundedImageQrReader @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val decoder: BarcodeDecoder,
     @ImageReadDispatcher private val dispatcher: CoroutineDispatcher,
 ) : ImageQrReader {
     private val busy = AtomicBoolean(false)
@@ -157,13 +155,27 @@ class BoundedImageQrReader @Inject constructor(
 
     private fun findCode(frame: LuminanceFrame): ImageReadResult {
         val bitmap = frame.toBinaryBitmap()
-        // A grid of finder patterns is not a photo of a code: no multi-code search (cubic cost, not cancellable).
-        val grid = FinderCandidateCounter(bitmap.blackMatrix).exceeds(MAX_FINDER_CANDIDATES)
-        val texts = if (grid) emptyList() else decodeAll(bitmap)
-        if (texts.isNotEmpty()) return ImageReadResult.Found(texts.first(), multiple = texts.size > 1)
+        // Candidates are counted before any ZXing call (LF-35): a grid is refused, a crowded page skips the
+        // multi-code reader (cubic, not cancellable) and gets the plain reader only.
+        val load = FinderGridGuard.assess(bitmap.blackMatrix)
+        if (load == FinderGridGuard.Load.REFUSED) return failed(ImageFailure.UNREADABLE)
+        if (load == FinderGridGuard.Load.MULTI_OK) {
+            val texts = decodeAll(bitmap)
+            if (texts.isNotEmpty()) return ImageReadResult.Found(texts.first(), multiple = texts.size > 1)
+        }
+        return readOne(bitmap)
+    }
 
-        decoder.decode(frame)?.let { return ImageReadResult.Found(it, multiple = false) }
-        return failed(if (grid) ImageFailure.UNREADABLE else classifyMiss(bitmap))
+    /** The plain reader on the already binarized (and already guarded) bitmap; also tells absent from unreadable. */
+    private fun readOne(bitmap: BinaryBitmap): ImageReadResult = try {
+        val text = QRCodeReader().decode(bitmap, HINTS).text
+        if (text.isNullOrEmpty()) failed(ImageFailure.UNREADABLE) else ImageReadResult.Found(text, multiple = false)
+    } catch (ignored: NotFoundException) {
+        failed(ImageFailure.NO_QR)
+    } catch (ignored: FormatException) {
+        failed(ImageFailure.UNREADABLE)
+    } catch (ignored: ChecksumException) {
+        failed(ImageFailure.UNREADABLE)
     }
 
     /** The distinct texts of every code found, first in reading order. */
@@ -176,69 +188,16 @@ class BoundedImageQrReader @Inject constructor(
         return codes.mapNotNull { it.text?.takeIf(String::isNotEmpty) }.distinct()
     }
 
-    /** Tells "nothing there" from "a code was spotted but cannot be decoded". */
-    private fun classifyMiss(bitmap: BinaryBitmap): ImageFailure = try {
-        QRCodeReader().decode(bitmap, HINTS)
-        ImageFailure.UNREADABLE
-    } catch (ignored: NotFoundException) {
-        ImageFailure.NO_QR
-    } catch (ignored: FormatException) {
-        ImageFailure.UNREADABLE
-    } catch (ignored: ChecksumException) {
-        ImageFailure.UNREADABLE
-    }
-
     private fun failed(reason: ImageFailure) = ImageReadResult.Failed(reason)
 
     /** Internal early exit: the image is refused for [reason]. */
     private class ImageRefusedException(val reason: ImageFailure) : Exception()
 
-    /**
-     * Counts the finder-pattern candidates with ZXing's own detector (same run-length scan as its `find`), and
-     * stops as soon as there are more than a limit. Cheap: linear in the pixels, no combination of patterns.
-     */
-    private class FinderCandidateCounter(matrix: BitMatrix) : FinderPatternFinder(matrix) {
-        @Suppress("CyclomaticComplexMethod", "NestedBlockDepth")
-        fun exceeds(limit: Int): Boolean {
-            val width = image.width
-            val state = IntArray(PATTERN_RUNS)
-            for (y in 0 until image.height) {
-                doClearCounts(state)
-                var current = 0
-                for (x in 0 until width) {
-                    if (image.get(x, y)) {
-                        if ((current and 1) == 1) current++
-                        state[current]++
-                    } else if ((current and 1) == 1) {
-                        state[current]++
-                    } else if (current == PATTERN_RUNS - 1) {
-                        if (foundPatternCross(state) && handlePossibleCenter(state, y, x)) {
-                            current = 0
-                            doClearCounts(state)
-                        } else {
-                            doShiftCounts2(state)
-                            current = PATTERN_RUNS - 2
-                        }
-                    } else {
-                        state[++current]++
-                    }
-                }
-                if (foundPatternCross(state)) handlePossibleCenter(state, y, width)
-                if (possibleCenters.size > limit) return true
-            }
-            return false
-        }
-
-        private companion object {
-            const val PATTERN_RUNS = 5
-        }
-    }
-
     internal companion object {
         const val MAX_FILE_BYTES = 10L * 1024 * 1024
         const val MAX_SOURCE_PIXELS = 25_000_000L
         const val MAX_DECODE_PIXELS = 4_000_000L
-        const val MAX_FINDER_CANDIDATES = 30
+        const val MAX_DECODE_SIDE = 2_048
         private const val BUFFER_BYTES = 16 * 1024
         private const val OPAQUE = 255
         private const val RED_WEIGHT = 299
@@ -251,10 +210,14 @@ class BoundedImageQrReader @Inject constructor(
         private const val CHANNEL_MASK = 0xFF
         private val HINTS: Map<DecodeHintType, Any> = mapOf(DecodeHintType.TRY_HARDER to true)
 
-        /** Power of two for `inSampleSize` so that the decoded bitmap (sizes rounded up) stays under the bound. */
+        /** Power of two for `inSampleSize`: the decoded bitmap (sizes rounded up) keeps both bounds, pixels and side. */
         fun sampleSizeFor(width: Int, height: Int): Int {
             var sample = 1
-            while (ceilDiv(width, sample).toLong() * ceilDiv(height, sample) > MAX_DECODE_PIXELS) sample *= 2
+            while (ceilDiv(width, sample).toLong() * ceilDiv(height, sample) > MAX_DECODE_PIXELS ||
+                maxOf(ceilDiv(width, sample), ceilDiv(height, sample)) > MAX_DECODE_SIDE
+            ) {
+                sample *= 2
+            }
             return sample
         }
 

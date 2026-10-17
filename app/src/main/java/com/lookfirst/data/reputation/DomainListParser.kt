@@ -1,5 +1,6 @@
 package com.lookfirst.data.reputation
 
+import com.lookfirst.domain.analysis.UserContentPlatforms
 import com.lookfirst.domain.host.HostNormalizer
 import com.lookfirst.domain.host.HostResult
 import com.lookfirst.domain.host.PublicSuffixList
@@ -141,7 +142,7 @@ internal object DomainListParser {
             val ascii = host.ascii
             val key: Long
             if (host.kind == HostKind.DOMAIN) {
-                val registrable = psl?.registrableDomain(ascii)
+                val registrable = psl?.registrableDomain(ascii)?.let { UserContentPlatforms.registrableFor(ascii, it) }
                 if (registrable == null) {
                     // A bare public suffix ("com", "co.uk") would flag a whole registry: refused, not stored.
                     invalid++

@@ -23,7 +23,7 @@ class LocalHostsTest {
             listOf(
                 "localhost", "app.localhost", "router", "fritz.box", "nas.local", "x.home.arpa", "site.internal",
                 "printer.lan", "wiki.intranet", "srv.corp", "tv.home", "a.test", "a.example", "a.invalid",
-                "a.notatld", "ROUTER", "nas.local.", "a.b.c.internal",
+                "a.notatld", "home.arpa", "speedport.box", "ROUTER", "nas.local.", "a.b.c.internal",
             )
         val missed = hosts.filterNot { local(it) }
         assertTrue("not flagged: $missed", missed.isEmpty())
@@ -57,6 +57,8 @@ class LocalHostsTest {
         assertFalse(local("internal.fr"))
         assertFalse(local("lan.com"))
         assertFalse(local("box.com"))
+        assertFalse(local("exemple.box"))
+        assertFalse(local("nic.box"))
         assertFalse(local("testing.org"))
     }
 

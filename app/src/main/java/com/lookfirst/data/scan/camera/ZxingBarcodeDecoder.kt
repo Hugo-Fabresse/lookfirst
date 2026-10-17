@@ -6,6 +6,7 @@ import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.ReaderException
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
+import com.lookfirst.data.scan.FinderGridGuard
 import com.lookfirst.domain.scan.BarcodeDecoder
 import com.lookfirst.domain.scan.LuminanceFrame
 import javax.inject.Inject
@@ -29,7 +30,13 @@ class ZxingBarcodeDecoder @Inject constructor() : BarcodeDecoder {
             false,
         )
         return try {
-            QRCodeReader().decode(BinaryBitmap(HybridBinarizer(source)), HINTS).text?.takeIf { it.isNotEmpty() }
+            val bitmap = BinaryBitmap(HybridBinarizer(source))
+            // A grid of finder patterns freezes the reader (LF-35): such a frame is ignored before ZXing reads it.
+            if (FinderGridGuard.isGrid(bitmap.blackMatrix)) {
+                null
+            } else {
+                QRCodeReader().decode(bitmap, HINTS).text?.takeIf { it.isNotEmpty() }
+            }
         } catch (ignored: ReaderException) {
             null
         } catch (ignored: RuntimeException) {

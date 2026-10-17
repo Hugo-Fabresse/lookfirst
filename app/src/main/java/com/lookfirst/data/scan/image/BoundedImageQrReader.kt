@@ -13,11 +13,10 @@ import com.google.zxing.NotFoundException
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.ReaderException
 import com.google.zxing.Result
-import com.google.zxing.common.BitMatrix
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.multi.qrcode.QRCodeMultiReader
 import com.google.zxing.qrcode.QRCodeReader
-import com.google.zxing.qrcode.detector.FinderPatternFinder
+import com.lookfirst.data.scan.FinderGridGuard
 import com.lookfirst.di.ImageReadDispatcher
 import com.lookfirst.domain.scan.BarcodeDecoder
 import com.lookfirst.domain.scan.LuminanceFrame
@@ -42,8 +41,8 @@ import javax.inject.Singleton
  * - the magic bytes are checked before the platform decoder sees the file: jpeg, png, webp, heif only;
  * - the header is read first: at most [MAX_SOURCE_PIXELS] declared, then the bitmap is decoded sub-sampled to
  *   about [MAX_DECODE_PIXELS]; platform decoder only, one frame; the bitmap is recycled right after use;
- * - ZXing's multi-code reader is cubic in the number of finder patterns and cannot be cancelled: it only runs
- *   when at most [MAX_FINDER_CANDIDATES] candidates are found, otherwise the plain (fast-failing) reader is used;
+ * - ZXing's readers (multi-code and TRY_HARDER) are super-linear in the number of finder patterns and cannot be
+ *   cancelled: [FinderGridGuard] counts the candidates first and a grid is refused as unreadable, ZXing untouched;
  * - one read at a time on a dedicated single thread: while a read is still running (even if cancelled), a new
  *   one is refused with [ImageFailure.BUSY];
  * - nothing is written to disk.
@@ -158,12 +157,13 @@ class BoundedImageQrReader @Inject constructor(
     private fun findCode(frame: LuminanceFrame): ImageReadResult {
         val bitmap = frame.toBinaryBitmap()
         // A grid of finder patterns is not a photo of a code: no multi-code search (cubic cost, not cancellable).
-        val grid = FinderCandidateCounter(bitmap.blackMatrix).exceeds(MAX_FINDER_CANDIDATES)
-        val texts = if (grid) emptyList() else decodeAll(bitmap)
+        // The plain TRY_HARDER reader (here and in [decoder]) is slow on a grid too: ZXing is not called at all (LF-35).
+        if (FinderGridGuard.isGrid(bitmap.blackMatrix)) return failed(ImageFailure.UNREADABLE)
+        val texts = decodeAll(bitmap)
         if (texts.isNotEmpty()) return ImageReadResult.Found(texts.first(), multiple = texts.size > 1)
 
         decoder.decode(frame)?.let { return ImageReadResult.Found(it, multiple = false) }
-        return failed(if (grid) ImageFailure.UNREADABLE else classifyMiss(bitmap))
+        return failed(classifyMiss(bitmap))
     }
 
     /** The distinct texts of every code found, first in reading order. */
@@ -193,52 +193,10 @@ class BoundedImageQrReader @Inject constructor(
     /** Internal early exit: the image is refused for [reason]. */
     private class ImageRefusedException(val reason: ImageFailure) : Exception()
 
-    /**
-     * Counts the finder-pattern candidates with ZXing's own detector (same run-length scan as its `find`), and
-     * stops as soon as there are more than a limit. Cheap: linear in the pixels, no combination of patterns.
-     */
-    private class FinderCandidateCounter(matrix: BitMatrix) : FinderPatternFinder(matrix) {
-        @Suppress("CyclomaticComplexMethod", "NestedBlockDepth")
-        fun exceeds(limit: Int): Boolean {
-            val width = image.width
-            val state = IntArray(PATTERN_RUNS)
-            for (y in 0 until image.height) {
-                doClearCounts(state)
-                var current = 0
-                for (x in 0 until width) {
-                    if (image.get(x, y)) {
-                        if ((current and 1) == 1) current++
-                        state[current]++
-                    } else if ((current and 1) == 1) {
-                        state[current]++
-                    } else if (current == PATTERN_RUNS - 1) {
-                        if (foundPatternCross(state) && handlePossibleCenter(state, y, x)) {
-                            current = 0
-                            doClearCounts(state)
-                        } else {
-                            doShiftCounts2(state)
-                            current = PATTERN_RUNS - 2
-                        }
-                    } else {
-                        state[++current]++
-                    }
-                }
-                if (foundPatternCross(state)) handlePossibleCenter(state, y, width)
-                if (possibleCenters.size > limit) return true
-            }
-            return false
-        }
-
-        private companion object {
-            const val PATTERN_RUNS = 5
-        }
-    }
-
     internal companion object {
         const val MAX_FILE_BYTES = 10L * 1024 * 1024
         const val MAX_SOURCE_PIXELS = 25_000_000L
         const val MAX_DECODE_PIXELS = 4_000_000L
-        const val MAX_FINDER_CANDIDATES = 30
         private const val BUFFER_BYTES = 16 * 1024
         private const val OPAQUE = 255
         private const val RED_WEIGHT = 299

@@ -8,6 +8,8 @@ on:
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
+  push:
+    branches: [ci/LF-20-data-provenance]
 
 permissions: {}
 

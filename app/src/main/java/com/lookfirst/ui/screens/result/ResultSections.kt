@@ -76,12 +76,15 @@ internal fun UrlHost(host: HostDisplay, modifier: Modifier = Modifier) {
 /** The host with its registrable domain in bold and every non-ASCII letter underlined (not colour alone). */
 internal fun hostAnnotated(host: HostDisplay): AnnotatedString = buildAnnotatedString {
     val text = host.shown.value
-    for ((index, char) in text.withIndex()) {
+    var index = 0
+    while (index < text.length) {
+        val codePoint = text.codePointAt(index)
         val style = SpanStyle(
             fontWeight = if (index >= host.strongFrom) FontWeight.Bold else FontWeight.Normal,
-            textDecoration = if (char.code > ASCII_LIMIT) TextDecoration.Underline else null,
+            textDecoration = if (codePoint > ASCII_LIMIT) TextDecoration.Underline else null,
         )
-        withStyle(style) { append(char) }
+        withStyle(style) { append(String(Character.toChars(codePoint))) }
+        index += Character.charCount(codePoint)
     }
 }
 

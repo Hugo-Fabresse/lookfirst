@@ -77,7 +77,7 @@
     <string name="reason_lists_unavailable_short">Lists unreadable</string>
     <string name="reason_lists_unavailable">The reputation lists could not be read: the address was not compared with reported sites.</string>
     <string name="reason_analysis_incomplete_short">Analysis incomplete</string>
-    <string name="reason_analysis_incomplete">The address could not be fully analysed: the look-alike checks were not made.</string>
+    <string name="reason_analysis_incomplete">The content could not be fully analysed: some checks were not made.</string>
     <string name="reason_unparsable_short">Content not understood</string>
     <string name="reason_unparsable">This content could not be understood. It is shown as is.</string>
     <string name="reason_redirect_http_short">Unencrypted redirect</string>
@@ -159,7 +159,7 @@
     <string name="open_in_maps">Open in Maps</string>
     <string name="add_wifi_network">Add this network</string>
     <string name="open_wifi_settings">Open Wi-Fi settings</string>
-    <string name="a11y_open_unavailable">Open: not available yet in this version</string>
+    <string name="a11y_open_unavailable">%1$s: not available yet in this version</string>
     <string name="a11y_risk_signal_n">Risk signal %1$d of %2$d: %3$s</string>
     <string name="a11y_technical_form">Technical form: %1$s</string>
     <string name="a11y_dash">dash</string>

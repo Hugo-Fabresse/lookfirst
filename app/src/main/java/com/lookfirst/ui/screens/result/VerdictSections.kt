@@ -129,7 +129,14 @@ internal fun AnalysingBanner(modifier: Modifier = Modifier) {
 @Composable
 internal fun VerdictHeader(verdict: Verdict, modifier: Modifier = Modifier) {
     val focus = remember { FocusRequester() }
-    LaunchedEffect(verdict.payloadId) { runCatching { focus.requestFocus() } }
+    // Saved across rotation: focus and announcement happen once per payload, not again when the screen is rebuilt.
+    var announced by rememberSaveable(verdict.payloadId) { mutableStateOf(false) }
+    LaunchedEffect(verdict.payloadId) {
+        if (!announced) {
+            runCatching { focus.requestFocus() }
+            announced = true
+        }
+    }
     val colors = LocalVerdictPalette.current.of(verdict.level)
     val texts = rememberReasonTexts()
     val sentence = remember(verdict, texts) { headlineSentence(verdict, texts) }
@@ -141,7 +148,7 @@ internal fun VerdictHeader(verdict: Verdict, modifier: Modifier = Modifier) {
             .focusable()
             .semantics(mergeDescendants = true) {
                 heading()
-                liveRegion = LiveRegionMode.Polite
+                if (!announced) liveRegion = LiveRegionMode.Polite
             },
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

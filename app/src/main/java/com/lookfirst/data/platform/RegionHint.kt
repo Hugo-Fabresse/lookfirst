@@ -22,8 +22,11 @@ internal fun pickRegion(vararg candidates: String?): String? = candidates
 /** SIM country first (no permission needed), then the locale. Reads nothing else, sends nothing. */
 class AndroidRegionHintProvider @Inject constructor(@ApplicationContext private val context: Context) :
     RegionHintProvider {
-    override fun regionHint(): String? {
+    @Suppress("TooGenericExceptionCaught")
+    override fun regionHint(): String? = try {
         val sim = (context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager)?.simCountryIso
-        return pickRegion(sim, Locale.getDefault().country)
+        pickRegion(sim, Locale.getDefault().country)
+    } catch (ignored: RuntimeException) {
+        null
     }
 }

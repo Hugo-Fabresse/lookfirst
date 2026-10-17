@@ -80,10 +80,12 @@ class ResultViewModel @Inject constructor(
     }
 
     /** Never throws: an analysis that fails is reported as incomplete (CAUTION), not as "no risk signal". */
-    private fun analyze(raw: String, payloadId: String): Verdict = runCatching {
+    @Suppress("TooGenericExceptionCaught")
+    private fun analyze(raw: String, payloadId: String): Verdict = try {
         analyzeScan(raw, payloadId, AnalysisContext(regionHints.regionHint()))
-    }.getOrElse {
-        if (it is CancellationException) throw it
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (ignored: Exception) {
         Verdict(VerdictLevel.CAUTION, listOf(Signal(SignalCode.ANALYSIS_INCOMPLETE)), payloadId)
     }
 

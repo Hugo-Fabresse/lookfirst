@@ -77,7 +77,7 @@
     <string name="reason_lists_unavailable_short">Listes illisibles</string>
     <string name="reason_lists_unavailable">Les listes de réputation n\'ont pas pu être lues : l\'adresse n\'a pas été comparée aux sites signalés.</string>
     <string name="reason_analysis_incomplete_short">Analyse incomplète</string>
-    <string name="reason_analysis_incomplete">L\'adresse n\'a pas pu être analysée en entier : les contrôles d\'imitation n\'ont pas été faits.</string>
+    <string name="reason_analysis_incomplete">Le contenu n\'a pas pu être analysé en entier : certains contrôles n\'ont pas été faits.</string>
     <string name="reason_unparsable_short">Contenu incompris</string>
     <string name="reason_unparsable">Ce contenu n\'a pas pu être compris. Il est affiché tel quel.</string>
     <string name="reason_redirect_http_short">Redirection non chiffrée</string>
@@ -159,7 +159,7 @@
     <string name="open_in_maps">Ouvrir dans Plans</string>
     <string name="add_wifi_network">Ajouter ce réseau</string>
     <string name="open_wifi_settings">Ouvrir les réglages Wi-Fi</string>
-    <string name="a11y_open_unavailable">Ouvrir : pas encore disponible dans cette version</string>
+    <string name="a11y_open_unavailable">%1$s : pas encore disponible dans cette version</string>
     <string name="a11y_risk_signal_n">Signal de risque %1$d sur %2$d : %3$s</string>
     <string name="a11y_technical_form">Forme technique : %1$s</string>
     <string name="a11y_dash">tiret</string>

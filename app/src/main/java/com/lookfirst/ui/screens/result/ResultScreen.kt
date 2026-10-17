@@ -236,8 +236,6 @@ private fun OpenKind.label(): Int = when (this) {
 @Composable
 private fun ActionStack(actions: Actions?, onCancel: () -> Unit, onBlocked: () -> Unit) {
     val cancelSpoken = stringResource(R.string.a11y_cancel_resume)
-    val copySpoken = stringResource(R.string.a11y_copy_exact)
-    val openSpoken = stringResource(R.string.a11y_open_unavailable)
     val cancelModifier = Modifier
         .fillMaxWidth()
         .heightIn(min = MinTarget)
@@ -254,20 +252,23 @@ private fun ActionStack(actions: Actions?, onCancel: () -> Unit, onBlocked: () -
             }
         }
         if (actions != null) {
+            val copyLabel = stringResource(if (actions.copy.copyOnly) R.string.copy_only else R.string.action_copy)
+            val copySpoken = stringResource(R.string.a11y_copy_exact, copyLabel)
             OutlinedButton(
                 onClick = guarded(onBlocked = onBlocked, action = actions.copy.onClick),
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = MinTarget)
                     .semantics { contentDescription = copySpoken },
-            ) { Text(stringResource(if (actions.copy.copyOnly) R.string.copy_only else R.string.action_copy)) }
-            actions.open?.let { OpenButton(it, openSpoken) }
+            ) { Text(copyLabel) }
+            actions.open?.let { OpenButton(it) }
         }
     }
 }
 
 @Composable
-private fun OpenButton(open: OpenAction, spoken: String) {
+private fun OpenButton(open: OpenAction) {
+    val spoken = stringResource(R.string.a11y_open_unavailable, stringResource(open.label))
     val modifier = Modifier
         .fillMaxWidth()
         .heightIn(min = MinTarget)

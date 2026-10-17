@@ -71,7 +71,7 @@
     <string name="a11y_line_break">saut de ligne</string>
     <string name="a11y_invisible_other">caractère invisible</string>
     <string name="a11y_masked">masqué</string>
-    <string name="a11y_copy_exact">Copier le contenu exact</string>
+    <string name="a11y_copy_exact">%1$s, contenu exact</string>
     <string name="a11y_cancel_resume">Annuler et reprendre le scan</string>
     <plurals name="chars_more">
         <item quantity="one">… (%1$d caractère de plus non affiché)</item>

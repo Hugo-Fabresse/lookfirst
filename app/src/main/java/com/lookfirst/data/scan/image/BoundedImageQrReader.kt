@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.ChecksumException
 import com.google.zxing.DecodeHintType
@@ -12,40 +13,59 @@ import com.google.zxing.NotFoundException
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.ReaderException
 import com.google.zxing.Result
+import com.google.zxing.common.BitMatrix
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.multi.qrcode.QRCodeMultiReader
 import com.google.zxing.qrcode.QRCodeReader
-import com.lookfirst.di.IoDispatcher
+import com.google.zxing.qrcode.detector.FinderPatternFinder
+import com.lookfirst.di.ImageReadDispatcher
 import com.lookfirst.domain.scan.BarcodeDecoder
 import com.lookfirst.domain.scan.LuminanceFrame
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.FileNotFoundException
 import java.io.IOException
+import java.io.InputStream
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
-import kotlin.coroutines.coroutineContext
+import javax.inject.Singleton
 
 /**
- * [ImageQrReader] with hard bounds against a booby-trapped image (threat model T-IMG-1, T-IMG-4):
+ * [ImageQrReader] with hard bounds against a booby-trapped image (threat model T-IMG-1, T-IMG-2, T-IMG-4):
  * - only `content://` URIs (what the Photo Picker and the document picker return);
- * - at most [MAX_FILE_BYTES] are read, whatever the provider claims about the size;
- * - the header is read first: accepted formats only, at most [MAX_SOURCE_PIXELS] declared, then the bitmap is
- *   decoded sub-sampled to about [MAX_DECODE_PIXELS];
- * - platform decoder only (patched by OS updates), no animated format, one frame;
- * - the bitmap is recycled as soon as its luminance is copied; nothing is written to disk.
- * A QR code is searched for with the multi-code reader (all codes), then with the shared [BarcodeDecoder].
+ * - at most [MAX_FILE_BYTES] are read, whatever the provider claims about the size; cancellable while reading;
+ * - the magic bytes are checked before the platform decoder sees the file: jpeg, png, webp, heif only;
+ * - the header is read first: at most [MAX_SOURCE_PIXELS] declared, then the bitmap is decoded sub-sampled to
+ *   about [MAX_DECODE_PIXELS]; platform decoder only, one frame; the bitmap is recycled right after use;
+ * - ZXing's multi-code reader is cubic in the number of finder patterns and cannot be cancelled: it only runs
+ *   when at most [MAX_FINDER_CANDIDATES] candidates are found, otherwise the plain (fast-failing) reader is used;
+ * - one read at a time on a dedicated single thread: while a read is still running (even if cancelled), a new
+ *   one is refused with [ImageFailure.BUSY];
+ * - nothing is written to disk.
  */
+@Singleton
 class BoundedImageQrReader @Inject constructor(
     @ApplicationContext private val context: Context,
     private val decoder: BarcodeDecoder,
-    @IoDispatcher private val dispatcher: CoroutineDispatcher,
+    @ImageReadDispatcher private val dispatcher: CoroutineDispatcher,
 ) : ImageQrReader {
-    override suspend fun read(uri: Uri): ImageReadResult = withContext(dispatcher) {
-        try {
-            readBounded(uri)
+    private val busy = AtomicBoolean(false)
+
+    override suspend fun read(uri: Uri): ImageReadResult {
+        if (!busy.compareAndSet(false, true)) return failed(ImageFailure.BUSY)
+        return try {
+            withContext(dispatcher) {
+                try {
+                    readBounded(uri)
+                } finally {
+                    busy.set(false)
+                }
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (refused: ImageRefusedException) {
@@ -62,22 +82,21 @@ class BoundedImageQrReader @Inject constructor(
 
     private suspend fun readBounded(uri: Uri): ImageReadResult {
         if (uri.scheme != "content") return failed(ImageFailure.CORRUPT)
-        val bytes = readCapped(uri) ?: throw ImageRefusedException(ImageFailure.TOO_LARGE)
-        coroutineContext.ensureActive()
+        val bytes = readCapped(uri)
+        if (!ImageMagicBytes.isAccepted(bytes)) return failed(ImageFailure.CORRUPT)
+        currentCoroutineContext().ensureActive()
         val frame = decodeLuminance(bytes, sampleSizeOf(bytes))
-        coroutineContext.ensureActive()
+        currentCoroutineContext().ensureActive()
         return findCode(frame)
     }
 
-    /** Reads the header only: refuses an unaccepted format or a picture declaring too many pixels. */
+    /** Reads the header only: refuses a picture declaring too many pixels. */
     private fun sampleSizeOf(bytes: ByteArray): Int {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         val width = bounds.outWidth
         val height = bounds.outHeight
-        if (width <= 0 || height <= 0 || bounds.outMimeType !in ACCEPTED_MIME_TYPES) {
-            throw ImageRefusedException(ImageFailure.CORRUPT)
-        }
+        if (width <= 0 || height <= 0) throw ImageRefusedException(ImageFailure.CORRUPT)
         if (width.toLong() * height > MAX_SOURCE_PIXELS) throw ImageRefusedException(ImageFailure.TOO_LARGE)
         return sampleSizeFor(width, height)
     }
@@ -96,18 +115,40 @@ class BoundedImageQrReader @Inject constructor(
         }
     }
 
-    /** The bytes of [uri], or null when there are more than [MAX_FILE_BYTES] (reading stops there). */
-    private fun readCapped(uri: Uri): ByteArray? {
-        val input = context.contentResolver.openInputStream(uri) ?: throw IOException("no stream")
+    /**
+     * The bytes of [uri], through a file descriptor when the provider gives one (its size is only used to refuse
+     * early and to size the buffer, never as the bound), else through a stream. The descriptor is closed on
+     * cancellation. Throws [ImageRefusedException] over [MAX_FILE_BYTES].
+     */
+    private suspend fun readCapped(uri: Uri): ByteArray {
+        val descriptor = try {
+            context.contentResolver.openFileDescriptor(uri, "r")
+        } catch (ignored: FileNotFoundException) {
+            null
+        }
+        if (descriptor == null) {
+            val stream = context.contentResolver.openInputStream(uri) ?: throw IOException("no stream")
+            return readCapped(stream, expectedSize = -1L)
+        }
+        descriptor.use { pfd ->
+            val size = pfd.statSize
+            if (size > MAX_FILE_BYTES) throw ImageRefusedException(ImageFailure.TOO_LARGE)
+            return readCapped(ParcelFileDescriptor.AutoCloseInputStream(pfd), size)
+        }
+    }
+
+    private suspend fun readCapped(input: InputStream, expectedSize: Long): ByteArray {
         input.use { stream ->
-            val out = ByteArrayOutputStream()
+            val hint = if (expectedSize in 1..MAX_FILE_BYTES) expectedSize.toInt() else BUFFER_BYTES
+            val out = ByteArrayOutputStream(hint)
             val buffer = ByteArray(BUFFER_BYTES)
             var total = 0L
             while (true) {
+                currentCoroutineContext().ensureActive()
                 val read = stream.read(buffer)
                 if (read < 0) break
                 total += read
-                if (total > MAX_FILE_BYTES) return null
+                if (total > MAX_FILE_BYTES) throw ImageRefusedException(ImageFailure.TOO_LARGE)
                 out.write(buffer, 0, read)
             }
             return out.toByteArray()
@@ -116,16 +157,23 @@ class BoundedImageQrReader @Inject constructor(
 
     private fun findCode(frame: LuminanceFrame): ImageReadResult {
         val bitmap = frame.toBinaryBitmap()
+        // A grid of finder patterns is not a photo of a code: no multi-code search (cubic cost, not cancellable).
+        val grid = FinderCandidateCounter(bitmap.blackMatrix).exceeds(MAX_FINDER_CANDIDATES)
+        val texts = if (grid) emptyList() else decodeAll(bitmap)
+        if (texts.isNotEmpty()) return ImageReadResult.Found(texts.first(), multiple = texts.size > 1)
+
+        decoder.decode(frame)?.let { return ImageReadResult.Found(it, multiple = false) }
+        return failed(if (grid) ImageFailure.UNREADABLE else classifyMiss(bitmap))
+    }
+
+    /** The distinct texts of every code found, first in reading order. */
+    private fun decodeAll(bitmap: BinaryBitmap): List<String> {
         val codes = try {
             QRCodeMultiReader().decodeMultiple(bitmap, HINTS).toList().inReadingOrder()
         } catch (ignored: ReaderException) {
             emptyList()
         }
-        val texts = codes.mapNotNull { it.text?.takeIf(String::isNotEmpty) }.distinct()
-        if (texts.isNotEmpty()) return ImageReadResult.Found(texts.first(), multiple = texts.size > 1)
-
-        decoder.decode(frame)?.let { return ImageReadResult.Found(it, multiple = false) }
-        return failed(classifyMiss(bitmap))
+        return codes.mapNotNull { it.text?.takeIf(String::isNotEmpty) }.distinct()
     }
 
     /** Tells "nothing there" from "a code was spotted but cannot be decoded". */
@@ -142,13 +190,55 @@ class BoundedImageQrReader @Inject constructor(
 
     private fun failed(reason: ImageFailure) = ImageReadResult.Failed(reason)
 
-    /** Internal early exit of [readBounded]: the image is refused for [reason]. */
+    /** Internal early exit: the image is refused for [reason]. */
     private class ImageRefusedException(val reason: ImageFailure) : Exception()
 
+    /**
+     * Counts the finder-pattern candidates with ZXing's own detector (same run-length scan as its `find`), and
+     * stops as soon as there are more than a limit. Cheap: linear in the pixels, no combination of patterns.
+     */
+    private class FinderCandidateCounter(matrix: BitMatrix) : FinderPatternFinder(matrix) {
+        @Suppress("CyclomaticComplexMethod", "NestedBlockDepth")
+        fun exceeds(limit: Int): Boolean {
+            val width = image.width
+            val state = IntArray(PATTERN_RUNS)
+            for (y in 0 until image.height) {
+                doClearCounts(state)
+                var current = 0
+                for (x in 0 until width) {
+                    if (image.get(x, y)) {
+                        if ((current and 1) == 1) current++
+                        state[current]++
+                    } else if ((current and 1) == 1) {
+                        state[current]++
+                    } else if (current == PATTERN_RUNS - 1) {
+                        if (foundPatternCross(state) && handlePossibleCenter(state, y, x)) {
+                            current = 0
+                            doClearCounts(state)
+                        } else {
+                            doShiftCounts2(state)
+                            current = PATTERN_RUNS - 2
+                        }
+                    } else {
+                        state[++current]++
+                    }
+                }
+                if (foundPatternCross(state)) handlePossibleCenter(state, y, width)
+                if (possibleCenters.size > limit) return true
+            }
+            return false
+        }
+
+        private companion object {
+            const val PATTERN_RUNS = 5
+        }
+    }
+
     internal companion object {
-        const val MAX_FILE_BYTES = 20L * 1024 * 1024
-        const val MAX_SOURCE_PIXELS = 100_000_000L
+        const val MAX_FILE_BYTES = 10L * 1024 * 1024
+        const val MAX_SOURCE_PIXELS = 25_000_000L
         const val MAX_DECODE_PIXELS = 4_000_000L
+        const val MAX_FINDER_CANDIDATES = 30
         private const val BUFFER_BYTES = 16 * 1024
         private const val OPAQUE = 255
         private const val RED_WEIGHT = 299
@@ -159,15 +249,16 @@ class BoundedImageQrReader @Inject constructor(
         private const val RED_SHIFT = 16
         private const val ALPHA_SHIFT = 24
         private const val CHANNEL_MASK = 0xFF
-        private val ACCEPTED_MIME_TYPES = setOf("image/jpeg", "image/png", "image/webp", "image/heif", "image/heic")
         private val HINTS: Map<DecodeHintType, Any> = mapOf(DecodeHintType.TRY_HARDER to true)
 
-        /** Power of two for `inSampleSize` so that the decoded bitmap has at most [MAX_DECODE_PIXELS]. */
+        /** Power of two for `inSampleSize` so that the decoded bitmap (sizes rounded up) stays under the bound. */
         fun sampleSizeFor(width: Int, height: Int): Int {
             var sample = 1
-            while ((width / sample).toLong() * (height / sample) > MAX_DECODE_PIXELS) sample *= 2
+            while (ceilDiv(width, sample).toLong() * ceilDiv(height, sample) > MAX_DECODE_PIXELS) sample *= 2
             return sample
         }
+
+        private fun ceilDiv(value: Int, divisor: Int): Int = (value + divisor - 1) / divisor
 
         /** 8-bit luminance, a transparent pixel counting as white (a QR on a transparent PNG stays readable). */
         private fun Bitmap.toLuminanceFrame(): LuminanceFrame {

@@ -6,17 +6,20 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
+import java.util.concurrent.Executors
 import javax.inject.Qualifier
+import javax.inject.Singleton
 
 /** CPU-bound work off the UI thread (parsing a scanned text). */
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class DefaultDispatcher
 
-/** Blocking reads (a picked image) off the UI thread. */
+/** One dedicated thread for reading a picked image (a stuck read can then never starve anything else). */
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
-annotation class IoDispatcher
+annotation class ImageReadDispatcher
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -26,6 +29,9 @@ object DispatchersModule {
     fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
 
     @Provides
-    @IoDispatcher
-    fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
+    @Singleton
+    @ImageReadDispatcher
+    fun provideImageReadDispatcher(): CoroutineDispatcher = Executors
+        .newSingleThreadExecutor { task -> Thread(task, "image-qr-reader").apply { isDaemon = true } }
+        .asCoroutineDispatcher()
 }

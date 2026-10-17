@@ -154,25 +154,44 @@ class ScanViewModel @Inject constructor(
      * the Result screen exactly like a camera read, a failure to the image failure screen. Nothing else happens.
      */
     fun onImagePicked(uri: Uri?) {
-        val current = mutableState.value
-        val idle = current !is ScanUiState.ReadingImage && current !is ScanUiState.Captured
-        if (uri == null || !idle || readingImage?.isActive == true) return
-        if (current !is ScanUiState.ImageFailed) {
-            cameraBlockedState = current.takeIf {
+        if (uri == null) return
+        var previous: ScanUiState = ScanUiState.Captured
+        var accepted = false
+        mutableState.update { current ->
+            previous = current
+            accepted = current.canStartImageRead()
+            if (accepted) ScanUiState.ReadingImage else current
+        }
+        if (!accepted) return
+        if (previous !is ScanUiState.ImageFailed) {
+            cameraBlockedState = previous.takeIf {
                 it is ScanUiState.PermissionRationale || it is ScanUiState.PermissionDenied
             }
         }
-        mutableState.value = ScanUiState.ReadingImage
         readingImage = viewModelScope.launch {
-            when (val result = imageReader.read(uri)) {
-                is ImageReadResult.Found -> {
-                    mutableState.value = ScanUiState.Captured
-                    eventChannel.trySend(ScanEvent.CodeRead(Untrusted(result.content), result.multiple))
+            val result = imageReader.read(uri)
+            // Only the state still reading may take the result: a camera read or "back" has priority.
+            var applied = false
+            mutableState.update { current ->
+                applied = current is ScanUiState.ReadingImage
+                when {
+                    !applied -> current
+                    result is ImageReadResult.Found -> ScanUiState.Captured
+                    result is ImageReadResult.Failed -> ScanUiState.ImageFailed(result.reason)
+                    else -> current
                 }
-                is ImageReadResult.Failed -> mutableState.value = ScanUiState.ImageFailed(result.reason)
+            }
+            if (applied && result is ImageReadResult.Found) {
+                eventChannel.trySend(ScanEvent.CodeRead(Untrusted(result.content), result.multiple))
             }
         }
     }
+
+    private fun ScanUiState.canStartImageRead() = this is ScanUiState.Scanning ||
+        this is ScanUiState.PermissionRationale ||
+        this is ScanUiState.PermissionDenied ||
+        this is ScanUiState.CameraUnavailable ||
+        this is ScanUiState.ImageFailed
 
     /** "Back to camera" (or system back) from the image screens; stops a read still running. */
     fun onBackToCamera() {

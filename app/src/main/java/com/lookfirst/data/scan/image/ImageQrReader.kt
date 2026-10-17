@@ -15,6 +15,9 @@ enum class ImageFailure {
 
     /** Not an image of an accepted format, or a broken file. */
     CORRUPT,
+
+    /** A previous read is still running on the single reading thread: try again in a moment. */
+    BUSY,
 }
 
 sealed interface ImageReadResult {

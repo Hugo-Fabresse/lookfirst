@@ -39,6 +39,7 @@ internal fun ImageFailure.message(): Int = when (this) {
     ImageFailure.UNREADABLE -> R.string.err_unreadable
     ImageFailure.TOO_LARGE -> R.string.err_image_too_big
     ImageFailure.CORRUPT -> R.string.err_image_corrupt
+    ImageFailure.BUSY -> R.string.err_image_busy
 }
 
 /**

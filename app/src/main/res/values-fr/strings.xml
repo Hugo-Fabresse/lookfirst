@@ -95,4 +95,5 @@
     <string name="err_image_too_big">Cette image est trop volumineuse pour être lue en sécurité. Choisissez-en une plus légère.</string>
     <string name="err_image_corrupt">Cette image ne peut pas être ouverte. Elle est peut-être abîmée ou d\'un format non pris en charge.</string>
     <string name="err_multi_qr">Plusieurs QR codes dans l\'image : seul le premier est affiché.</string>
+    <string name="err_image_busy">L\'image précédente est encore en cours de lecture. Patientez un instant, puis réessayez.</string>
 </resources>

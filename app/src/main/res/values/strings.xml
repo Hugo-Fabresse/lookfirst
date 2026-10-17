@@ -95,4 +95,5 @@
     <string name="err_image_too_big">This image is too large to be read safely. Choose a lighter one.</string>
     <string name="err_image_corrupt">This image cannot be opened. It may be damaged or in an unsupported format.</string>
     <string name="err_multi_qr">Several QR codes in the image: only the first is shown.</string>
+    <string name="err_image_busy">The previous image is still being read. Wait a moment, then try again.</string>
 </resources>

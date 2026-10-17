@@ -1,0 +1,229 @@
+name: Security
+
+# Free scanners run as CLIs (no CodeQL, no GitHub Advanced Security: the repo is private, D7). Report
+# mode: a finding never fails the workflow, only a tool crash does.
+#   - pull_request: findings listed in the job summary.
+#   - push main / weekly / manual: one GitHub issue per NEW finding (label `security`, assigned to the
+#     owner, deduplicated by a fingerprint in the issue body, closed issues never reopened).
+# osv-scanner reads app/gradle.lockfile (releaseRuntimeClasspath = what ships in the APK). Its freshness
+# is checked by the gate in ci.yml.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * 1" # Mondays 05:00 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  SEMGREP_VERSION: "1.180.0" # hashes in scripts/security/semgrep-requirements.txt
+  GITLEAKS_VERSION: "8.30.1"
+  # sha256 of gitleaks_<version>_linux_x64.tar.gz, from the release's checksums.txt.
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  OSV_VERSION: "2.6.0"
+  # sha256 of osv-scanner_linux_amd64, from the release's osv-scanner_SHA256SUMS.
+  OSV_SHA256: "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108"
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Pinned version + hashes in a throw-away venv. --disable-nosem: a `nosemgrep` comment added by a PR
+      # cannot hide a finding. Rulesets checked anonymously: p/kotlin, p/secrets, p/security-audit,
+      # p/owasp-top-ten (p/android does not exist in the registry).
+      - name: Install semgrep
+        run: |
+          python3 -m venv "$RUNNER_TEMP/semgrep-venv"
+          "$RUNNER_TEMP/semgrep-venv/bin/pip" install --quiet --require-hashes --no-deps -r scripts/security/semgrep-requirements.txt
+          echo "SEMGREP_BIN=$RUNNER_TEMP/semgrep-venv/bin/semgrep" >> "$GITHUB_ENV"
+
+      - name: Semgrep
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          args=()
+          # On a PR, only report what the PR introduces.
+          if [ -n "$BASE_SHA" ]; then args+=(--baseline-commit "$BASE_SHA"); fi
+          SEMGREP_ENABLE_VERSION_CHECK=0 "$SEMGREP_BIN" scan --metrics=off --quiet --disable-nosem --json --output semgrep.json \
+            --config p/kotlin --config p/secrets --config p/security-audit --config p/owasp-top-ten \
+            "${args[@]}"
+
+      # A PR can hide findings (ignore files, inline markers): say so in the summary.
+      - name: Markers added by the PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/security/pr_markers.sh "$BASE_SHA" "$HEAD_SHA"
+
+      - name: Summary
+        run: |
+          mkdir -p findings
+          python3 scripts/security/normalize.py semgrep semgrep.json findings/semgrep.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: findings-semgrep
+          path: findings/semgrep.json
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: |
+          tmp=$(mktemp -d)
+          curl -sSfL -o "$tmp/gitleaks.tgz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf "$tmp/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+          rm -rf "$tmp"
+
+      # An explicit config OUTSIDE the scanned tree (built-in rules) and an empty ignore dir: a
+      # .gitleaks.toml / .gitleaksignore added by a PR cannot hide a finding.
+      # PR: only the commits of the PR. push / schedule / manual: the whole history.
+      # --redact: the secret value never reaches the report, the summary or an issue.
+      - name: Gitleaks
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          printf '[extend]\nuseDefault = true\n' > "$RUNNER_TEMP/gitleaks.toml"
+          mkdir "$RUNNER_TEMP/no-ignore"
+          opts=()
+          if [ -n "$BASE_SHA" ]; then opts+=(--log-opts "${BASE_SHA}..${HEAD_SHA}"); fi
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --exit-code 0 \
+            --config "$RUNNER_TEMP/gitleaks.toml" --gitleaks-ignore-path "$RUNNER_TEMP/no-ignore" \
+            --report-format json --report-path gitleaks.json "${opts[@]}" .
+          [ -f gitleaks.json ] || echo '[]' > gitleaks.json
+
+      - name: Summary
+        run: |
+          mkdir -p findings
+          python3 scripts/security/normalize.py gitleaks gitleaks.json findings/gitleaks.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: findings-gitleaks
+          path: findings/gitleaks.json
+
+  osv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install osv-scanner
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/osv-scanner" \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SHA256}  $RUNNER_TEMP/osv-scanner" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+
+      # Only the lockfile of the shipped classpath (the APK), not libs.versions.toml or build tooling.
+      # Exit 1 = vulnerabilities found (report mode, not a failure); any other code = tool error.
+      # osv-scanner.toml (ignores with reason + expiry) is read; a PR editing it is flagged below.
+      - name: osv-scanner
+        run: |
+          rc=0
+          "$RUNNER_TEMP/osv-scanner" scan -L app/gradle.lockfile --config osv-scanner.toml \
+            --format json --output-file osv.json || rc=$?
+          if [ "$rc" -gt 1 ]; then echo "osv-scanner failed (exit $rc)"; exit "$rc"; fi
+
+      - name: Markers added by the PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/security/pr_markers.sh "$BASE_SHA" "$HEAD_SHA"
+
+      - name: Summary
+        run: |
+          mkdir -p findings
+          python3 scripts/security/normalize.py osv osv.json findings/osv.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: findings-osv
+          path: findings/osv.json
+
+  # Never on pull_request: a PR token is read-only for forks and findings stay in the summary.
+  issues:
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+    needs: [semgrep, gitleaks, osv]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: findings
+          pattern: findings-*
+
+      - name: Create issues for new findings
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 scripts/security/create_issues.py findings
+
+  # A tool crash (not a finding) must not go unnoticed: ONE `security-tooling` issue for Hugo, a later
+  # failure comments on it. Not for PRs; a cancelled run never alerts.
+  notify-failure:
+    needs: [semgrep, gitleaks, osv, issues]
+    if: ${{ always() && github.event_name != 'pull_request' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update the security-tooling issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          gh label create security-tooling --color B60205 --description "Outil de securite en panne" 2>/dev/null || true
+          body="Un job de security.yml a echoue ($EVENT, $REF, $SHA): $RUN_URL"
+          n=$(gh issue list --label security-tooling --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --body "$body"
+          else
+            gh issue create --label security-tooling --assignee Hugo-Fabresse \
+              --title "Securite : un outil du scan a echoue" --body "$body"
+          fi

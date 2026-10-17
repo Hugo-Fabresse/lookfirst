@@ -1,0 +1,50 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "prConcurrentLimit": 5,
+  "minimumReleaseAge": "7 days",
+  "packageRules": [
+    {
+      "description": "GitHub Actions: one PR per action, never grouped with libraries (each pin is reviewed on its own)",
+      "matchManagers": [
+        "github-actions"
+      ]
+    },
+    {
+      "description": "Batch non-major library updates into one PR to keep the noise down",
+      "matchManagers": [
+        "!github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "groupName": "all non-major dependencies"
+    },
+    {
+      "description": "AGP / Kotlin / KSP move together and need care — keep them separate",
+      "matchPackageNames": [
+        "com.android.tools.build:gradle",
+        "org.jetbrains.kotlin:**",
+        "com.google.devtools.ksp:**"
+      ],
+      "groupName": "kotlin + android gradle plugin",
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ]
+    }
+  ]
+}

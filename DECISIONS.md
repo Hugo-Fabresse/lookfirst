@@ -32,4 +32,9 @@ DECISION [decoder] : longueur d'IBAN par pays non contrôlée (format + clé mod
 DECISION [sécurité] : alerte semgrep exported_activity sur l'activité de lancement acceptée — composant MAIN/LAUNCHER obligatoirement exporté, seul composant exporté
 DECISION [scan] : permission HIDE_OVERLAY_WINDOWS (normale, sans invite) ajoutée — setHideOverlayWindows(true) n'a d'effet qu'avec elle (T-UI-3)
 DECISION [scan] : tout refus de CAMERA mène à l'écran « refusée » (réglages Android) — pas de seconde invite, ni culpabilisation (ux 5.3)
-DECISION [scan] : après lecture le ViewModel ne garde que la longueur du contenu — la chaîne brute sera conservée par LF-11 avec l'écran résultat
+DECISION [scan] : après lecture ScanViewModel ne garde pas la chaîne — elle passe à ResultViewModel (jamais dans une route ni dans l'état sauvegardé), conservée tant que l'écran Résultat est ouvert
+DECISION [result] : navigation Scan -> Résultat sans animation, ViewModels portés par l'activité — pas de hilt-navigation-compose, pas d'argument de route contenant le QR
+DECISION [result] : contenu exact masqué tant que l'utilisateur ne touche pas « Afficher » quand il contient un secret (otpauth, mot de passe Wi-Fi) — sinon le secret fuit dans le bloc de contenu
+DECISION [result] : Copier copie la chaîne lue par la caméra telle quelle (pas la forme NFC affichée) — « texte exact » ; presse-papiers vidé au retour dans l'app seulement s'il contient encore ce secret (API 28+)
+DECISION [result] : textes ajoutés hors ux.md §7 (type_url_no_scheme, field_*, userinfo_note, camera_unavailable, camera_retry, a11y_invisible_other) — à reporter dans ux.md par le designer
+DECISION [scan] : caméra absente ou occupée = état « caméra indisponible » avec Réessayer, image conservée — pas de viseur vide muet

@@ -23,11 +23,14 @@ class AboutScreenTest {
     val composeRule = createComposeRule()
 
     private var backs = 0
+    private var privacyOpens = 0
 
     private fun text(id: Int): String = RuntimeEnvironment.getApplication().getString(id)
 
     private fun show() {
-        composeRule.setContent { LookFirstTheme { AboutScreen(onBack = { backs++ }) } }
+        composeRule.setContent {
+            LookFirstTheme { AboutScreen(onBack = { backs++ }, onOpenPrivacyPolicy = { privacyOpens++ }) }
+        }
     }
 
     @Test
@@ -86,6 +89,14 @@ class AboutScreenTest {
         listOf(R.string.about_local_body, R.string.about_no_guarantee_body, R.string.about_licences_body).forEach {
             assertFalse(text(it).contains("safe", ignoreCase = true))
         }
+    }
+
+    @Test
+    fun theLinkToThePrivacyPolicyOnlyCallsBackWhenTapped() {
+        show()
+        assertEquals(0, privacyOpens)
+        composeRule.onNodeWithText(text(R.string.privacy_link)).performScrollTo().performClick()
+        assertEquals(1, privacyOpens)
     }
 
     @Test

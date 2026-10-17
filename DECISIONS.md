@@ -24,3 +24,5 @@ DECISION [ux] : D15 — SEPA / paiement et crypto : Copier seulement — pas d'I
 DECISION [ux] : D16 — listes > 14 jours = raison CAUTION ; bundle signé initial dans l'APK (ADR-0005) — jamais de listes absentes au 1er lancement
 DECISION [ux] : D17 — Suspect et Danger : Ouvrir derrière une confirmation (Annuler par défaut) — l'utilisateur décide, aligné sur T-UI-2
 DECISION [ux] : D18 — « Contrôles effectués : … » au lieu de « Vérifié : … » — ne pas ressembler à un label de confiance
+DECISION [decoder] : contenu borné à 4096 caractères avant tout parsing, NFC, caractères cachés signalés jamais supprimés — un QR tient ~2,9 Ko
+DECISION [decoder] : champs répétés Wi-Fi (S/T/P/H), schéma hors liste sans espace = AppLink, avec espace = Text — ambiguïté = rejet (Unknown), jamais de choix silencieux

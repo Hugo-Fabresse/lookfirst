@@ -197,3 +197,33 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: python3 scripts/security/create_issues.py findings
+
+  # A tool crash (not a finding) must not go unnoticed: ONE `security-tooling` issue for Hugo, a later
+  # failure comments on it. Not for PRs; a cancelled run never alerts.
+  notify-failure:
+    needs: [semgrep, gitleaks, osv, issues]
+    if: ${{ always() && github.event_name != 'pull_request' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update the security-tooling issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          gh label create security-tooling --color B60205 --description "Outil de securite en panne" 2>/dev/null || true
+          body="Un job de security.yml a echoue ($EVENT, $REF, $SHA): $RUN_URL"
+          n=$(gh issue list --label security-tooling --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --body "$body"
+          else
+            gh issue create --label security-tooling --assignee Hugo-Fabresse \
+              --title "Securite : un outil du scan a echoue" --body "$body"
+          fi

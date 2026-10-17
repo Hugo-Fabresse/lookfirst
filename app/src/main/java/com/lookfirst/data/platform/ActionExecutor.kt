@@ -33,6 +33,17 @@ sealed interface OpenOutcome {
 
     /** No application can handle this content. */
     data object NoApp : OpenOutcome
+
+    /**
+     * A system dialog must be started for a result (the Wi-Fi add-network dialog, API 30+). The screen launches
+     * [request] through an activity result launcher and reports whether the user accepted.
+     */
+    data class NeedsResult(val request: SystemDialogRequest) : OpenOutcome
+}
+
+/** A system dialog to start for a result. Opaque to the UI; its content (a password) never reaches a log. */
+class SystemDialogRequest internal constructor(val intent: Intent) {
+    override fun toString(): String = "SystemDialogRequest"
 }
 
 /**
@@ -55,24 +66,31 @@ interface ActionExecutor {
 class AndroidActionExecutor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val sdk: SdkVersion,
+    private val smsApp: DefaultSmsPackage,
+    private val probeHost: ProbeHost,
 ) : ActionExecutor {
     private val packages: PackageManager get() = context.packageManager
 
     override fun hasNonBrowserHandler(url: ScanPayload.Url): Boolean {
         val uri = verifiedUri(url) ?: return false
-        val browsers = queryPackages(OpenIntents.browserProbe(), 0)
-        val handlers = queryPackages(OpenIntents.browseProbe(uri), PackageManager.MATCH_DEFAULT_ONLY)
+        val browsers = browserPackages(probeHost.next())
+        val handlers = queryPackages(OpenIntents.browse(uri, null), PackageManager.MATCH_DEFAULT_ONLY)
         return handlers.any { it !in browsers }
     }
 
     override fun open(payload: ScanPayload): OpenOutcome = when (payload) {
         is ScanPayload.Url -> openUrl(payload)
         is ScanPayload.Tel -> start(OpenIntents.dial(payload))
-        is ScanPayload.Sms -> start(OpenIntents.sms(payload))
+        is ScanPayload.Sms -> openSms(payload)
         is ScanPayload.Mail -> start(OpenIntents.mail(payload))
         is ScanPayload.Geo -> start(OpenIntents.geo(payload))
         is ScanPayload.Wifi -> openWifi(payload)
         else -> OpenOutcome.Unsafe
+    }
+
+    private fun openSms(sms: ScanPayload.Sms): OpenOutcome {
+        val smsPackage = smsApp.get() ?: return OpenOutcome.NoApp
+        return start(OpenIntents.sms(sms, smsPackage))
     }
 
     private fun openUrl(url: ScanPayload.Url): OpenOutcome {
@@ -95,11 +113,16 @@ class AndroidActionExecutor @Inject constructor(
         uri.userInfo == null &&
         uri.toString() == url.value
 
+    /** Browsers: the apps that declare the browser role, and those that answer for an address nobody can claim. */
+    private fun browserPackages(host: String): Set<String> =
+        queryPackages(OpenIntents.appBrowserSelector(), 0) + queryPackages(OpenIntents.browserProbe(host), 0)
+
     /** The package that answers for an address no site claims; null when none is the default (chooser). */
     private fun defaultBrowser(): String? {
-        val probe = OpenIntents.browserProbe()
+        val host = probeHost.next()
+        val probe = OpenIntents.browserProbe(host)
         val chosen = packages.resolveActivity(probe, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
-        return chosen?.takeIf { it != RESOLVER_PACKAGE && it in queryPackages(probe, 0) }
+        return chosen?.takeIf { it != RESOLVER_PACKAGE && it in browserPackages(host) }
     }
 
     /** The add-network dialog exists from API 30; the level comes from [sdk], which lint cannot follow. */
@@ -108,7 +131,7 @@ class AndroidActionExecutor @Inject constructor(
         val add = if (sdk.current() >= Build.VERSION_CODES.R) OpenIntents.addWifiNetwork(wifi) else null
         val system = add?.let { systemPackageFor(it) }
         return if (add != null && system != null) {
-            start(add.setPackage(system))
+            OpenOutcome.NeedsResult(SystemDialogRequest(add.setPackage(system)))
         } else {
             start(OpenIntents.wifiSettings(), OpenOutcome.StartedKeepScreen)
         }

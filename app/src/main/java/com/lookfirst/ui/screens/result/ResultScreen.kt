@@ -223,7 +223,7 @@ private fun ResultUiState.Content.toActions(onCopy: () -> Unit, onOpen: () -> Un
         OpenAction(
             label = if (heavy) R.string.action_open_anyway else kind.label(),
             filled = !heavy && level != null,
-            enabled = level != null,
+            enabled = level != null && !opening,
             onClick = onOpen,
         )
     }

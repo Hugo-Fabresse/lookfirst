@@ -7,6 +7,7 @@ import com.lookfirst.data.platform.ClipboardWriter
 import com.lookfirst.data.platform.OpenOutcome
 import com.lookfirst.data.platform.PayloadIdGenerator
 import com.lookfirst.data.platform.RegionHintProvider
+import com.lookfirst.data.platform.SystemDialogRequest
 import com.lookfirst.di.DefaultDispatcher
 import com.lookfirst.domain.analysis.AnalysisContext
 import com.lookfirst.domain.decoder.PayloadParser
@@ -42,6 +43,9 @@ sealed interface ResultEvent {
 
     /** Nothing was started: the screen says why ([unsafe]: the content cannot be opened safely; else no app). */
     data class OpenFailed(val unsafe: Boolean) : ResultEvent
+
+    /** The screen must start this system dialog for a result and report it with [ResultViewModel.onSystemDialogResult]. */
+    data class LaunchSystemDialog(val request: SystemDialogRequest) : ResultEvent
 }
 
 /**
@@ -130,7 +134,7 @@ class ResultViewModel @Inject constructor(
     fun onOpen() {
         val current = mutableState.value as? ResultUiState.Content ?: return
         val level = current.verdict?.level ?: return
-        if (current.content.openKind == null || current.confirmingSecretCopy) return
+        if (current.content.openKind == null || current.confirmingSecretCopy || current.opening) return
         if (level == VerdictLevel.DANGEROUS || level == VerdictLevel.SUSPICIOUS) {
             mutableState.value = current.copy(confirmingOpen = true)
         } else {
@@ -140,7 +144,7 @@ class ResultViewModel @Inject constructor(
 
     fun onConfirmOpen() {
         val current = mutableState.value as? ResultUiState.Content ?: return
-        if (!current.confirmingOpen) return
+        if (!current.confirmingOpen || current.opening) return
         mutableState.value = current.copy(confirmingOpen = false)
         startAction()
     }
@@ -149,14 +153,27 @@ class ResultViewModel @Inject constructor(
         mutableState.update { if (it is ResultUiState.Content) it.copy(confirmingOpen = false) else it }
     }
 
+    /** [ResultUiState.Content.opening] stops a second tap; it is cleared when nothing was started. */
     private fun startAction() {
         val shown = payload ?: return
-        when (actions.open(shown)) {
+        mutableState.update { if (it is ResultUiState.Content) it.copy(opening = true) else it }
+        when (val outcome = actions.open(shown)) {
             OpenOutcome.Started -> eventChannel.trySend(ResultEvent.Opened)
-            OpenOutcome.StartedKeepScreen -> Unit
-            OpenOutcome.Unsafe -> eventChannel.trySend(ResultEvent.OpenFailed(unsafe = true))
-            OpenOutcome.NoApp -> eventChannel.trySend(ResultEvent.OpenFailed(unsafe = false))
+            is OpenOutcome.NeedsResult -> eventChannel.trySend(ResultEvent.LaunchSystemDialog(outcome.request))
+            OpenOutcome.StartedKeepScreen -> finishOpening(null)
+            OpenOutcome.Unsafe -> finishOpening(ResultEvent.OpenFailed(unsafe = true))
+            OpenOutcome.NoApp -> finishOpening(ResultEvent.OpenFailed(unsafe = false))
         }
+    }
+
+    private fun finishOpening(event: ResultEvent?) {
+        mutableState.update { if (it is ResultUiState.Content) it.copy(opening = false) else it }
+        event?.let { eventChannel.trySend(it) }
+    }
+
+    /** The user answered the system dialog: accepted goes back to scanning, declined keeps the credentials on screen. */
+    fun onSystemDialogResult(accepted: Boolean) {
+        if (accepted) eventChannel.trySend(ResultEvent.Opened) else finishOpening(null)
     }
 
     /** Copy: straight away, or after the confirmation dialog when the text contains a secret (ux.md 4.6). */

@@ -32,9 +32,9 @@ internal object OpenIntents {
         Intent(Intent.ACTION_DIAL, Uri.fromParts(SCHEME_TEL, it, null))
     }
 
-    /** `smsto:` + body: the user still presses send in the messaging app. */
-    fun sms(sms: ScanPayload.Sms): Intent? = dialable(sms.number.value)?.let { number ->
-        Intent(Intent.ACTION_SENDTO, Uri.fromParts(SCHEME_SMSTO, number, null)).apply {
+    /** `smsto:` + body, sent to the default SMS app only: the user still presses send there. */
+    fun sms(sms: ScanPayload.Sms, smsPackage: String): Intent? = dialable(sms.number.value)?.let { number ->
+        Intent(Intent.ACTION_SENDTO, Uri.fromParts(SCHEME_SMSTO, number, null)).setPackage(smsPackage).apply {
             sms.body?.value?.let { putExtra(EXTRA_SMS_BODY, it) }
         }
     }
@@ -62,17 +62,17 @@ internal object OpenIntents {
         return Intent(Intent.ACTION_VIEW, Uri.parse("$SCHEME_GEO:$point$query"))
     }
 
-    /** The Intent for an already verified canonical URL, sent to [browserPackage] only. */
-    fun browse(uri: Uri, browserPackage: String): Intent = Intent(Intent.ACTION_VIEW, uri)
+    /** The Intent for an already verified canonical URL; [browserPackage] null only to ask who would handle it. */
+    fun browse(uri: Uri, browserPackage: String?): Intent = Intent(Intent.ACTION_VIEW, uri)
         .addCategory(Intent.CATEGORY_BROWSABLE)
         .setPackage(browserPackage)
 
-    /** The same URL without a target, only to ask which apps would handle it. */
-    fun browseProbe(uri: Uri): Intent = Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)
-
-    /** A neutral address: it matches the browsers and nothing that claims a specific site (App Links). */
-    fun browserProbe(): Intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.invalid"))
+    /** An address nobody can claim (random label under `.invalid`): it matches browsers, never an App Link. */
+    fun browserProbe(host: String): Intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://$host"))
         .addCategory(Intent.CATEGORY_BROWSABLE)
+
+    /** The apps that declare themselves as the browser application: the set of browsers. */
+    fun appBrowserSelector(): Intent = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_BROWSER)
 
     /** The system confirmation to add one network (API 30+). Null for a network that cannot be suggested. */
     @RequiresApi(android.os.Build.VERSION_CODES.R)

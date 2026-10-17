@@ -8,6 +8,7 @@ import com.lookfirst.data.platform.ClipboardWriter
 import com.lookfirst.data.platform.OpenOutcome
 import com.lookfirst.data.platform.PayloadIdGenerator
 import com.lookfirst.data.platform.RegionHintProvider
+import com.lookfirst.data.platform.SystemDialogRequest
 import com.lookfirst.data.reputation.NoReputationLists
 import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.SignalCode
@@ -468,5 +469,48 @@ class ResultViewModelTest {
         actions.nonBrowserHandler = true
         val vm = shown("tel:+33123456789")
         assertFalse(vm.verdict().reasons.any { it.code == SignalCode.NON_BROWSER_HANDLER })
+    }
+
+    @Test
+    fun aSecondTapOnOpenWhileOpeningDoesNothing() {
+        val vm = shown("https://example.com/")
+        vm.onOpen()
+        assertTrue((vm.state.value as ResultUiState.Content).opening)
+        vm.onOpen()
+        assertEquals(1, actions.opened.size)
+    }
+
+    @Test
+    fun theOpeningFlagIsClearedWhenNothingWasStarted() {
+        for (outcome in listOf(OpenOutcome.Unsafe, OpenOutcome.NoApp, OpenOutcome.StartedKeepScreen)) {
+            actions.outcome = outcome
+            val vm = shown("https://example.com/")
+            vm.onOpen()
+            assertFalse(outcome.toString(), (vm.state.value as ResultUiState.Content).opening)
+        }
+    }
+
+    @Test
+    fun aSystemDialogIsHandedToTheScreenAndOnlyAcceptanceClosesIt() = runBlocking {
+        val request = SystemDialogRequest(android.content.Intent("test"))
+        actions.outcome = OpenOutcome.NeedsResult(request)
+        val vm = shown("WIFI:T:WPA;S:Net;P:hunter2222;;")
+        vm.events.test {
+            vm.onOpen()
+            assertEquals(ResultEvent.LaunchSystemDialog(request), awaitItem())
+            vm.onSystemDialogResult(accepted = false)
+            expectNoEvents()
+            assertFalse((vm.state.value as ResultUiState.Content).opening)
+            vm.onOpen()
+            assertEquals(ResultEvent.LaunchSystemDialog(request), awaitItem())
+            vm.onSystemDialogResult(accepted = true)
+            assertEquals(ResultEvent.Opened, awaitItem())
+        }
+    }
+
+    @Test
+    fun anObfuscatedIpv4IsShownAsDottedDecimal() {
+        val host = shown("http://0x7f.1/").content().host
+        assertEquals("127.0.0.1", host?.shown?.value)
     }
 }

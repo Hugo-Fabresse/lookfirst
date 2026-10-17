@@ -155,7 +155,7 @@
     <string name="dialog_open_title">Open anyway?</string>
     <string name="dialog_open_danger_body">LookFirst found serious danger signals. If you continue, you do so at your own risk.</string>
     <string name="dialog_open_suspicious_body">LookFirst found risk signals. If you continue, you do so at your own risk.</string>
-    <string name="open_unsafe">This link cannot be opened safely. Copy it if needed.</string>
+    <string name="open_unsafe">LookFirst cannot guarantee that this link opens the address it analysed. Copy it if needed.</string>
     <string name="open_no_app">No app can open this content.</string>
     <string name="open_in_browser">Open in browser</string>
     <string name="open_dialer">Open the dialer</string>

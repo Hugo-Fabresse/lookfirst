@@ -25,6 +25,8 @@ sealed interface ResultUiState {
         val verdict: Verdict? = null,
         val confirmingSecretCopy: Boolean = false,
         val confirmingOpen: Boolean = false,
+        /** Open was tapped and its action is under way: a second tap does nothing. */
+        val opening: Boolean = false,
     ) : ResultUiState
 }
 

@@ -25,6 +25,7 @@ import org.robolectric.Shadows.shadowOf
 private const val BROWSER = "org.example.browser"
 private const val OTHER_BROWSER = "org.example.otherbrowser"
 private const val SHOP_APP = "org.example.shop"
+private const val SMS_APP = "org.example.sms"
 private const val SYSTEM_SETTINGS = "com.android.settings"
 
 /** Robolectric (sdk 34 only): the Intents LookFirst builds, checked on what the system would receive. */
@@ -34,7 +35,14 @@ class ActionExecutorTest {
     private val packageManager = shadowOf(app.packageManager)
     private var sdk = 34
 
-    private fun executor() = AndroidActionExecutor(app, SdkVersion { sdk })
+    private var smsPackage: String? = SMS_APP
+
+    private fun executor() = AndroidActionExecutor(
+        app,
+        SdkVersion { sdk },
+        DefaultSmsPackage { smsPackage },
+        ProbeHost { "probe.invalid" },
+    )
 
     private fun resolveInfo(pkg: String, system: Boolean = false) = ResolveInfo().apply {
         activityInfo = ActivityInfo().apply {
@@ -47,12 +55,19 @@ class ActionExecutorTest {
         }
     }
 
-    private fun browserProbe() = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.invalid"))
+    private fun selector() = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_BROWSER)
+
+    private fun dialogOf(outcome: OpenOutcome): Intent = (outcome as OpenOutcome.NeedsResult).request.intent
+
+    private fun browserProbe() = Intent(Intent.ACTION_VIEW, Uri.parse("https://probe.invalid"))
         .addCategory(Intent.CATEGORY_BROWSABLE)
 
     /** The device has [packages] as browsers; the first one is the default. */
     private fun installBrowsers(vararg packages: String) {
-        for (pkg in packages) packageManager.addResolveInfoForIntent(browserProbe(), resolveInfo(pkg))
+        for (pkg in packages) {
+            packageManager.addResolveInfoForIntent(browserProbe(), resolveInfo(pkg))
+            packageManager.addResolveInfoForIntent(selector(), resolveInfo(pkg))
+        }
     }
 
     private fun installHandler(canonical: String, vararg packages: String) {
@@ -140,6 +155,29 @@ class ActionExecutorTest {
     }
 
     @Test
+    fun aPackageKnownOnlyAsABrowserApplicationIsNotACapture() {
+        installBrowsers(BROWSER)
+        packageManager.addResolveInfoForIntent(selector(), resolveInfo(OTHER_BROWSER))
+        installHandler("https://x.example/", OTHER_BROWSER)
+        assertFalse(executor().hasNonBrowserHandler(payload("https://x.example/")))
+    }
+
+    @Test
+    fun anObfuscatedIpv4IsOpenedAsDottedDecimal() {
+        installBrowsers(BROWSER)
+        assertEquals(OpenOutcome.Started, openUrl("https://0x7f.1/x"))
+        assertEquals("127.0.0.1", checkNotNull(started()).data?.host)
+    }
+
+    @Test
+    fun aMalformedIpv6IsRefused() {
+        installBrowsers(BROWSER)
+        assertEquals(OpenOutcome.Unsafe, openUrl("https://[1:2:3]/"))
+        assertEquals(OpenOutcome.Unsafe, openUrl("https://[1::2::3]/"))
+        assertNull(started())
+    }
+
+    @Test
     fun anAppLinkHandlerThatIsNotABrowserIsReported() {
         installBrowsers(BROWSER)
         installHandler("https://shop.example/item", SHOP_APP)
@@ -191,6 +229,14 @@ class ActionExecutorTest {
         assertEquals("+33123456789", intent.data?.schemeSpecificPart)
         assertEquals("Hello there", intent.getStringExtra("sms_body"))
         assertEquals(setOf("sms_body"), intent.extras?.keySet())
+        assertEquals(SMS_APP, intent.`package`)
+    }
+
+    @Test
+    fun withoutADefaultSmsAppNothingIsStarted() {
+        smsPackage = null
+        assertEquals(OpenOutcome.NoApp, executor().open(payload<ScanPayload.Sms>("SMSTO:+33123456789:Hello")))
+        assertNull(started())
     }
 
     @Test
@@ -239,10 +285,11 @@ class ActionExecutorTest {
         packageManager.addResolveInfoForIntent(add, resolveInfo("org.evil.settings"))
         packageManager.addResolveInfoForIntent(add, resolveInfo(SYSTEM_SETTINGS, system = true))
         val outcome = executor().open(payload<ScanPayload.Wifi>("WIFI:T:WPA;S:HomeNet;P:hunter2222;;"))
-        assertEquals(OpenOutcome.Started, outcome)
-        val intent = checkNotNull(started())
+        val intent = dialogOf(outcome)
+        assertNull(started())
         assertEquals(Settings.ACTION_WIFI_ADD_NETWORKS, intent.action)
         assertEquals(SYSTEM_SETTINGS, intent.`package`)
+        assertEquals(0, intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK)
         val list = intent.getParcelableArrayListExtra<WifiNetworkSuggestion>(Settings.EXTRA_WIFI_NETWORK_LIST)
         assertEquals(1, list?.size)
         assertEquals("HomeNet", list?.first()?.ssid)
@@ -255,8 +302,7 @@ class ActionExecutorTest {
             Intent(Settings.ACTION_WIFI_ADD_NETWORKS),
             resolveInfo(SYSTEM_SETTINGS, system = true),
         )
-        executor().open(payload<ScanPayload.Wifi>("WIFI:T:nopass;S:Cafe;;"))
-        val intent = checkNotNull(started())
+        val intent = dialogOf(executor().open(payload<ScanPayload.Wifi>("WIFI:T:nopass;S:Cafe;;")))
         assertEquals(Settings.ACTION_WIFI_ADD_NETWORKS, intent.action)
         val list = intent.getParcelableArrayListExtra<WifiNetworkSuggestion>(Settings.EXTRA_WIFI_NETWORK_LIST)
         assertNull(checkNotNull(list)[0].passphrase)

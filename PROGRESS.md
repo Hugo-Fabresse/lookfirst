@@ -14,4 +14,4 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-15 — signaux de risque par type de contenu (analyseurs purs, fusionné, PR #16) — tests: 58 ajoutés
 - [✅ DONE] LF-9 — scan caméra (CameraX + ZXing, permission, écran Scan) — fusionné, PR #15
 - [✅ DONE] LF-11 — écran Résultat : contenu exact + Copier / Annuler, navigation Scan → Résultat (fusionné, PR #17)
-- [🔄 WIP] LF-10 — scan d'un QR depuis une image (Photo Picker, lecture bornée, écran d'échec)
+- [✅ DONE] LF-10 — scan d'un QR depuis une image (Photo Picker, lecture bornée, écran d'échec)

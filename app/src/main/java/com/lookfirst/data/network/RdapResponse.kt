@@ -36,13 +36,11 @@ internal object RdapResponse {
             .maxOrNull()
     }
 
-    /** A domain object, and when it names itself, the domain that was asked for. */
+    /** A domain object that names itself, and names the domain that was asked for (case ignored). */
     private fun describes(root: Json.Obj, domain: String): Boolean {
         val objectClass = (root.fields["objectClassName"] as? Json.Str)?.value
-        val name = root.fields["ldhName"]
-        val classOk = objectClass == null || objectClass == "domain"
-        val nameOk = name == null || (name as? Json.Str)?.value?.removeSuffix(".")?.lowercase() == domain
-        return classOk && nameOk
+        val name = (root.fields["ldhName"] as? Json.Str)?.value
+        return objectClass == "domain" && name != null && name.equals(domain, ignoreCase = true)
     }
 
     /** A date a little ahead of the phone's clock is a clock that is behind; further than a day is not credible. */

@@ -8,9 +8,12 @@ import com.lookfirst.data.platform.PayloadIdGenerator
 import com.lookfirst.data.platform.RegionHintProvider
 import com.lookfirst.domain.analysis.ReputationLookup
 import com.lookfirst.domain.analysis.ReputationResult
+import com.lookfirst.domain.decoder.PayloadParser
+import com.lookfirst.domain.model.ParseResult
 import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
+import com.lookfirst.domain.open.CanonicalUrl
 import com.lookfirst.domain.rdap.RdapClient
 import com.lookfirst.domain.rdap.RdapFailure
 import com.lookfirst.domain.rdap.RdapOutcome
@@ -27,6 +30,7 @@ import com.lookfirst.domain.usecase.ApplyDomainAge
 import com.lookfirst.domain.usecase.ApplyRedirectTrace
 import com.lookfirst.domain.verdict.VerdictLevel
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -37,6 +41,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
+import kotlin.coroutines.CoroutineContext
 
 /** The optional "Check domain age" check: warning, request, new verdict (ux.md 3.7, 5.12, ADR-0004). */
 @RunWith(RobolectricTestRunner::class)
@@ -70,10 +75,11 @@ class ResultViewModelAgeTest {
     private val lookup = ReputationLookup {
         if (it.ascii == "evil.example") ReputationResult.Listed("test") else ReputationResult.NotListed
     }
-    private var traceOutcome: (com.lookfirst.domain.open.CanonicalUrl) -> TraceOutcome =
+    private var traceGate: CompletableDeferred<Unit>? = null
+    private var traceOutcome: (CanonicalUrl) -> TraceOutcome =
         { TraceOutcome.Completed(RedirectTrace(it, emptyList(), TraceEnd.Final)) }
 
-    private fun viewModel(): ResultViewModel {
+    private fun viewModel(work: CoroutineDispatcher = Dispatchers.Unconfined): ResultViewModel {
         val analyze = AnalyzeScan(lookup)
         return ResultViewModel(
             clipboard = object : ClipboardWriter {
@@ -87,7 +93,10 @@ class ResultViewModelAgeTest {
             analyzeScan = analyze,
             regionHints = RegionHintProvider { null },
             payloadIds = PayloadIdGenerator { "id-${++nextId}" },
-            redirectTracer = { traceOutcome(it) },
+            redirectTracer = {
+                traceGate?.await()
+                traceOutcome(it)
+            },
             applyRedirectTrace = ApplyRedirectTrace(analyze),
             rdapPlanner = RdapPlanner { host ->
                 planned += host
@@ -96,7 +105,7 @@ class ResultViewModelAgeTest {
             rdapClient = client,
             applyDomainAge = ApplyDomainAge(),
             networkStatus = { online },
-            workDispatcher = Dispatchers.Unconfined,
+            workDispatcher = work,
         )
     }
 
@@ -330,5 +339,77 @@ class ResultViewModelAgeTest {
         assertTrue(SignalCode.REDIRECT_FINAL in verdict.reasons.map { it.code })
         assertEquals(VerdictLevel.CAUTION, verdict.level)
         assertEquals(VerdictLevel.CAUTION, vm.checks().levelChangedTo)
+    }
+
+    /** Runs the work handed to it one task at a time, when the test says so. */
+    private class StepDispatcher : CoroutineDispatcher() {
+        private val queue = ArrayDeque<Runnable>()
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            queue.addLast(block)
+        }
+
+        fun runOne(): Boolean = queue.removeFirstOrNull()?.also { it.run() } != null
+    }
+
+    private fun canonical(raw: String): CanonicalUrl {
+        val payload = (PayloadParser.parse(raw) as ParseResult.Ok).payload as ScanPayload.Url
+        return checkNotNull(CanonicalUrl.of(payload))
+    }
+
+    /**
+     * Both checks are under way when their answers arrive, in the given order, and every composition is run one task
+     * at a time. Returns the final verdict and every level seen on the way.
+     */
+    private fun interleaved(traceFirst: Boolean): Pair<com.lookfirst.domain.verdict.Verdict, List<VerdictLevel>> {
+        val work = StepDispatcher()
+        val vm = viewModel(work)
+        vm.show(Untrusted("https://a.example/"))
+        drain(vm, work, mutableListOf())
+        val tGate = CompletableDeferred<Unit>().also { traceGate = it }
+        val aGate = CompletableDeferred<Unit>().also { client.gate = it }
+        traceOutcome = {
+            TraceOutcome.Completed(RedirectTrace(it, listOf(canonical("https://evil.example/login")), TraceEnd.Final))
+        }
+        client.outcome = RdapOutcome.Registered(1L, 5)
+        vm.onTraceRequested()
+        vm.onTraceConfirmed()
+        vm.onAgeRequested()
+        vm.onAgeConfirmed()
+        val levels = mutableListOf(vm.content().verdict!!.level)
+        val (first, second) = if (traceFirst) tGate to aGate else aGate to tGate
+        first.complete(Unit)
+        shadowOf(Looper.getMainLooper()).idle()
+        second.complete(Unit)
+        shadowOf(Looper.getMainLooper()).idle()
+        drain(vm, work, levels)
+        assertEquals(CheckState.DONE, vm.checks().trace)
+        assertEquals(CheckState.DONE, vm.checks().age)
+        return vm.content().verdict!! to levels
+    }
+
+    private fun drain(vm: ResultViewModel, work: StepDispatcher, levels: MutableList<VerdictLevel>) {
+        var guard = 0
+        while (guard++ < 50) {
+            val ran = work.runOne()
+            shadowOf(Looper.getMainLooper()).idle()
+            (vm.state.value as? ResultUiState.Content)?.verdict?.let { levels += it.level }
+            if (!ran) return
+        }
+    }
+
+    @Test
+    fun `the two answers give the same verdict in either order and no level falls on the way`() {
+        val (a, levelsA) = interleaved(traceFirst = true)
+        val (b, levelsB) = interleaved(traceFirst = false)
+        assertEquals(VerdictLevel.DANGEROUS, a.level)
+        assertEquals(a.level, b.level)
+        assertEquals(a.reasons.map { it.code }.toSet(), b.reasons.map { it.code }.toSet())
+        assertTrue(SignalCode.DOMAIN_RECENT in a.reasons.map { it.code })
+        assertTrue(SignalCode.REDIRECT_FINAL in a.reasons.map { it.code })
+        for (levels in listOf(levelsA, levelsB)) {
+            // VerdictLevel is declared heaviest first: a smaller ordinal is a heavier level.
+            assertTrue("levels fell: $levels", levels.zipWithNext().all { (x, y) -> y.ordinal <= x.ordinal })
+        }
     }
 }

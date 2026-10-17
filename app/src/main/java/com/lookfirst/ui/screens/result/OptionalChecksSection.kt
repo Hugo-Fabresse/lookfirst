@@ -90,6 +90,7 @@ private fun TraceCheck(checks: OptionalChecks, onTrace: () -> Unit) {
     val note = when {
         checks.httpsOnly -> R.string.trace_https_only
         checks.unusualPort -> R.string.trace_port_only
+        checks.trace == CheckState.BUSY -> R.string.check_busy
         checks.trace == CheckState.FAILED -> R.string.check_failed
         else -> null
     }
@@ -110,6 +111,7 @@ private fun AgeCheck(checks: OptionalChecks, onAge: () -> Unit) {
     ) { Text(stringResource(R.string.age_check)) }
     val note = when {
         checks.ageUnavailable != null -> checks.ageUnavailable.noteRes()
+        checks.age == CheckState.BUSY -> R.string.check_busy
         checks.age == CheckState.FAILED -> R.string.check_failed
         else -> null
     }

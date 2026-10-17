@@ -13,13 +13,12 @@ private const val HTTPS_PREFIX = "https://"
 private const val PATH_SAFE = "._~-"
 
 /**
- * The IANA RDAP bootstrap for domain names (RFC 9224): which server answers for a TLD. Read from the bundle's
- * `rdap-dns.json` under [JsonLimits.BOOTSTRAP]; a service is `[[tlds], [urls]]`.
- *
- * Two modes. [parseStrict] is the install check (design document, section 6 step 6): any TLD or URL that does not
- * conform refuses the file. [parseLenient] is what the app uses to read an installed file: it keeps only the
- * conforming URLs and drops the services left with none. A conforming URL is `https`, has a host name (never an
- * address), no port, no userinfo, no query, no fragment, and a plain path that ends with `/`.
+ * The IANA RDAP bootstrap for domain names (RFC 9224): which server answers for a TLD. Read from the file embedded
+ * in the APK (`rdap-dns.json`, pinned by SHA-256 in scripts/gen-host-data.py) under [JsonLimits.BOOTSTRAP]; a service
+ * is `[[tlds], [urls]]`. [parse] keeps only the conforming URLs (the real file also lists `http://` servers) and
+ * drops the services left with none; the first conforming URL of a service wins, and so does the first service for a
+ * TLD. A conforming URL is `https`, has a host name (never an address), no port, no userinfo, no query, no
+ * fragment, and a plain path that ends with `/`. A file that is not the bootstrap shape at all gives null.
  */
 internal class RdapBootstrap private constructor(private val servers: Map<String, RdapServer>) {
     val size: Int get() = servers.size
@@ -28,15 +27,11 @@ internal class RdapBootstrap private constructor(private val servers: Map<String
     fun serverFor(tld: String): RdapServer? = servers[tld]
 
     companion object {
-        fun parseStrict(bytes: ByteArray): RdapBootstrap? = parse(bytes, strict = true)
-
-        fun parseLenient(bytes: ByteArray): RdapBootstrap? = parse(bytes, strict = false)
-
-        private fun parse(bytes: ByteArray, strict: Boolean): RdapBootstrap? {
+        fun parse(bytes: ByteArray): RdapBootstrap? {
             val root = StrictJson.parse(bytes, JsonLimits.BOOTSTRAP) as? Json.Obj ?: return null
             val services = (root.fields["services"] as? Json.Arr)?.items ?: return null
             if (services.size > MAX_SERVICES) return null
-            val collector = Collector(strict)
+            val collector = Collector()
             return if (services.all { collector.add(it) }) RdapBootstrap(collector.servers) else null
         }
 
@@ -52,8 +47,8 @@ internal class RdapBootstrap private constructor(private val servers: Map<String
         }
     }
 
-    /** Collects the services one by one; [add] is false when the file must be refused. */
-    private class Collector(private val strict: Boolean) {
+    /** Collects the services one by one; [add] is false when the file is not the bootstrap shape. */
+    private class Collector {
         val servers = LinkedHashMap<String, RdapServer>()
         private var tldCount = 0
 
@@ -65,18 +60,14 @@ internal class RdapBootstrap private constructor(private val servers: Map<String
             tldCount += tlds.size
             if (tldCount > MAX_TLDS || urls.size > MAX_URLS_PER_SERVICE) return false
             val checked = urls.map { (it as? Json.Str)?.value?.let(Companion::serverOf) }
-            val refused = strict && (urls.isEmpty() || checked.any { it == null })
-            return !refused && tlds.all { addTld(it, checked.firstOrNull { server -> server != null }) }
+            val server = checked.firstOrNull { it != null }
+            tlds.forEach { addTld(it, server) }
+            return true
         }
 
-        private fun addTld(node: Json, server: RdapServer?): Boolean {
+        private fun addTld(node: Json, server: RdapServer?) {
             val tld = (node as? Json.Str)?.value?.takeIf(::isTld)
-            return when {
-                tld == null -> !strict
-                strict && servers.containsKey(tld) -> false
-                server != null && !servers.containsKey(tld) -> true.also { servers[tld] = server }
-                else -> true
-            }
+            if (tld != null && server != null && !servers.containsKey(tld)) servers[tld] = server
         }
     }
 }

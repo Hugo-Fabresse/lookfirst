@@ -10,9 +10,7 @@ class RdapBootstrapTest {
     private fun file(services: String) =
         """{"version":"1.0","publication":"2026-10-01T00:00:00Z","services":[$services]}"""
 
-    private fun strict(text: String) = RdapBootstrap.parseStrict(text.toByteArray())
-
-    private fun lenient(text: String) = RdapBootstrap.parseLenient(text.toByteArray())
+    private fun parse(text: String) = RdapBootstrap.parse(text.toByteArray())
 
     private val valid = file(
         """[["com","net"],["https://rdap.verisign.com/com/v1/"]],""" +
@@ -22,7 +20,7 @@ class RdapBootstrapTest {
 
     @Test
     fun `a conforming file gives the first server of each tld`() {
-        val bootstrap = strict(valid)!!
+        val bootstrap = parse(valid)!!
         assertEquals(RdapServer("rdap.verisign.com", "/com/v1/"), bootstrap.serverFor("com"))
         assertEquals(RdapServer("rdap.verisign.com", "/com/v1/"), bootstrap.serverFor("net"))
         assertEquals(RdapServer("rdap.nominet.uk", "/uk/"), bootstrap.serverFor("uk"))
@@ -64,52 +62,39 @@ class RdapBootstrapTest {
     )
 
     @Test
-    fun `a bundle with one non-conforming server url is refused`() {
-        for ((name, url) in hostile) {
-            val text = file("""[["com"],["https://rdap.ok.example/","$url"]]""")
-            assertNull("accepted: $name", strict(text))
-            val alone = file("""[["com"],["$url"]]""")
-            assertNull("accepted alone: $name", strict(alone))
-        }
-    }
-
-    @Test
-    fun `reading an installed file keeps only conforming urls and takes the first one`() {
+    fun `only conforming urls are kept and the first one wins`() {
         for ((name, url) in hostile) {
             val text = file("""[["com"],["$url","https://rdap.ok.example/x/"]]""")
-            assertEquals("kept: $name", RdapServer("rdap.ok.example", "/x/"), lenient(text)!!.serverFor("com"))
-            assertNull("used: $name", lenient(file("""[["com"],["$url"]]"""))!!.serverFor("com"))
+            assertEquals("kept: $name", RdapServer("rdap.ok.example", "/x/"), parse(text)!!.serverFor("com"))
+            assertNull("used: $name", parse(file("""[["com"],["$url"]]"""))!!.serverFor("com"))
         }
     }
 
     @Test
-    fun `the lenient reader ignores a service with no usable server and keeps the others`() {
+    fun `a service with no usable server is ignored and the others are kept`() {
         val text = file("""[["org"],["http://rdap.example.org/"]],[["com"],["https://rdap.ok.example/"]]""")
-        val bootstrap = lenient(text)!!
+        val bootstrap = parse(text)!!
         assertNull(bootstrap.serverFor("org"))
         assertNotNull(bootstrap.serverFor("com"))
     }
 
     @Test
-    fun `a service without any url is refused at install and ignored when read`() {
+    fun `a service without any url is ignored`() {
         val text = file("""[["com"],[]]""")
-        assertNull(strict(text))
-        assertNull(lenient(text)!!.serverFor("com"))
+        assertNull(parse(text)!!.serverFor("com"))
     }
 
     @Test
     fun `a tld that is not plain lowercase ascii is refused`() {
         for (tld in listOf("COM", "co.m", "", "-com", "com-", "c om", "cöm", "a".repeat(64), "com/", "*")) {
-            assertNull("accepted: $tld", strict(file("""[["$tld"],["https://rdap.ok.example/"]]""")))
-            assertNull(lenient(file("""[["$tld"],["https://rdap.ok.example/"]]"""))!!.serverFor(tld))
+            assertNull(parse(file("""[["$tld"],["https://rdap.ok.example/"]]"""))!!.serverFor(tld))
         }
     }
 
     @Test
-    fun `the same tld in two services is ambiguous at install and the first wins when read`() {
+    fun `the same tld in two services gives the first one`() {
         val text = file("""[["com"],["https://one.example/"]],[["com"],["https://two.example/"]]""")
-        assertNull(strict(text))
-        assertEquals("one.example", lenient(text)!!.serverFor("com")!!.host)
+        assertEquals("one.example", parse(text)!!.serverFor("com")!!.host)
     }
 
     @Test
@@ -126,36 +111,33 @@ class RdapBootstrapTest {
             """{"services":[[["com"],"https://a.example/"]]}""",
             """{"services":[],"services":[]}""",
         ).forEach {
-            assertNull("strict accepted: $it", strict(it))
-            assertNull("lenient accepted: $it", lenient(it))
+            assertNull("accepted: $it", parse(it))
         }
     }
 
     @Test
-    fun `an entry that is not a string is refused at install and skipped when read`() {
+    fun `an entry that is not a string is skipped`() {
         val badTld = """{"services":[[["com",1],["https://a.example/"]]]}"""
         val badUrl = """{"services":[[["com"],["https://a.example/",2]]]}"""
-        assertNull(strict(badTld))
-        assertNull(strict(badUrl))
-        assertEquals("a.example", lenient(badTld)!!.serverFor("com")!!.host)
-        assertEquals("a.example", lenient(badUrl)!!.serverFor("com")!!.host)
+        assertEquals("a.example", parse(badTld)!!.serverFor("com")!!.host)
+        assertEquals("a.example", parse(badUrl)!!.serverFor("com")!!.host)
     }
 
     @Test
     fun `a huge or too deep file is refused without trouble`() {
         val manyServices = file((1..2_500).joinToString(",") { """[["t$it"],["https://r$it.example/"]]""" })
-        assertNull(strict(manyServices))
+        assertNull(parse(manyServices))
         val manyTlds = file("""[[${(1..10_500).joinToString(",") { "\"t$it\"" }}],["https://r.example/"]]""")
-        assertNull(strict(manyTlds))
+        assertNull(parse(manyTlds))
         val deep = """{"services":""" + "[".repeat(50) + "]".repeat(50) + "}"
-        assertNull(strict(deep))
-        assertNull(strict("""{"services":[""" + """[["com"],["https://r.example/"]],""".repeat(200_000) + "]}"))
-        assertNull(strict("{".repeat(100_000)))
+        assertNull(parse(deep))
+        assertNull(parse("""{"services":[""" + """[["com"],["https://r.example/"]],""".repeat(200_000) + "]}"))
+        assertNull(parse("{".repeat(100_000)))
     }
 
     @Test
     fun `a url given as an object field or null is not a url`() {
-        assertNull(strict("""{"services":[[["com"],[null]]]}"""))
+        assertNull(parse("""{"services":[[["com"],[null]]]}""")!!.serverFor("com"))
         assertNull(RdapBootstrap.serverOf(""))
         assertNull(RdapBootstrap.serverOf("https://"))
         assertNull(RdapBootstrap.serverOf("https:///x/"))

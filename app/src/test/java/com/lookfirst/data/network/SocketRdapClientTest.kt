@@ -285,7 +285,11 @@ class SocketRdapClientTest {
 
     @Test
     fun `a target whose domain could break the request line is refused before anything is resolved`() {
-        for (domain in listOf("a b.com", "a\r\nX: y.com", "é.com", "a/b.com", "", "a?b.com", "A.com")) {
+        val bad = listOf(
+            "a b.com", "a\r\nX: y.com", "é.com", "a/b.com", "", "a?b.com", "A.com", "..", ".a", "a.", "a..com", "-.x",
+            "a-.com", "-a.com", "com", "a".repeat(64) + ".com", "x.".repeat(130) + "com",
+        )
+        for (domain in bad) {
             assertEquals(domain, RdapFailure.BAD_ANSWER, failure(lookup(RdapTarget(domain, server))))
         }
         assertTrue(resolutions.isEmpty())
@@ -293,12 +297,28 @@ class SocketRdapClientTest {
     }
 
     @Test
-    fun `a blocked executor reports a network failure`() {
+    fun `a saturated pool is reported as busy, not as a network failure`() {
         val refusing = Executor { throw java.util.concurrent.RejectedExecutionException() }
         val outcome = runBlocking {
             SocketRdapClient(resolver, transport, refusing, { now }, 5_000, { wall }).lookup(target)
         }
-        assertEquals(RdapFailure.NETWORK, failure(outcome))
+        assertEquals(RdapFailure.BUSY, failure(outcome))
+    }
+
+    @Test
+    fun `a name of 63 characters per label is accepted`() {
+        val long = "a".repeat(63) + ".com"
+        script = { found("2026-10-10T00:00:00Z", name = long) }
+        assertTrue(lookup(RdapTarget(long, server)) is RdapOutcome.Registered)
+    }
+
+    @Test
+    fun `the age counts UTC calendar days like the date shown`() {
+        script = { found("2026-10-16T23:59:00Z") }
+        // The phone's clock reads 2026-10-17T12:00Z: yesterday evening is 1 day ago although only 12 hours passed.
+        assertEquals(1, (lookup() as RdapOutcome.Registered).ageDays)
+        script = { found("2026-10-17T00:01:00Z") }
+        assertEquals(0, (lookup() as RdapOutcome.Registered).ageDays)
     }
 
     @Test

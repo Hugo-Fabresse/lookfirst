@@ -215,10 +215,10 @@ class SocketRedirectTracerTest {
     }
 
     @Test
-    fun `a refused execution is a network failure`() {
+    fun `a refused execution is busy, not a network failure`() {
         val full =
             SocketRedirectTracer(resolver, transport, { throw java.util.concurrent.RejectedExecutionException() })
-        assertEquals(TraceOutcome.Failed(TraceFailure.NETWORK), runBlocking { full.trace(url("https://a.example/")) })
+        assertEquals(TraceOutcome.Failed(TraceFailure.BUSY), runBlocking { full.trace(url("https://a.example/")) })
     }
 
     @Test

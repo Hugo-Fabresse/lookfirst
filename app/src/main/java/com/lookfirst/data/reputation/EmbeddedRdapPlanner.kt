@@ -29,7 +29,7 @@ class EmbeddedRdapPlanner @Inject constructor() : RdapPlanner {
     internal companion object {
         /** The embedded bootstrap, read once; null if the file is missing or not the expected shape. */
         val embedded: RdapBootstrap? by lazy {
-            HostResources.bytes(BOOTSTRAP_FILE)?.let { RdapBootstrap.parseLenient(it) }
+            HostResources.bytes(BOOTSTRAP_FILE)?.let { RdapBootstrap.parse(it) }
         }
 
         fun planIn(psl: PublicSuffixList, bootstrap: RdapBootstrap, host: String): RdapPlan {

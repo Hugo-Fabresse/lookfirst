@@ -98,6 +98,9 @@ enum class CheckState {
     /** No trace could be made: the section says so, the verdict is the local analysis. */
     FAILED,
 
+    /** Nothing was sent: both network workers were taken. The section says "try again in a moment". */
+    BUSY,
+
     /** The trace was made and its signals are in the verdict: the check is not offered again. */
     DONE,
 }

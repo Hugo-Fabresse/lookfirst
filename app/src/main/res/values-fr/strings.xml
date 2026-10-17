@@ -82,7 +82,8 @@
     <string name="warn_trace_body">LookFirst va contacter ce lien pour voir où il mène. Le site verra votre adresse IP et saura que son QR code a été scanné. Rien n\'est ouvert ni installé.</string>
     <string name="warn_continue">Continuer</string>
     <string name="check_loading">Vérification en cours…</string>
-    <string name="check_failed">Vérification impossible (délai dépassé ou réseau indisponible). Le verdict reste celui de l\'analyse locale.</string>
+    <string name="check_failed">Vérification impossible (délai dépassé ou réseau indisponible). Le verdict n\'a pas changé.</string>
+    <string name="check_busy">Réessayez dans un instant.</string>
     <string name="age_check">Vérifier l\'âge du domaine</string>
     <string name="warn_rdap_title">Vérifier l\'âge du domaine ?</string>
     <string name="warn_rdap_body">LookFirst demande à un registre public (RDAP, %2$s) depuis quand ce nom de domaine existe. Seul le nom de domaine (%1$s) est envoyé, pas l\'adresse complète. Le registre voit votre adresse IP. Le site lui-même n\'est pas contacté.</string>

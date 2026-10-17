@@ -50,7 +50,8 @@ internal class SocketRdapClient(
     private fun failed(failure: WorkFailure): RdapOutcome = RdapOutcome.Failed(
         when (failure) {
             WorkFailure.TIMEOUT -> RdapFailure.TIMEOUT
-            WorkFailure.REJECTED, WorkFailure.NETWORK -> RdapFailure.NETWORK
+            WorkFailure.REJECTED -> RdapFailure.BUSY
+            WorkFailure.NETWORK -> RdapFailure.NETWORK
         },
     )
 
@@ -119,10 +120,22 @@ internal class SocketRdapClient(
             return if (rest.startsWith("/")) rest else "/$rest"
         }
 
-        /** Letters, digits, hyphens and dots only: nothing that could end a path segment or a request line. */
-        fun isLdhName(name: String): Boolean = name.length in 1..MAX_NAME_LENGTH &&
-            name.all { it in 'a'..'z' || it in '0'..'9' || it == '-' || it == '.' }
+        /**
+         * At least two labels of 1 to 63 lowercase letters, digits or hyphens, none starting or ending with a
+         * hyphen: nothing that could end a path segment or a request line.
+         */
+        fun isLdhName(name: String): Boolean {
+            if (name.length > MAX_NAME_LENGTH) return false
+            val labels = name.split('.')
+            return labels.size >= 2 && labels.all { isLabel(it) }
+        }
+
+        fun isLabel(label: String): Boolean = label.length in 1..MAX_LABEL_LENGTH &&
+            label.all { it in 'a'..'z' || it in '0'..'9' || it == '-' } &&
+            label[0] != '-' &&
+            label.last() != '-'
 
         const val MAX_NAME_LENGTH = 253
+        const val MAX_LABEL_LENGTH = 63
     }
 }

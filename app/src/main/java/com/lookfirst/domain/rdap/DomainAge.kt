@@ -11,18 +11,19 @@ private const val DAY_MILLIS = 86_400_000L
  * How a registration age weighs (decision D-rdap, threat model T-NET-5). A new domain is not malicious in itself,
  * but most phishing domains are days old: under [SUSPICIOUS_BELOW_DAYS] days it is SUSPICIOUS, from there to
  * [CAUTION_BELOW_DAYS] days it is CAUTION, older says nothing (a benign answer proves nothing: an old domain can be
- * compromised). Day 0 is the day of registration.
+ * compromised). Day 0 is the UTC day of registration.
  */
 object DomainAge {
     const val SUSPICIOUS_BELOW_DAYS = 30
     const val CAUTION_BELOW_DAYS = 90
 
     /**
-     * Whole days from [registeredAtMillis] to [nowMillis]. A date in the future (a clock a little behind) is day 0;
-     * the caller refuses dates that are far in the future before it gets here.
+     * Calendar days between the UTC day of [registeredAtMillis] and the UTC day of [nowMillis]: the same day the
+     * screen shows as the registration date, so "12 days ago" and the date always agree. A date in the future (a
+     * clock a little behind) is day 0; the caller refuses dates that are far in the future before it gets here.
      */
     fun daysBetween(registeredAtMillis: Long, nowMillis: Long): Int {
-        val days = Math.floorDiv(nowMillis - registeredAtMillis, DAY_MILLIS)
+        val days = Math.floorDiv(nowMillis, DAY_MILLIS) - Math.floorDiv(registeredAtMillis, DAY_MILLIS)
         return days.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
     }
 

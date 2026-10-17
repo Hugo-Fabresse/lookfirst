@@ -20,11 +20,13 @@ import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
 import com.lookfirst.domain.open.CanonicalUrl
 import com.lookfirst.domain.rdap.RdapClient
+import com.lookfirst.domain.rdap.RdapFailure
 import com.lookfirst.domain.rdap.RdapOutcome
 import com.lookfirst.domain.rdap.RdapPlan
 import com.lookfirst.domain.rdap.RdapPlanner
 import com.lookfirst.domain.rdap.RdapTarget
 import com.lookfirst.domain.rdap.RdapUnavailable
+import com.lookfirst.domain.redirect.TraceFailure
 import com.lookfirst.domain.redirect.TraceOutcome
 import com.lookfirst.domain.usecase.AnalyzeScan
 import com.lookfirst.domain.usecase.ApplyDomainAge
@@ -43,6 +45,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -100,6 +104,16 @@ class ResultViewModel @Inject constructor(
 
     /** What the optional domain-age check asks: the registrable domain and its registry, from the installed lists. */
     private var ageTarget: RdapTarget? = null
+
+    /**
+     * The raw answers of the two optional checks. The shown verdict is always `local + trace + age` composed in that
+     * fixed order from these, so the order in which the answers arrive changes nothing (no answer overwrites another).
+     */
+    private var traceResult: TraceOutcome.Completed? = null
+    private var ageResult: RdapOutcome? = null
+
+    /** One commit at a time: an answer is composed with the other one as it is when the lock is taken. */
+    private val commitLock = Mutex()
 
     /**
      * Starts showing [content]. Ignored while another content is displayed. [multipleCodes]: the image it comes
@@ -270,16 +284,11 @@ class ResultViewModel @Inject constructor(
         tracing = viewModelScope.launch {
             val outcome = redirectTracer.trace(start)
             if (outcome !is TraceOutcome.Completed) {
-                updateChecks { it.copy(trace = CheckState.FAILED) }
+                val busy = (outcome as? TraceOutcome.Failed)?.reason == TraceFailure.BUSY
+                updateChecks { it.copy(trace = if (busy) CheckState.BUSY else CheckState.FAILED) }
                 return@launch
             }
-            // The verdict of the moment, not the local one: a domain-age result already in it must survive.
-            val base = (mutableState.value as? ResultUiState.Content)?.verdict ?: localVerdict ?: return@launch
-            val updated = withContext(workDispatcher) { merge(base, outcome) }
-            mutableState.update {
-                if (it !is ResultUiState.Content || it.checks == null) return@update it
-                it.copy(verdict = updated, checks = it.checks.copy(trace = CheckState.DONE).announcing(it, updated))
-            }
+            commit(trace = outcome) { it.copy(trace = CheckState.DONE) }
         }
     }
 
@@ -302,16 +311,11 @@ class ResultViewModel @Inject constructor(
         ageChecking = viewModelScope.launch {
             val outcome = rdapClient.lookup(target)
             if (outcome is RdapOutcome.Failed) {
-                updateChecks { it.copy(age = CheckState.FAILED) }
+                val busy = outcome.reason == RdapFailure.BUSY
+                updateChecks { it.copy(age = if (busy) CheckState.BUSY else CheckState.FAILED) }
                 return@launch
             }
-            val base = (mutableState.value as? ResultUiState.Content)?.verdict ?: return@launch
-            val updated = withContext(workDispatcher) { mergeAge(base, outcome) }
-            mutableState.update {
-                if (it !is ResultUiState.Content || it.checks == null) return@update it
-                val done = it.checks.copy(age = CheckState.DONE, ageOutcome = outcome)
-                it.copy(verdict = updated, checks = done.announcing(it, updated))
-            }
+            commit(age = outcome) { it.copy(age = CheckState.DONE, ageOutcome = outcome) }
         }
     }
 
@@ -322,6 +326,34 @@ class ResultViewModel @Inject constructor(
         updateChecks {
             if (it.age == CheckState.WARNING || it.age == CheckState.RUNNING) it.copy(age = CheckState.IDLE) else it
         }
+    }
+
+    /**
+     * Records one answer and shows the verdict composed from both answers. Serialised: the composition (off the main
+     * thread) reads the other answer as it is under the lock, and the answers and the state are written together
+     * without a suspension, so a cancelled check leaves nothing behind and no update is lost.
+     */
+    private suspend fun commit(
+        trace: TraceOutcome.Completed? = null,
+        age: RdapOutcome? = null,
+        mark: (OptionalChecks) -> OptionalChecks,
+    ) {
+        commitLock.withLock {
+            val local = localVerdict ?: return
+            val composed = withContext(workDispatcher) { compose(local, trace ?: traceResult, age ?: ageResult) }
+            if (trace != null) traceResult = trace
+            if (age != null) ageResult = age
+            mutableState.update {
+                if (it !is ResultUiState.Content || it.checks == null) return@update it
+                it.copy(verdict = composed, checks = mark(it.checks).announcing(it, composed))
+            }
+        }
+    }
+
+    /** local, then the redirect trace, then the domain age: always this order. Each step only adds. */
+    private fun compose(local: Verdict, trace: TraceOutcome.Completed?, age: RdapOutcome?): Verdict {
+        val traced = if (trace == null) local else merge(local, trace)
+        return if (age == null) traced else mergeAge(traced, age)
     }
 
     /**
@@ -383,6 +415,8 @@ class ResultViewModel @Inject constructor(
         ageChecking?.cancel()
         ageChecking = null
         ageTarget = null
+        traceResult = null
+        ageResult = null
         traceStart = null
         localVerdict = null
         scanned = null

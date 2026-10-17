@@ -31,7 +31,7 @@ enum class RdapUnavailable {
     /** The address has no registrable domain: an IP address, a bare public suffix, a name that did not normalize. */
     NOT_A_DOMAIN,
 
-    /** The bundle names no usable registry server for this TLD. */
+    /** The embedded bootstrap names no usable (https) registry server for this TLD. */
     NO_SERVER,
 }
 
@@ -42,7 +42,14 @@ sealed interface RdapPlan {
 }
 
 /** Why no answer could be used. One generic sentence is shown; the detail never reaches the user or the logs. */
-enum class RdapFailure { TIMEOUT, NETWORK, BAD_ANSWER }
+enum class RdapFailure {
+    TIMEOUT,
+    NETWORK,
+    BAD_ANSWER,
+
+    /** Both network workers are taken (blocked DNS lookups still running): nothing was sent, try again soon. */
+    BUSY,
+}
 
 sealed interface RdapOutcome {
     /** The registry gave a registration date; [ageDays] is whole days since, never negative. */
@@ -59,7 +66,7 @@ fun interface RdapClient {
     suspend fun lookup(target: RdapTarget): RdapOutcome
 }
 
-/** Port to the installed bootstrap: which server answers for this address, if any. Offline and synchronous. */
+/** Port to the bootstrap embedded in the app: which server answers for this address, if any. Offline and synchronous. */
 fun interface RdapPlanner {
     fun plan(asciiHost: String): RdapPlan
 }

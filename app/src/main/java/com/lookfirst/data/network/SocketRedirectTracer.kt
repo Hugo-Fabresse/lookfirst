@@ -43,7 +43,8 @@ internal class SocketRedirectTracer(
     private fun failed(failure: WorkFailure): TraceOutcome = TraceOutcome.Failed(
         when (failure) {
             WorkFailure.TIMEOUT -> TraceFailure.TIMEOUT
-            WorkFailure.REJECTED, WorkFailure.NETWORK -> TraceFailure.NETWORK
+            WorkFailure.REJECTED -> TraceFailure.BUSY
+            WorkFailure.NETWORK -> TraceFailure.NETWORK
         },
     )
 

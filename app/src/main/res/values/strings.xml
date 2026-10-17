@@ -82,7 +82,8 @@
     <string name="warn_trace_body">LookFirst will contact this link to see where it leads. The site will see your IP address and learn that its QR code was scanned. Nothing is opened or installed.</string>
     <string name="warn_continue">Continue</string>
     <string name="check_loading">Checking…</string>
-    <string name="check_failed">Check not possible (timed out or network unavailable). The verdict remains the local analysis.</string>
+    <string name="check_failed">Check not possible (timed out or network unavailable). The verdict has not changed.</string>
+    <string name="check_busy">Try again in a moment.</string>
     <string name="age_check">Check domain age</string>
     <string name="warn_rdap_title">Check domain age?</string>
     <string name="warn_rdap_body">LookFirst asks a public registry (RDAP, %2$s) how long this domain name has existed. Only the domain name (%1$s) is sent, not the full address. The registry sees your IP address. The site itself is not contacted.</string>

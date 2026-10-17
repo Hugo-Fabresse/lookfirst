@@ -52,13 +52,18 @@ class RdapResponseTest {
         assertNull(read("""{"objectClassName":"domain","ldhName":"example.com"}"""))
         assertNull(read("""{"objectClassName":"domain","ldhName":"example.com","events":"registration"}"""))
         assertNull(read("""{"objectClassName":"domain","ldhName":"example.com","events":[1,"x",null,[]]}"""))
-        assertNull(read("""{"objectClassName":"domain","events":[{"eventAction":"registration"}]}"""))
         assertNull(
-            read("""{"objectClassName":"domain","events":[{"eventAction":1,"eventDate":"2020-01-01T00:00:00Z"}]}"""),
+            read("""{"objectClassName":"domain","ldhName":"example.com","events":[{"eventAction":"registration"}]}"""),
         )
         assertNull(
             read(
-                """{"objectClassName":"domain","events":""" +
+                """{"objectClassName":"domain","ldhName":"example.com","events":""" +
+                    """[{"eventAction":1,"eventDate":"2020-01-01T00:00:00Z"}]}""",
+            ),
+        )
+        assertNull(
+            read(
+                """{"objectClassName":"domain","ldhName":"example.com","events":""" +
                     """[{"eventAction":"Registration","eventDate":"2020-01-01T00:00:00Z"}]}""",
             ),
         )
@@ -82,11 +87,23 @@ class RdapResponseTest {
         assertNull(read("""{"objectClassName":"domain","ldhName":"other.com","events":[$date]}"""))
         assertNull(read("""{"objectClassName":"domain","ldhName":"example.com.evil.net","events":[$date]}"""))
         assertNull(read("""{"objectClassName":"domain","ldhName":5,"events":[$date]}"""))
+        assertNull(read("""{"objectClassName":"domain","ldhName":"Example.COM.","events":[$date]}"""))
         assertEquals(
             instant("2020-01-01T00:00:00Z"),
-            read("""{"objectClassName":"domain","ldhName":"Example.COM.","events":[$date]}"""),
+            read("""{"objectClassName":"domain","ldhName":"Example.COM","events":[$date]}"""),
         )
-        assertEquals(instant("2020-01-01T00:00:00Z"), read("""{"events":[$date]}"""))
+    }
+
+    @Test
+    fun `both the object class and the name are required`() {
+        val date = event("registration", "2020-01-01T00:00:00Z")
+        assertNull(read("""{"events":[$date]}"""))
+        assertNull(read("""{"objectClassName":"domain","events":[$date]}"""))
+        assertNull(read("""{"ldhName":"example.com","events":[$date]}"""))
+        assertNull(read("""{"objectClassName":"Domain","ldhName":"example.com","events":[$date]}"""))
+        assertNull(read("""{"objectClassName":["domain"],"ldhName":"example.com","events":[$date]}"""))
+        assertNull(read("""{"objectClassName":"domain","ldhName":null,"events":[$date]}"""))
+        assertNull(read("""{"objectClassName":"domain","ldhName":"","events":[$date]}"""))
     }
 
     @Test
@@ -120,7 +137,7 @@ class RdapResponseTest {
     @Test
     fun `events beyond the cap are not looked at`() {
         val filler = (1..300).joinToString(",") { event("last changed", "2020-01-01T00:00:00Z") }
-        val json = """{"objectClassName":"domain","events":[$filler,${event(
+        val json = """{"objectClassName":"domain","ldhName":"example.com","events":[$filler,${event(
             "registration",
             "2020-01-01T00:00:00Z",
         )}]}"""

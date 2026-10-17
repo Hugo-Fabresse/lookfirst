@@ -40,7 +40,7 @@ internal data class JsonLimits(
         /** The signed manifest. */
         val MANIFEST = JsonLimits(maxDepth = 6, maxNodes = 2_000, maxStringLength = 1_024)
 
-        /** The RDAP bootstrap file of the bundle (a few thousand values, shape checked after). */
+        /** The RDAP bootstrap file embedded in the APK (a few thousand values, shape checked after). */
         val BOOTSTRAP = JsonLimits(maxDepth = 6, maxNodes = 20_000, maxStringLength = 1_024)
 
         /** A registry's answer (at most 256 KiB, untrusted): nested vCards, long notices. */

@@ -11,7 +11,7 @@ import org.junit.Test
 
 class EmbeddedRdapPlannerTest {
     private val psl = PublicSuffixList.instance!!
-    private val bootstrap = RdapBootstrap.parseStrict(
+    private val bootstrap = RdapBootstrap.parse(
         (
             """{"services":[[["com","net","io"],["https://rdap.verisign.com/com/v1/"]],""" +
                 """[["uk"],["https://rdap.nominet.uk/uk/"]]]}"""

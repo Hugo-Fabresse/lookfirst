@@ -21,6 +21,12 @@ internal class LoadedLists(val sources: List<LoadedSource>)
 /** Entries across all sources and age in whole days of the oldest one (settings screen). */
 internal class ListsSummary(val entries: Long, val ageDays: Int)
 
+/** Forces a directory entry (a rename) to storage. Android: `Os.open` + `Os.fsync`; tests pass a recorder. */
+internal fun interface DirectorySync {
+    @Throws(IOException::class)
+    fun sync(directory: File)
+}
+
 internal sealed interface ListInstallResult {
     class Installed(val entries: Long) : ListInstallResult
 

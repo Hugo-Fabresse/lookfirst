@@ -17,7 +17,7 @@ class LfixTest {
     private val pslSha = "ab".repeat(32)
 
     private fun write(name: String, keys: List<Long>, source: Int = 1): File =
-        File(folder.root, name).also { it.writeBytes(BundleBuilder.indexOfKeys(source, keys, pslSha)) }
+        File(folder.root, name).also { it.writeBytes(TestIndex.indexOfKeys(source, keys, pslSha)) }
 
     @Test
     fun keyIsTheFirstEightBytesOfSha256OfKindAndName() {
@@ -53,7 +53,7 @@ class LfixTest {
 
     @Test
     fun malformedFilesAreRefused() {
-        val good = BundleBuilder.indexOfKeys(1, listOf(1L, 2L, 3L), pslSha)
+        val good = TestIndex.indexOfKeys(1, listOf(1L, 2L, 3L), pslSha)
         fun bytes(change: (ByteArray) -> ByteArray) =
             File(folder.root, "x${System.nanoTime()}").also { it.writeBytes(change(good)) }
         assertNull(Lfix.validate(bytes { it.copyOf(63) }))
@@ -77,9 +77,9 @@ class LfixTest {
 
     @Test
     fun largeIndexValidatesAndIntersectsQuickly() {
-        val keys = BundleBuilder.syntheticKeys(2_000_000, 11)
+        val keys = TestIndex.syntheticKeys(2_000_000, 11)
         val big = write("big.idx", keys)
-        val other = write("other.idx", BundleBuilder.syntheticKeys(50_000, 12))
+        val other = write("other.idx", TestIndex.syntheticKeys(50_000, 12))
         val start = System.nanoTime()
         assertEquals(2_000_000L, Lfix.validate(big)!!.entryCount)
         assertFalse(Lfix.intersects(big, other))

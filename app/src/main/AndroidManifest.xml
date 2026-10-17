@@ -11,7 +11,7 @@
     <uses-feature
         android:name="android.hardware.camera.any"
         android:required="false" />
-    <!-- Network: the reputation lists (one fixed https host, ListsEndpoint) and the optional redirect check the
+    <!-- Network: the reputation lists (fixed https addresses of their publishers, ListSources) and the optional redirect check the
          user starts by a tap. Cleartext is forbidden by network_security_config.xml. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Normal permission: WorkManager's network constraint, and knowing whether the device is offline so that the

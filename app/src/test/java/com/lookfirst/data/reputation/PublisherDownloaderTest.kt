@@ -25,7 +25,7 @@ class PublisherDownloaderTest {
     private var now = TEST_NOW
     private val first = testSource(id = SourceIds.CERT_PL, url = URI("https://lists.example.org/domains.txt"))
     private val second = testSource(
-        id = SourceIds.PHISHING_DATABASE,
+        id = OTHER_SOURCE_ID,
         url = URI("https://other.example.net/list/phish.txt"),
     )
     private val store by lazy { ListStore(File(folder.root, "reputation"), listOf(first, second), { now }, {}) }

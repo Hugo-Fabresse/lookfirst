@@ -19,18 +19,9 @@ private const val INT_MASK = 0xFFFFFFFFL
 private const val READ_CHUNK = 64 * 1024
 private val MAGIC = byteArrayOf('L'.code.toByte(), 'F'.code.toByte(), 'I'.code.toByte(), 'X'.code.toByte())
 
-/** Source id 0 is the allow-list; sources of reputation start at 1. */
+/** Index source ids. Each list the app knows has its own, never reused: ids 0 and 1 belonged to the removed bundle. */
 internal object SourceIds {
-    const val ALLOWLIST = 0
-    const val PHISHING_DATABASE = 1
     const val CERT_PL = 2
-
-    /** Human names come from this table, never from a downloaded file. */
-    fun nameFor(id: Int): String? = when (id) {
-        PHISHING_DATABASE -> "Phishing.Database"
-        CERT_PL -> "CERT Polska"
-        else -> null
-    }
 }
 
 internal class LfixHeader(val sourceId: Int, val entryCount: Long, val pslSha256: String)

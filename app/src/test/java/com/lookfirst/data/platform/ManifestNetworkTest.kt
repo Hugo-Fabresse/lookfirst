@@ -84,7 +84,9 @@ class ManifestNetworkTest {
     }
 
     @Test
-    fun theOnlyHostTheAppTalksToIsCompiledIn() {
-        assertEquals("codeberg.org", com.lookfirst.data.reputation.ListsEndpoint.HOST)
+    fun theOnlyHostsTheAppTalksToAreCompiledIn() {
+        val hosts = com.lookfirst.data.reputation.ListSources.ALL.map { it.url.host }
+        assertEquals(listOf("hole.cert.pl"), hosts)
+        assertTrue(com.lookfirst.data.reputation.ListSources.ALL.all { it.url.scheme == "https" })
     }
 }

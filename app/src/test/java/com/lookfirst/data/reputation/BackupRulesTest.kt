@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** Bundles live in `filesDir`; the backup configuration must keep that domain out of every backup and transfer. */
+/** The list indexes live in `filesDir`; the backup configuration must keep that domain out of every backup and transfer. */
 class BackupRulesTest {
     @Test
     fun filesDomainIsExcludedFromBackupAndDeviceTransfer() {

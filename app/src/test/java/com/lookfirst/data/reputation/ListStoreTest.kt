@@ -18,7 +18,7 @@ class ListStoreTest {
     private val root by lazy { File(folder.root, "reputation") }
     private var now = TEST_NOW
     private val first = testSource(id = SourceIds.CERT_PL, minEntries = 3, maxEntries = 500)
-    private val second = testSource(id = SourceIds.PHISHING_DATABASE, minEntries = 3, maxEntries = 500)
+    private val second = testSource(id = OTHER_SOURCE_ID, minEntries = 3, maxEntries = 500)
     private val syncs = mutableListOf<File>()
 
     private fun store(vararg sources: ListSource, sync: DirectorySync = DirectorySync { syncs += it }) =

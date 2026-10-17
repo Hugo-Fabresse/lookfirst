@@ -18,7 +18,7 @@ class LocalReputationLookupTest {
 
     private var clock = TEST_NOW
     private val cert = testSource(id = SourceIds.CERT_PL, minEntries = 1)
-    private val other = testSource(id = SourceIds.PHISHING_DATABASE, minEntries = 1)
+    private val other = testSource(id = OTHER_SOURCE_ID, minEntries = 1)
 
     private fun host(text: String): NormalizedHost = (HostNormalizer.normalize(text) as HostResult.Normalized).host
 
@@ -114,7 +114,7 @@ class LocalReputationLookupTest {
     @Test
     fun anySourceThatListsAHostWins() {
         val lookup = lookupWith(standard, second = keyed("d:only-in-second.com"))
-        val inSecond = ReputationResult.Listed("Test list ${SourceIds.PHISHING_DATABASE}")
+        val inSecond = ReputationResult.Listed("Test list ${OTHER_SOURCE_ID}")
         assertEquals(inSecond, lookup.result("only-in-second.com"))
         assertEquals(listed, lookup.result("phish.net"))
     }

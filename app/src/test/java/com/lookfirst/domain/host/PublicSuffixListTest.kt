@@ -62,4 +62,16 @@ class PublicSuffixListTest {
         assertNull(list.registrableDomain("a..com"))
         assertNotNull(list.registrableDomain("a.example"))
     }
+
+    @Test
+    fun icannRegistrableDomainIgnoresThePrivateSection() {
+        assertEquals("github.io", list.icannRegistrableDomain("user.github.io"))
+        assertEquals("user.github.io", list.registrableDomain("user.github.io"))
+        assertEquals("blogspot.com", list.icannRegistrableDomain("shop.blogspot.com"))
+        assertEquals("paypal.com", list.icannRegistrableDomain("www.paypal.com"))
+        assertEquals("bbc.co.uk", list.icannRegistrableDomain("news.bbc.co.uk"))
+        assertNull(list.icannRegistrableDomain("co.uk"))
+        assertNull(list.icannRegistrableDomain("com"))
+        assertNull(list.icannRegistrableDomain("a..com"))
+    }
 }

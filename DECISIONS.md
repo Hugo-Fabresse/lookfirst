@@ -105,4 +105,4 @@ DECISION [lists] : signature illisible sur le manifeste = une seule nouvelle ten
 DECISION [lists] : ListDownloader reste dans data/reputation (HttpURLConnection, pas d'OkHttp) ; l'hôte codeberg.org est compilé, le propriétaire/dépôt Hugo-Fabresse/lookfirst-lists est PROVISOIRE jusqu'à LF-25
 DECISION [lists] : la mise à jour automatique n'est planifiée qu'après l'écran de premier lancement (case cochée par défaut) ; elle se coupe depuis Réglages
 DECISION [settings] : licences = texte statique dans À propos (ZXing, AndroidX, PSL, Phishing.Database), sans écran de licences dédié ; keyset.json pas encore téléchargé (rotation par versions de l'appli)
-DECISION [build] : WorkManager 2.10.0 ajoute WAKE_LOCK, ACCESS_NETWORK_STATE, RECEIVE_BOOT_COMPLETED et FOREGROUND_SERVICE au manifeste fusionné (permissions normales, venant de la bibliothèque) — à réexaminer avec Hugo
+DECISION [build] : retrait FOREGROUND_SERVICE/RECEIVE_BOOT_COMPLETED/DiagnosticsReceiver du manifeste fusionné (tools:node=remove) — inutiles (pas de foreground ni d'expedited, setPersisted(false)) ; replanification au démarrage ; WAKE_LOCK et ACCESS_NETWORK_STATE gardés pour la contrainte réseau

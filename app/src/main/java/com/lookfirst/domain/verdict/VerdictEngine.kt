@@ -13,14 +13,18 @@ object VerdictEngine {
      * evidence (two hosts) stays twice. Content that was not understood
      * (text, unknown format, too large, empty) is never [VerdictLevel.NO_RISK_SIGNAL].
      */
-    fun combine(signals: List<Signal>, result: ParseResult, payloadId: String): Verdict {
+    fun combine(signals: List<Signal>, result: ParseResult, payloadId: String): Verdict =
+        combine(signals, isUnderstood(result), payloadId)
+
+    /** Same, for a caller that already knows whether the content was understood (a re-evaluation after a check). */
+    fun combine(signals: List<Signal>, understood: Boolean, payloadId: String): Verdict {
         val reasons = signals
             .withIndex()
             .sortedWith(compareBy({ it.value.severity.ordinal }, { it.index }))
             .map { it.value }
             .distinctBy { it.code to it.evidence }
         val level = reasons.firstOrNull()?.let { levelOf(it.severity) } ?: VerdictLevel.NO_RISK_SIGNAL
-        val floor = if (isUnderstood(result)) VerdictLevel.NO_RISK_SIGNAL else VerdictLevel.CAUTION
+        val floor = if (understood) VerdictLevel.NO_RISK_SIGNAL else VerdictLevel.CAUTION
         // VerdictLevel is declared heaviest first, so the smaller ordinal is the heavier level.
         return Verdict(if (level.ordinal <= floor.ordinal) level else floor, reasons, payloadId)
     }

@@ -55,7 +55,7 @@ object UrlStructureAnalyzer : SignalAnalyzer {
     }
 
     /** IP_HOST, SHORTENER and the failure signals, all from the normalized host. */
-    private fun hostSignals(url: ScanPayload.Url, normalized: HostResult?): List<Signal> = when (normalized) {
+    internal fun hostSignals(url: ScanPayload.Url, normalized: HostResult?): List<Signal> = when (normalized) {
         null -> listOf(Signal(SignalCode.IP_HOST, evidence = url.rawHost)) // IPv6 literal
         is HostResult.Invalid -> buildList {
             add(Signal(SignalCode.ANALYSIS_INCOMPLETE, evidence = url.rawHost))

@@ -33,4 +33,5 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-44 — TYPO sur les morceaux à tirets d'un label, indice obligatoire ; corpus légitime +9 hôtes à tirets, 0 faux positif, fraude +4 — branche fix/LF-44-typo-in-label-parts
 - [🔄 WIP]  LF-32 — limite de variation des listes sur la différence d'ensembles + ancrage de l'horloge par l'en-tête Date — branche fix/LF-32-list-set-variation
 - [🔄 WIP]  LF-34 — signal LOCAL_HOST : hôtes locaux, réservés et TLD inexistants (audit S-6) — branche fix/LF-34-local-host-signal
+- [✅ DONE] LF-42 — hôte probable d'un Text en forme d'adresse analysé (listes, marque, homographe, IP, local), sans Ouvrir (audit I-2) — branche fix/LF-42-address-like-text
 - [✅ DONE] LF-37 — label du clip sensible persisté (effacement après mort du processus) + toString des ScanPayload sans contenu — tests: ClipboardProcessDeathTest, ScanPayloadToStringTest

@@ -24,11 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lookfirst.R
@@ -45,7 +41,7 @@ fun ScanScreen(
     onOpenAndroidSettings: () -> Unit,
     onTorchToggle: () -> Unit,
     onOpenSettings: () -> Unit,
-    onCancel: () -> Unit,
+    onCameraRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -65,7 +61,14 @@ fun ScanScreen(
                     actionLabel = R.string.open_android_settings,
                     onAction = onOpenAndroidSettings,
                 )
-                is ScanUiState.Captured -> CapturedContent(state, onCancel)
+                ScanUiState.CameraUnavailable -> PermissionContent(
+                    icon = R.drawable.ic_camera_off,
+                    message = R.string.camera_unavailable,
+                    actionLabel = R.string.camera_retry,
+                    onAction = onCameraRetry,
+                )
+                // The Result screen is on top: nothing to draw, the camera is released.
+                ScanUiState.Captured -> Unit
             }
         }
     }
@@ -160,32 +163,5 @@ private fun PickImageButton() {
     OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
         Icon(painter = painterResource(R.drawable.ic_image), contentDescription = null, modifier = Modifier.size(20.dp))
         Text(text = stringResource(R.string.pick_image), modifier = Modifier.padding(start = 8.dp))
-    }
-}
-
-/** Placeholder until LF-11: nothing but the length of what was read, and Cancel to resume the camera. */
-@Composable
-private fun CapturedContent(state: ScanUiState.Captured, onCancel: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(R.string.scan_result_title),
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.semantics {
-                liveRegion = LiveRegionMode.Polite
-            },
-        )
-        Text(
-            text = pluralStringResource(R.plurals.scan_result_length, state.contentLength, state.contentLength),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.action_cancel))
-        }
     }
 }

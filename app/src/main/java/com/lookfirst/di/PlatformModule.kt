@@ -2,8 +2,10 @@ package com.lookfirst.di
 
 import com.lookfirst.data.platform.AndroidAppSettingsOpener
 import com.lookfirst.data.platform.AndroidCameraPermission
+import com.lookfirst.data.platform.AndroidClipboardWriter
 import com.lookfirst.data.platform.AppSettingsOpener
 import com.lookfirst.data.platform.CameraPermission
+import com.lookfirst.data.platform.ClipboardWriter
 import com.lookfirst.data.scan.camera.DefaultQrAnalyzerFactory
 import com.lookfirst.data.scan.camera.QrAnalyzerFactory
 import com.lookfirst.data.scan.camera.ZxingBarcodeDecoder
@@ -21,6 +23,9 @@ abstract class PlatformModule {
 
     @Binds
     abstract fun bindAppSettingsOpener(impl: AndroidAppSettingsOpener): AppSettingsOpener
+
+    @Binds
+    abstract fun bindClipboardWriter(impl: AndroidClipboardWriter): ClipboardWriter
 
     @Binds
     abstract fun bindBarcodeDecoder(impl: ZxingBarcodeDecoder): BarcodeDecoder

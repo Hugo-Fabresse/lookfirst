@@ -21,8 +21,8 @@ object RiskAnalyzer {
             UnparsableAnalyzer,
         )
 
-    fun analyze(result: ParseResult): List<Signal> = when (result) {
-        is ParseResult.Ok -> ANALYZERS.flatMap { it.analyze(result) }
+    fun analyze(result: ParseResult, context: AnalysisContext = AnalysisContext()): List<Signal> = when (result) {
+        is ParseResult.Ok -> ANALYZERS.flatMap { it.analyze(result, context) }
         // Nothing was decoded: nothing can be said, and that is never a clean result.
         is ParseResult.TooLarge, ParseResult.Empty -> listOf(Signal(SignalCode.UNPARSABLE))
     }

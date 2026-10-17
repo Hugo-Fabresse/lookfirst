@@ -21,7 +21,17 @@ class UrlStructureAnalyzerTest {
         val signals = UrlStructureAnalyzer.on("https://paypal.com@evil-pay.example/login")
         assertEquals(setOf(SignalCode.USERINFO_AT), signals.codes())
         assertEquals("evil-pay.example", signals.of(SignalCode.USERINFO_AT).evidence?.value)
-        assertEquals(Severity.SUSPICIOUS, signals.of(SignalCode.USERINFO_AT).severity)
+        assertEquals(Severity.DANGEROUS, signals.of(SignalCode.USERINFO_AT).severity)
+    }
+
+    @Test
+    fun userinfoWithoutDotOrNumberIsSuspiciousOnly() {
+        val plain = UrlStructureAnalyzer.on("https://support@evil.example/login")
+        assertEquals(Severity.SUSPICIOUS, plain.of(SignalCode.USERINFO_AT).severity)
+        val ip = UrlStructureAnalyzer.on("https://2130706433@evil.example/")
+        assertEquals(Severity.DANGEROUS, ip.of(SignalCode.USERINFO_AT).severity)
+        val dotted = UrlStructureAnalyzer.on("https://user:paypal.com@evil.example/")
+        assertEquals(Severity.DANGEROUS, dotted.of(SignalCode.USERINFO_AT).severity)
     }
 
     @Test
@@ -42,6 +52,14 @@ class UrlStructureAnalyzerTest {
     fun unresolvedHostTriggersNothingAboutIp() {
         // Fullwidth digits: only the UTS #46 normalizer (LF-16) can say whether this is an IP.
         assertTrue(SignalCode.IP_HOST !in codes("https://１２７.０.０.１/"))
+    }
+
+    @Test
+    fun unresolvedHostIsAnalysisIncompleteUntilTheNormalizerRuns() {
+        val signal = UrlStructureAnalyzer.on("https://café.example/menu").of(SignalCode.ANALYSIS_INCOMPLETE)
+        assertEquals(Severity.CAUTION, signal.severity)
+        assertTrue(SignalCode.ANALYSIS_INCOMPLETE in codes("https://%70aypal.com/login"))
+        assertTrue(SignalCode.ANALYSIS_INCOMPLETE !in codes("https://cafe.example/menu"))
     }
 
     @Test
@@ -94,8 +112,7 @@ class UrlStructureAnalyzerTest {
     @Test
     fun percentEncodedHostIsSuspicious() {
         val signals = UrlStructureAnalyzer.on("https://%70aypal.com/login")
-        assertEquals(SignalCode.URL_HOST_ENCODED, signals.single().code)
-        assertEquals(Severity.SUSPICIOUS, signals.single().severity)
+        assertEquals(Severity.SUSPICIOUS, signals.of(SignalCode.URL_HOST_ENCODED).severity)
     }
 
     @Test

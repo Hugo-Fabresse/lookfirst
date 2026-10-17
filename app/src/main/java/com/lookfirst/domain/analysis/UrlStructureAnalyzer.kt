@@ -1,8 +1,10 @@
 package com.lookfirst.domain.analysis
 
+import com.lookfirst.domain.decoder.HostNumbers
 import com.lookfirst.domain.model.HostKind
 import com.lookfirst.domain.model.ParseResult
 import com.lookfirst.domain.model.ScanPayload
+import com.lookfirst.domain.model.Severity
 import com.lookfirst.domain.model.Signal
 import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
@@ -34,10 +36,11 @@ private val IP_KINDS = setOf(HostKind.IPV4, HostKind.IPV6, HostKind.IPV4_OBFUSCA
  * whose kind is [HostKind.UNRESOLVED] only gets the checks that do not depend on the host.
  */
 object UrlStructureAnalyzer : SignalAnalyzer {
-    override fun analyze(result: ParseResult.Ok): List<Signal> {
+    override fun analyze(result: ParseResult.Ok, context: AnalysisContext): List<Signal> {
         val url = result.payload as? ScanPayload.Url ?: return emptyList()
         return buildList {
-            if (url.hasUserinfo) add(Signal(SignalCode.USERINFO_AT, evidence = url.rawHost))
+            userinfoSignal(url)?.let { add(it) }
+            if (url.hostKind == HostKind.UNRESOLVED) add(Signal(SignalCode.ANALYSIS_INCOMPLETE, evidence = url.rawHost))
             if (url.hostKind in IP_KINDS) add(Signal(SignalCode.IP_HOST, evidence = url.rawHost))
             if (url.port != null && url.port !in STANDARD_PORTS) {
                 add(Signal(SignalCode.UNUSUAL_PORT, evidence = Untrusted("${url.port}")))
@@ -47,6 +50,15 @@ object UrlStructureAnalyzer : SignalAnalyzer {
             if (isShortener(url)) add(Signal(SignalCode.SHORTENER, evidence = url.rawHost))
             addAll(issueSignals(url))
         }
+    }
+
+    /** A dot or a numeric name before the `@` dresses the userinfo up as a site: DANGEROUS, else SUSPICIOUS. */
+    private fun userinfoSignal(url: ScanPayload.Url): Signal? {
+        val userinfo = url.userinfo?.value ?: return null
+        val name = userinfo.substringBefore(':')
+        val looksLikeHost = '.' in userinfo || (name.isNotEmpty() && HostNumbers.classify(name) != HostKind.DOMAIN)
+        val severity = if (looksLikeHost) Severity.DANGEROUS else Severity.SUSPICIOUS
+        return Signal(SignalCode.USERINFO_AT, severity, evidence = url.rawHost)
     }
 
     private fun isShortener(url: ScanPayload.Url): Boolean = url.hostKind == HostKind.DOMAIN &&

@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MessagingRiskAnalyzerTest {
-    private fun codes(raw: String) = MessagingAnalyzer.on(raw).codes()
+    private fun codes(raw: String, region: String? = null) = MessagingAnalyzer.on(raw, region).codes()
 
     @Test
     fun ussdCodesAreSuspicious() {
@@ -18,6 +18,59 @@ class MessagingRiskAnalyzerTest {
         assertEquals(setOf(SignalCode.USSD_CODE), codes("tel:*%2306%23"))
         assertEquals(setOf(SignalCode.USSD_CODE), codes("tel:%2321%23"))
         assertTrue(SignalCode.USSD_CODE in codes("sms:*100#"))
+    }
+
+    @Test
+    fun ussdHiddenAfterASemicolonIsStillFound() {
+        assertEquals(setOf(SignalCode.USSD_CODE), codes("tel:;*#06#"))
+        assertEquals(setOf(SignalCode.USSD_CODE), codes("tel:+33612345678;*21*+33699999999#"))
+        assertEquals(setOf(SignalCode.USSD_CODE), codes("tel:+33612345678;ext=%23"))
+    }
+
+    @Test
+    fun nonAsciiDigitsAreFlaggedAndStillClassified() {
+        val signals = MessagingAnalyzer.on("tel:+\uFF13\uFF13\uFF18\uFF19\uFF19123456")
+        assertEquals(setOf(SignalCode.NON_ASCII_DIGITS, SignalCode.PREMIUM_NUMBER), signals.codes())
+        assertEquals(Severity.SUSPICIOUS, signals.of(SignalCode.NON_ASCII_DIGITS).severity)
+        assertEquals(setOf(SignalCode.NON_ASCII_DIGITS), codes("tel:+\u0663\u0663612345678"))
+        assertTrue(SignalCode.NON_ASCII_DIGITS in codes("sms:+\uFF13\uFF13612345678"))
+    }
+
+    @Test
+    fun shortTelNumbersAreCautionExceptEmergency() {
+        assertEquals(setOf(SignalCode.SHORT_NUMBER), codes("tel:36789"))
+        assertEquals(setOf(SignalCode.SHORT_NUMBER), codes("tel:3010"))
+        assertEquals(setOf(SignalCode.SHORT_NUMBER), codes("tel:123"))
+        listOf("tel:112", "tel:114", "tel:115", "tel:119", "tel:116000", "tel:116123", "tel:15", "tel:17", "tel:18")
+            .forEach { assertTrue(it, codes(it).isEmpty()) }
+        assertTrue(codes("tel:1234567").isEmpty())
+    }
+
+    @Test
+    fun frenchRegionRecognisesNationalPremiumRanges() {
+        listOf("tel:0899123456", "tel:0821123456", "tel:0811123456", "tel:118218")
+            .forEach { assertEquals(it, setOf(SignalCode.PREMIUM_NUMBER), codes(it, "FR")) }
+        assertTrue(codes("tel:0800123456", "FR").isEmpty())
+        assertTrue(codes("tel:0123456789", "FR").isEmpty())
+        assertTrue(codes("tel:0912345678", "FR").isEmpty())
+        assertEquals(setOf(SignalCode.SHORT_NUMBER), codes("tel:3010", "FR"))
+        assertEquals(setOf(SignalCode.PREMIUM_NUMBER), codes("tel:0899123456", "fr"))
+    }
+
+    @Test
+    fun withoutRegionAZeroEightNineNumberIsOnlyAGuess() {
+        val signals = MessagingAnalyzer.on("tel:0899123456")
+        assertEquals(Severity.CAUTION, signals.of(SignalCode.POSSIBLE_PREMIUM_NUMBER).severity)
+        assertTrue(codes("tel:0899123456", "DE").isEmpty())
+        assertTrue(codes("tel:089123456").isEmpty())
+    }
+
+    @Test
+    fun mailWithBccOrBodyIsPrefilled() {
+        assertEquals(Severity.CAUTION, MessagingAnalyzer.on("mailto:a@example.com?bcc=x@example.org").single().severity)
+        assertEquals(setOf(SignalCode.MAIL_PREFILLED), codes("mailto:a@example.com?body=Send%20your%20PIN"))
+        assertTrue(codes("mailto:a@example.com?subject=Hello").isEmpty())
+        assertTrue(codes("mailto:a@example.com").isEmpty())
     }
 
     @Test
@@ -37,9 +90,8 @@ class MessagingRiskAnalyzerTest {
 
     @Test
     fun nationalNumbersAreNeverGuessedAsPremium() {
-        assertTrue(codes("tel:0899123456").isEmpty())
-        assertTrue(codes("tel:089123456").isEmpty())
         assertTrue(codes("tel:0912345678").isEmpty())
+        assertTrue(codes("tel:0123456789").isEmpty())
     }
 
     @Test
@@ -60,13 +112,14 @@ class MessagingRiskAnalyzerTest {
     }
 
     @Test
-    fun shortCodeRuleDoesNotApplyToTel() {
-        assertTrue(codes("tel:36789").isEmpty())
+    fun smsShortCodeRuleHasItsOwnCodeApartFromTel() {
+        assertEquals(setOf(SignalCode.SMS_SHORT_CODE), codes("sms:36789"))
+        assertEquals(setOf(SignalCode.SHORT_NUMBER), codes("tel:36789"))
     }
 
     @Test
     fun riskAnalyzerKeepsAStableOrder() {
-        val raw = "http://paypal.com@203.0.113.9:8080/​login"
+        val raw = "http://paypal.com@203.0.113.9:8080/\u200Blogin"
         val first = RiskAnalyzer.analyze(PayloadParser.parse(raw)).map { it.code }
         assertEquals(
             listOf(
@@ -117,7 +170,7 @@ class MessagingRiskAnalyzerTest {
                 "otpauth://totp/" + ":".repeat(300) + "?secret=A&" + "algorithm=x&".repeat(300),
                 "ethereum:0x" + "f".repeat(3000) + "/transfer?uint256=" + "9".repeat(900),
                 "BCD\n".repeat(500),
-                "‮".repeat(4000),
+                "\u202E".repeat(4000),
             )
         val start = System.nanoTime()
         inputs.forEach { RiskAnalyzer.analyze(PayloadParser.parse(it)) }

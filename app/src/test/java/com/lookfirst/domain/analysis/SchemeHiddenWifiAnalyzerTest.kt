@@ -15,7 +15,7 @@ class SchemeHiddenWifiAnalyzerTest {
             "data:text/html;base64,PHNjcmlwdD4=",
             "file:///sdcard/secret.txt",
             "content://com.example.provider/x",
-            "​javascript:alert(1)",
+            "\u200Bjavascript:alert(1)",
         ).forEach {
             val signal = SchemeAnalyzer.on(it).single { s -> s.code == SignalCode.DANGEROUS_SCHEME }
             assertEquals(Severity.DANGEROUS, signal.severity)
@@ -44,7 +44,7 @@ class SchemeHiddenWifiAnalyzerTest {
 
     @Test
     fun zeroWidthSpaceInUrlCountsOnce() {
-        val signal = HiddenCharAnalyzer.on("https://example.com/pa​th").single()
+        val signal = HiddenCharAnalyzer.on("https://example.com/pa\u200Bth").single()
         assertEquals(SignalCode.HIDDEN_CHARS, signal.code)
         assertEquals(Severity.SUSPICIOUS, signal.severity)
         assertEquals(1, signal.count)
@@ -52,7 +52,8 @@ class SchemeHiddenWifiAnalyzerTest {
 
     @Test
     fun rawAndDecodedFieldCharsAreSummed() {
-        val signals = HiddenCharAnalyzer.on("otpauth://totp/Goo​gle:bob?secret=JBSWY3DPEHPK3PXP&issuer=Goo%E2%80%8Bgle")
+        val raw = "otpauth://totp/Goo\u200Bgle:bob?secret=JBSWY3DPEHPK3PXP&issuer=Goo%E2%80%8Bgle"
+        val signals = HiddenCharAnalyzer.on(raw)
         assertTrue(signals.of(SignalCode.HIDDEN_CHARS).count >= 2)
     }
 
@@ -64,7 +65,7 @@ class SchemeHiddenWifiAnalyzerTest {
 
     @Test
     fun bidiOverrideInHostIsDangerous() {
-        val signals = HiddenCharAnalyzer.on("https://exa‮mple.com/gpj.exe")
+        val signals = HiddenCharAnalyzer.on("https://exa\u202Emple.com/gpj.exe")
         assertEquals(Severity.DANGEROUS, signals.of(SignalCode.BIDI_IN_HOST).severity)
         assertTrue(SignalCode.HIDDEN_CHARS in signals.codes())
     }
@@ -75,13 +76,17 @@ class SchemeHiddenWifiAnalyzerTest {
     }
 
     @Test
-    fun bidiInPathOnlyIsHiddenCharsNotBidiInHost() {
-        assertEquals(setOf(SignalCode.HIDDEN_CHARS), HiddenCharAnalyzer.on("https://example.com/‮path").codes())
+    fun bidiOutsideTheHostIsDangerousToo() {
+        val signals = HiddenCharAnalyzer.on("https://example.com/\u202Epath")
+        assertEquals(setOf(SignalCode.BIDI_IN_URL, SignalCode.HIDDEN_CHARS), signals.codes())
+        assertEquals(Severity.DANGEROUS, signals.of(SignalCode.BIDI_IN_URL).severity)
+        assertTrue(SignalCode.BIDI_IN_URL in HiddenCharAnalyzer.on("https://example.com/a?q=%E2%80%AE").codes())
+        assertTrue(SignalCode.BIDI_IN_URL !in HiddenCharAnalyzer.on("https://\u202Eexample.com/").codes())
     }
 
     @Test
     fun zeroWidthInHostIsHiddenCharsNotBidi() {
-        assertEquals(setOf(SignalCode.HIDDEN_CHARS), HiddenCharAnalyzer.on("https://exa​mple.com/").codes())
+        assertEquals(setOf(SignalCode.HIDDEN_CHARS), HiddenCharAnalyzer.on("https://exa\u200Bmple.com/").codes())
     }
 
     @Test
@@ -98,6 +103,13 @@ class SchemeHiddenWifiAnalyzerTest {
     fun wepIsCaution() {
         val signal = WifiAnalyzer.on("WIFI:T:WEP;S:Hotel;P:12345;;").single()
         assertEquals(SignalCode.WIFI_WEP, signal.code)
+        assertEquals(Severity.CAUTION, signal.severity)
+    }
+
+    @Test
+    fun unknownSecurityTypeIsCaution() {
+        val signal = WifiAnalyzer.on("WIFI:T:XYZ;S:Cafe;P:abc;;").single()
+        assertEquals(SignalCode.WIFI_UNKNOWN_SECURITY, signal.code)
         assertEquals(Severity.CAUTION, signal.severity)
     }
 

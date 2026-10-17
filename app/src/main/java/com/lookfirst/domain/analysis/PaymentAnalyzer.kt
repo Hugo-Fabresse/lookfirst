@@ -2,6 +2,7 @@ package com.lookfirst.domain.analysis
 
 import com.lookfirst.domain.model.EpcIssue
 import com.lookfirst.domain.model.ParseResult
+import com.lookfirst.domain.model.PaymentProblem
 import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.Signal
 import com.lookfirst.domain.model.SignalCode
@@ -21,45 +22,65 @@ private const val MAX_WEI_DIGITS = 21
 private const val MAX_TOKEN_DIGITS = 27
 
 /**
- * EPC / SEPA and crypto payment QR codes. One PAYMENT_MISMATCH signal whose evidence lists what is inconsistent
- * (fixed tokens such as `currency,bic`, never scanned text). Valid but attacker-owned destinations are unknowable
- * locally (T-PAY): this only catches payloads that contradict themselves or hide the recipient.
+ * EPC / SEPA and crypto payment QR codes. One PAYMENT_MISMATCH signal whose [Signal.details] list what is
+ * inconsistent, and CRYPTO_BAD_CHECKSUM when the displayed address fails its checksum. Valid but attacker-owned
+ * destinations are unknowable locally (T-PAY): this only catches payloads that contradict themselves.
  */
 object PaymentAnalyzer : SignalAnalyzer {
-    override fun analyze(result: ParseResult.Ok): List<Signal> {
-        val problems =
-            when (val payload = result.payload) {
-                is ScanPayload.Epc -> epcProblems(payload)
-                is ScanPayload.Crypto -> cryptoProblems(payload)
-                else -> return emptyList()
-            }
-        return if (problems.isEmpty()) {
-            emptyList()
-        } else {
-            listOf(Signal(SignalCode.PAYMENT_MISMATCH, evidence = Untrusted(problems.joinToString(","))))
+    override fun analyze(result: ParseResult.Ok, context: AnalysisContext): List<Signal> =
+        when (val payload = result.payload) {
+            is ScanPayload.Epc -> mismatch(epcProblems(payload), null)
+            is ScanPayload.Crypto -> cryptoSignals(payload)
+            else -> emptyList()
         }
+
+    private fun mismatch(problems: List<PaymentProblem>, evidence: Untrusted?): List<Signal> {
+        if (problems.isEmpty()) return emptyList()
+        return listOf(Signal(SignalCode.PAYMENT_MISMATCH, evidence = evidence, details = problems))
     }
 
-    private fun epcProblems(epc: ScanPayload.Epc): List<String> = buildList {
-        if (EpcIssue.BAD_IBAN_FORMAT in epc.issues || EpcIssue.BAD_IBAN_CHECKSUM in epc.issues) add("iban")
-        if (EpcIssue.BAD_BIC in epc.issues) add("bic")
-        if (EpcIssue.BAD_CURRENCY in epc.issues) add("currency")
-        if (EpcIssue.BAD_AMOUNT in epc.issues) add("amount")
-        if (epc.name == null) add("name")
+    private fun epcProblems(epc: ScanPayload.Epc): List<PaymentProblem> = buildList {
+        if (EpcIssue.BAD_IBAN_FORMAT in epc.issues || EpcIssue.BAD_IBAN_CHECKSUM in epc.issues) {
+            add(PaymentProblem.IBAN)
+        }
+        if (EpcIssue.BAD_BIC in epc.issues) add(PaymentProblem.BIC)
+        if (EpcIssue.BAD_CURRENCY in epc.issues) add(PaymentProblem.CURRENCY)
+        if (EpcIssue.BAD_AMOUNT in epc.issues) add(PaymentProblem.AMOUNT)
+        if (epc.name == null) add(PaymentProblem.NAME)
     }
 
-    private fun cryptoProblems(crypto: ScanPayload.Crypto): List<String> = buildList {
+    private fun cryptoSignals(crypto: ScanPayload.Crypto): List<Signal> = buildList {
+        if (CryptoAddresses.verify(crypto.coin, crypto.address.value) == false) {
+            add(Signal(SignalCode.CRYPTO_BAD_CHECKSUM, evidence = crypto.address))
+        }
+        addAll(mismatch(cryptoProblems(crypto), recipientEvidence(crypto)))
+    }
+
+    /** The real destination of a token transfer, when the URI names one, so the user can compare it. */
+    private fun recipientEvidence(crypto: ScanPayload.Crypto): Untrusted? =
+        if (crypto.function?.value == "transfer") crypto.recipient else null
+
+    private fun cryptoProblems(crypto: ScanPayload.Crypto): List<PaymentProblem> = buildList {
         val function = crypto.function?.value
         if (function == "transfer") {
-            add("token-transfer")
-            val recipient = crypto.recipient
-            if (recipient == null || !recipient.value.equals(crypto.address.value, ignoreCase = true)) add("recipient")
+            if (!hasDistinctValidRecipient(crypto)) add(PaymentProblem.RECIPIENT)
         } else if (function != null) {
-            add("contract-call")
+            add(PaymentProblem.CONTRACT_CALL)
         }
-        if (isHugeCoinAmount(crypto.amount)) add("amount")
-        if (isHugeDigits(crypto.value, MAX_WEI_DIGITS)) add("value")
-        if (isHugeDigits(crypto.tokenAmount, MAX_TOKEN_DIGITS)) add("token-amount")
+        if (isHugeCoinAmount(crypto.amount)) add(PaymentProblem.AMOUNT)
+        if (isHugeDigits(crypto.value, MAX_WEI_DIGITS)) add(PaymentProblem.VALUE)
+        if (isHugeDigits(crypto.tokenAmount, MAX_TOKEN_DIGITS)) add(PaymentProblem.TOKEN_AMOUNT)
+    }
+
+    /**
+     * In an ERC-20 `transfer` the path address is the contract and `address` the real recipient: the two are
+     * different by design. A missing, malformed, badly checksummed or identical recipient is the anomaly.
+     */
+    private fun hasDistinctValidRecipient(crypto: ScanPayload.Crypto): Boolean {
+        val recipient = crypto.recipient?.value ?: return false
+        return CryptoAddresses.isEthereumAddress(recipient) &&
+            CryptoAddresses.verify("ethereum", recipient) != false &&
+            !recipient.equals(crypto.address.value, ignoreCase = true)
     }
 
     /** Anything that is not a short plain decimal number counts as huge: `1e999`, `-1`, `0x...` are not amounts. */
@@ -81,7 +102,7 @@ object PaymentAnalyzer : SignalAnalyzer {
         return whole.isNotEmpty() && whole.length + exponent.toInt() > maxDigits
     }
 
-    /** Digits with at most one dot; no sign, no exponent, no spaces, bounded length. */
+    /** ASCII digits with at most one dot; no sign, no exponent, no spaces, bounded length. */
     private fun isPlainDecimal(text: String): Boolean {
         val digits = text.replace(".", "")
         val dots = text.length - digits.length

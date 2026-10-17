@@ -7,7 +7,8 @@ import com.lookfirst.domain.model.SignalCode
 
 internal fun ok(raw: String): ParseResult.Ok = PayloadParser.parse(raw) as ParseResult.Ok
 
-internal fun SignalAnalyzer.on(raw: String): List<Signal> = analyze(ok(raw))
+internal fun SignalAnalyzer.on(raw: String, region: String? = null): List<Signal> =
+    analyze(ok(raw), AnalysisContext(region))
 
 internal fun List<Signal>.codes(): Set<SignalCode> = map { it.code }.toSet()
 

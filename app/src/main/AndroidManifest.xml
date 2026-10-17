@@ -10,7 +10,9 @@
     <uses-feature
         android:name="android.hardware.camera.any"
         android:required="false" />
-    <!-- No INTERNET yet: added by the ticket that downloads the reputation lists. -->
+    <!-- Network: the reputation lists (one fixed https host, ListsEndpoint) and, later, the two optional checks the
+         user starts by a tap. Cleartext is forbidden by network_security_config.xml. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Package visibility (API 30+), resolution only: which browsers exist, whether an app other than a browser
          would capture an https link (App Links; best effort, hostless filters only), and the system add-network dialog. No QUERY_ALL_PACKAGES. -->

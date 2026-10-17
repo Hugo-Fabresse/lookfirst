@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- No permission on purpose: no INTERNET, no CAMERA for now. Added by the tickets that need them. -->
+    <!-- Runtime permission, asked at the first display of the camera view (never at launch). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Normal permission (granted at install, no prompt): lets Window.setHideOverlayWindows(true) work on
+         API 31+ (threat model T-UI-3, tapjacking). Not a data permission. -->
+    <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
+    <!-- The camera is optional: the image scan works without one. -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+    <!-- No INTERNET yet: added by the ticket that downloads the reputation lists. -->
 
     <application
         android:name=".LookFirstApp"

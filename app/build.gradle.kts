@@ -69,20 +69,29 @@ val prepareRobolectricAndroidAll by tasks.registering(Sync::class) {
 }
 
 /**
- * Release guard (LF-23): the public keys pinned in PinnedKeys.kt are test keys (their private halves are in the
- * test sources) until LF-25 replaces them and flips KEYS_ARE_PRODUCTION. Any release build fails before then, so
- * an APK that trusts keys anybody can sign with cannot be produced. See docs/design/reputation-bundle.md,
- * "Production keys".
+ * Release-publication guard (LF-23): the public keys pinned in PinnedKeys.kt are test keys (their private halves are
+ * in the test sources) until LF-25 replaces them and sets KEYS_ARE_PRODUCTION to true. Publishing an APK that trusts
+ * them is refused: the guard is active with `-Plookfirst.publish=true` or when the release build type has a
+ * signingConfig. An unsigned `assembleRelease` (full gate, R8 proof) stays possible; such a build also refuses every
+ * bundle at run time (ReputationStore) and its version name ends in `-testkeys`.
+ * See docs/design/reputation-bundle.md, "Production keys".
  */
+val pinnedKeysFile = layout.projectDirectory.file("src/main/java/com/lookfirst/data/reputation/PinnedKeys.kt")
+
+fun pinnedKeysAreProduction(): Boolean {
+    // Comments are removed first: a mention of the flag in documentation must not decide anything.
+    val code = pinnedKeysFile.asFile.readText()
+        .replace(Regex("/\\*[\\s\\S]*?\\*/"), "")
+        .replace(Regex("//[^\\n]*"), "")
+    return Regex("""const\s+val\s+KEYS_ARE_PRODUCTION\s*=\s*true\b""").containsMatchIn(code)
+}
+
 val verifyPinnedKeysAreProduction by tasks.registering {
-    val pinnedKeys = layout.projectDirectory.file("src/main/java/com/lookfirst/data/reputation/PinnedKeys.kt")
-    inputs.file(pinnedKeys)
+    inputs.file(pinnedKeysFile)
     doLast {
-        val text = pinnedKeys.asFile.readText()
-        val flagged = Regex("""const\s+val\s+KEYS_ARE_PRODUCTION\s*=\s*true\b""").containsMatchIn(text)
-        if (!flagged) {
+        if (!pinnedKeysAreProduction()) {
             throw GradleException(
-                "PinnedKeys.kt still pins TEST keys (KEYS_ARE_PRODUCTION is not true): refusing a release build. " +
+                "PinnedKeys.kt still pins TEST keys (KEYS_ARE_PRODUCTION is not true): refusing to publish. " +
                     "Replace the keys and set the flag in LF-25 (docs/design/reputation-bundle.md).",
             )
         }
@@ -90,7 +99,9 @@ val verifyPinnedKeysAreProduction by tasks.registering {
 }
 
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
-    dependsOn(verifyPinnedKeysAreProduction)
+    val publishing = providers.gradleProperty("lookfirst.publish").orNull == "true" ||
+        android.buildTypes.getByName("release").signingConfig != null
+    if (publishing) dependsOn(verifyPinnedKeysAreProduction)
 }
 
 android {
@@ -102,7 +113,7 @@ android {
         minSdk = 23
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.1.0" + if (pinnedKeysAreProduction()) "" else "-testkeys"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -126,6 +137,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     testOptions {

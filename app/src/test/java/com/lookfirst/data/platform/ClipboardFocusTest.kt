@@ -19,7 +19,7 @@ class ClipboardFocusTest {
             this.clip = clip
         }
 
-        override fun hasClip() = clip != null
+        override fun hasClip() = readable && clip != null
 
         override fun label(): CharSequence? = if (readable) clip?.description?.label else null
 
@@ -73,5 +73,17 @@ class ClipboardFocusTest {
         writer.onAppStopped()
         writer.onWindowFocused()
         assertEquals(0, store.clears)
+    }
+
+    @Test
+    fun noFocusYetThenFocusClearsTheSecret() {
+        writer.copy("hunter2", sensitive = true)
+        writer.onAppStopped()
+        store.readable = false
+        writer.onWindowFocused()
+        assertEquals(0, store.clears)
+        store.readable = true
+        writer.onWindowFocused()
+        assertEquals(1, store.clears)
     }
 }

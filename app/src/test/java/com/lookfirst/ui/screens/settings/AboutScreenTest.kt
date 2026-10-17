@@ -39,6 +39,7 @@ class AboutScreenTest {
             R.string.about_network_header,
             R.string.about_net_lists,
             R.string.about_net_lists_who,
+            R.string.lists_coverage_note,
             R.string.about_net_redirects,
             R.string.about_net_redirects_who,
             R.string.about_net_rdap,
@@ -58,6 +59,26 @@ class AboutScreenTest {
         assertTrue(text(R.string.about_net_lists_who).contains("Nothing about your scans"))
         assertTrue(text(R.string.about_licences_body).contains("CERT Polska"))
         assertTrue(text(R.string.about_licences_body).contains("directly"))
+    }
+
+    @Test
+    fun theCoverageNoteSaysTheListIsPolishAndThatTheOtherChecksStayActive() {
+        val note = text(R.string.lists_coverage_note)
+        assertTrue(note.contains("Polish CERT"))
+        assertTrue(note.contains("few French scams"))
+        assertTrue(note.contains("other checks"))
+        assertFalse(note.contains("safe", ignoreCase = true))
+    }
+
+    @Test
+    @Config(qualifiers = "fr")
+    fun theCoverageNoteIsInFrench() {
+        show()
+        val note = text(R.string.lists_coverage_note)
+        assertTrue(note.contains("CERT polonais"))
+        assertTrue(note.contains("peu les arnaques françaises"))
+        assertFalse(note.contains("sûr", ignoreCase = true))
+        composeRule.onNodeWithText(note).performScrollTo().assertExists()
     }
 
     @Test

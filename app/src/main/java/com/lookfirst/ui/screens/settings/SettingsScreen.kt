@@ -99,6 +99,7 @@ private fun ListsBlock(state: SettingsUiState, onUpdateNow: () -> Unit, onAutoUp
         modifier = Modifier.semantics { heading() },
     )
     Text(text = versionLine(state), style = MaterialTheme.typography.bodyLarge)
+    Text(text = stringResource(R.string.lists_coverage_note), style = MaterialTheme.typography.bodyMedium)
     Text(
         text = stringResource(
             when (state.lastAttempt) {

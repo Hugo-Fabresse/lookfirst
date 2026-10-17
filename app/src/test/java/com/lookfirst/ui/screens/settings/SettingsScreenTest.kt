@@ -48,6 +48,12 @@ class SettingsScreenTest {
     private val loaded = SettingsUiState(listsEntries = 128, listsAgeDays = 3, lastAttempt = LastAttemptLine.SUCCEEDED)
 
     @Test
+    fun saysThatTheListIsCentredOnPolandAndTheOtherChecksStayActive() {
+        show(loaded)
+        composeRule.onNodeWithText(text(R.string.lists_coverage_note)).assertExists()
+    }
+
+    @Test
     fun showsVersionAgeLastAttemptAndAppVersion() {
         show(loaded, appVersion = "9.8.7")
         composeRule.onNodeWithText(text(R.string.settings_lists_header)).assertExists()

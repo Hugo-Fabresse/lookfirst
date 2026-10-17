@@ -52,6 +52,13 @@
   ],
   "packageRules": [
     {
+      "description": "android-all-instrumented is the jar Robolectric itself picks for its sdk: bumped by hand with robolectric (see libs.versions.toml), never alone",
+      "matchPackageNames": [
+        "org.robolectric:android-all-instrumented"
+      ],
+      "enabled": false
+    },
+    {
       "description": "GitHub Actions: one PR per action, never grouped with libraries (each pin is reviewed on its own)",
       "matchManagers": [
         "github-actions"

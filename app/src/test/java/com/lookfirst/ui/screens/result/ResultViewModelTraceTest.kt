@@ -72,7 +72,7 @@ class ResultViewModelTraceTest {
     private var online = true
     private var nextId = 0
     private val lookup = ReputationLookup {
-        if (it.ascii == "evil.example") ReputationResult.Listed("test") else ReputationResult.NotListed
+        if (it.ascii == "evil.example.com") ReputationResult.Listed("test") else ReputationResult.NotListed
     }
 
     private fun viewModel(): ResultViewModel {
@@ -117,8 +117,8 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `only web links get the optional checks`() {
-        assertNotNull(shown("https://a.example/").checks())
-        assertNotNull(shown("http://a.example/").checks())
+        assertNotNull(shown("https://a.example.com/").checks())
+        assertNotNull(shown("http://a.example.com/").checks())
         assertNull(shown("tel:+33123456789").checks())
         assertNull(shown("WIFI:T:WPA;S:Net;P:hunter2222;;").checks())
         assertNull(shown("some text").checks())
@@ -126,7 +126,7 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `a plain http link cannot be traced`() {
-        val vm = shown("http://a.example/")
+        val vm = shown("http://a.example.com/")
         assertTrue(vm.checks()!!.httpsOnly)
         vm.onTraceRequested()
         assertEquals(CheckState.IDLE, vm.checks()!!.trace)
@@ -134,7 +134,7 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `a link on another port cannot be traced`() {
-        val vm = shown("https://a.example:8443/")
+        val vm = shown("https://a.example.com:8443/")
         assertTrue(vm.checks()!!.unusualPort)
         vm.onTraceRequested()
         assertEquals(CheckState.IDLE, vm.checks()!!.trace)
@@ -143,7 +143,7 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `asking opens the warning and nothing is sent`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         assertEquals(CheckState.IDLE, vm.checks()!!.trace)
         vm.onTraceRequested()
         assertEquals(CheckState.WARNING, vm.checks()!!.trace)
@@ -152,7 +152,7 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `cancelling the warning sends nothing and changes nothing`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         val before = vm.content().verdict
         vm.onTraceRequested()
         vm.onTraceCancelled()
@@ -163,7 +163,7 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `continue without the warning does nothing`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         vm.onTraceConfirmed()
         assertTrue(tracer.requested.isEmpty())
         assertEquals(CheckState.IDLE, vm.checks()!!.trace)
@@ -172,7 +172,7 @@ class ResultViewModelTraceTest {
     @Test
     fun `offline the warning does not open and the section says so`() {
         online = false
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         assertFalse(vm.checks()!!.online)
         vm.onTraceRequested()
         assertEquals(CheckState.IDLE, vm.checks()!!.trace)
@@ -181,7 +181,7 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `going offline after the screen opened is noticed when asking`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         online = false
         vm.onTraceRequested()
         assertFalse(vm.checks()!!.online)
@@ -190,18 +190,18 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `the scanned address in canonical form is the one traced, once`() {
-        val vm = shown("https://paypal.com@a.example/p?q=1")
+        val vm = shown("https://paypal.com@a.example.com/p?q=1")
         vm.onTraceRequested()
         vm.onTraceConfirmed()
-        assertEquals(listOf("https://a.example/p?q=1"), tracer.requested.map { it.value })
+        assertEquals(listOf("https://a.example.com/p?q=1"), tracer.requested.map { it.value })
     }
 
     @Test
     fun `a trace that raises the level yields a new verdict for the same payload`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         val before = vm.content().verdict!!
         assertEquals(VerdictLevel.NO_RISK_SIGNAL, before.level)
-        tracer.outcome = { trace(it, "https://evil.example/login") }
+        tracer.outcome = { trace(it, "https://evil.example.com/login") }
         vm.onTraceRequested()
         vm.onTraceConfirmed()
         val after = vm.content().verdict!!
@@ -214,7 +214,7 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `an unchanged level is not announced`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         vm.onTraceRequested()
         vm.onTraceConfirmed()
         assertEquals(CheckState.DONE, vm.checks()!!.trace)
@@ -224,7 +224,7 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `a heavier local verdict never falls after a clean trace`() {
-        val vm = shown("https://evil.example/")
+        val vm = shown("https://evil.example.com/")
         val before = vm.content().verdict!!
         vm.onTraceRequested()
         vm.onTraceConfirmed()
@@ -236,21 +236,21 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `the content on screen and the open target stay the scanned address`() {
-        val vm = shown("https://a.example/start")
+        val vm = shown("https://a.example.com/start")
         val content = vm.content().content
-        tracer.outcome = { trace(it, "https://b.example/elsewhere") }
+        tracer.outcome = { trace(it, "https://b.example.com/elsewhere") }
         vm.onTraceRequested()
         vm.onTraceConfirmed()
         assertEquals(content, vm.content().content)
         vm.onOpen()
         val opened = actions.opened.single() as ScanPayload.Url
-        assertEquals("a.example", opened.rawHost.value)
+        assertEquals("a.example.com", opened.rawHost.value)
         assertEquals("/start", opened.path.value)
     }
 
     @Test
     fun `a failed trace leaves the verdict alone, says so and can be asked again with the warning`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         val before = vm.content().verdict
         tracer.outcome = { TraceOutcome.Failed(TraceFailure.TIMEOUT) }
         vm.onTraceRequested()
@@ -264,7 +264,7 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `a trace is not offered again once it is done`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         vm.onTraceRequested()
         vm.onTraceConfirmed()
         vm.onTraceRequested()
@@ -274,10 +274,10 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `cancelling while it runs drops the answer`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         val gate = CompletableDeferred<Unit>()
         tracer.gate = gate
-        tracer.outcome = { trace(it, "https://evil.example/") }
+        tracer.outcome = { trace(it, "https://evil.example.com/") }
         val before = vm.content().verdict
         vm.onTraceRequested()
         vm.onTraceConfirmed()
@@ -291,7 +291,7 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `closing the screen while it runs drops the answer`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         val gate = CompletableDeferred<Unit>()
         tracer.gate = gate
         vm.onTraceRequested()
@@ -304,7 +304,7 @@ class ResultViewModelTraceTest {
 
     @Test
     fun `a second tap while it runs sends nothing more`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         tracer.gate = CompletableDeferred()
         vm.onTraceRequested()
         vm.onTraceConfirmed()

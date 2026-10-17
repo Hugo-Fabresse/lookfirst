@@ -19,7 +19,7 @@ import org.junit.Test
 class ApplyDomainAgeTest {
     private val analyze = AnalyzeScan(
         ReputationLookup {
-            if (it.ascii == "evil.example") ReputationResult.Listed("test") else ReputationResult.NotListed
+            if (it.ascii == "evil.example.com") ReputationResult.Listed("test") else ReputationResult.NotListed
         },
     )
     private val apply = ApplyDomainAge()
@@ -53,7 +53,7 @@ class ApplyDomainAgeTest {
 
     @Test
     fun `a domain registered 3 days ago makes a clean link suspicious`() {
-        val before = scanned("https://a.example/")
+        val before = scanned("https://a.example.com/")
         assertEquals(VerdictLevel.NO_RISK_SIGNAL, before.level)
         val after = apply(before, registered(3))
         assertEquals(VerdictLevel.SUSPICIOUS, after.level)
@@ -64,12 +64,12 @@ class ApplyDomainAgeTest {
 
     @Test
     fun `between 30 and 90 days the level is caution`() {
-        assertEquals(VerdictLevel.CAUTION, apply(scanned("https://a.example/"), registered(45)).level)
+        assertEquals(VerdictLevel.CAUTION, apply(scanned("https://a.example.com/"), registered(45)).level)
     }
 
     @Test
     fun `an old domain changes nothing and is not called safe`() {
-        val before = scanned("https://a.example/")
+        val before = scanned("https://a.example.com/")
         val after = apply(before, registered(4_000))
         assertEquals(before, after)
         assertEquals(VerdictLevel.NO_RISK_SIGNAL, after.level)
@@ -77,13 +77,13 @@ class ApplyDomainAgeTest {
 
     @Test
     fun `a failure leaves the very same verdict`() {
-        val before = scanned("https://a.example/")
+        val before = scanned("https://a.example.com/")
         assertSame(before, apply(before, RdapOutcome.Failed(RdapFailure.TIMEOUT)))
     }
 
     @Test
     fun `an unknown domain is information that does not move the level`() {
-        val before = scanned("https://a.example/")
+        val before = scanned("https://a.example.com/")
         val after = apply(before, RdapOutcome.NotFound)
         assertEquals(before.level, after.level)
         val reason = after.reasons.single { it.code == SignalCode.DOMAIN_UNKNOWN }
@@ -92,7 +92,7 @@ class ApplyDomainAgeTest {
 
     @Test
     fun `the level never falls below what the earlier analysis said`() {
-        val listed = scanned("https://evil.example/")
+        val listed = scanned("https://evil.example.com/")
         assertEquals(VerdictLevel.DANGEROUS, listed.level)
         for (outcome in listOf(registered(2), registered(60), registered(5_000), RdapOutcome.NotFound)) {
             val after = apply(listed, outcome)
@@ -103,14 +103,14 @@ class ApplyDomainAgeTest {
 
     @Test
     fun `no earlier signal is removed`() {
-        val before = scanned("http://a.example:8080/")
+        val before = scanned("http://a.example.com:8080/")
         val after = apply(before, registered(10))
         assertTrue(codes(before).all { it in codes(after) })
     }
 
     @Test
     fun `a second answer replaces the first one and cannot lower the level`() {
-        val first = apply(scanned("https://a.example/"), registered(3))
+        val first = apply(scanned("https://a.example.com/"), registered(3))
         val second = apply(first, registered(60))
         assertEquals(1, second.reasons.count { it.code == SignalCode.DOMAIN_RECENT })
         assertEquals(VerdictLevel.SUSPICIOUS, second.level)

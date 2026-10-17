@@ -79,6 +79,7 @@ private val REASON_TABLE: Map<SignalCode, ReasonRes> = mapOf(
     ),
     SignalCode.MAIL_PREFILLED to reason(R.string.reason_mail_prefilled_short, R.string.reason_mail_prefilled),
     SignalCode.NON_ASCII_DIGITS to reason(R.string.reason_non_ascii_digits_short, R.string.reason_non_ascii_digits),
+    SignalCode.LOCAL_HOST to reason(R.string.reason_local_host_short, R.string.reason_local_host),
     SignalCode.SHORTENER to reason(R.string.reason_shortener_short, R.string.reason_shortener),
     SignalCode.PLAIN_HTTP to reason(R.string.reason_plain_http_short, R.string.reason_plain_http),
     SignalCode.LONG_URL to reason(R.string.reason_long_url_short, R.string.reason_long_url),

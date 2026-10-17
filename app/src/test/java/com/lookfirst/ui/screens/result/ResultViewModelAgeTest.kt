@@ -73,7 +73,7 @@ class ResultViewModelAgeTest {
         RdapPlan.Ready(RdapTarget(host.removePrefix("www."), server))
     }
     private val lookup = ReputationLookup {
-        if (it.ascii == "evil.example") ReputationResult.Listed("test") else ReputationResult.NotListed
+        if (it.ascii == "evil.example.com") ReputationResult.Listed("test") else ReputationResult.NotListed
     }
     private var traceGate: CompletableDeferred<Unit>? = null
     private var traceOutcome: (CanonicalUrl) -> TraceOutcome =
@@ -122,11 +122,11 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `a web link offers the check with the domain and the registry named`() {
-        val vm = shown("https://www.a.example/login?x=1")
-        assertEquals(AgeTarget("a.example", "rdap.registry.example"), vm.checks().ageTarget)
+        val vm = shown("https://www.a.example.com/login?x=1")
+        assertEquals(AgeTarget("a.example.com", "rdap.registry.example"), vm.checks().ageTarget)
         assertNull(vm.checks().ageUnavailable)
         assertEquals(CheckState.IDLE, vm.checks().age)
-        assertEquals(listOf("www.a.example"), planned)
+        assertEquals(listOf("www.a.example.com"), planned)
     }
 
     @Test
@@ -138,14 +138,14 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `an http link or one on another port can still be checked, only the domain is sent`() {
-        assertNotNull(shown("http://a.example/").checks().ageTarget)
-        assertNotNull(shown("https://a.example:8443/").checks().ageTarget)
+        assertNotNull(shown("http://a.example.com/").checks().ageTarget)
+        assertNotNull(shown("https://a.example.com:8443/").checks().ageTarget)
     }
 
     @Test
     fun `no registry to ask says why and the button does nothing`() {
         plan = { RdapPlan.Unavailable(RdapUnavailable.NO_SERVER) }
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         assertNull(vm.checks().ageTarget)
         assertEquals(RdapUnavailable.NO_SERVER, vm.checks().ageUnavailable)
         vm.onAgeRequested()
@@ -157,13 +157,13 @@ class ResultViewModelAgeTest {
     @Test
     fun `a planner that fails means no registry, never a crash`() {
         plan = { error("boom") }
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         assertEquals(RdapUnavailable.NO_BOOTSTRAP, vm.checks().ageUnavailable)
     }
 
     @Test
     fun `asking opens the warning and nothing is sent`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         vm.onAgeRequested()
         assertEquals(CheckState.WARNING, vm.checks().age)
         assertTrue(client.requested.isEmpty())
@@ -171,7 +171,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `continue without the warning does nothing`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         vm.onAgeConfirmed()
         assertTrue(client.requested.isEmpty())
         assertEquals(CheckState.IDLE, vm.checks().age)
@@ -179,7 +179,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `cancelling the warning sends nothing and changes nothing`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         val before = vm.content().verdict
         vm.onAgeRequested()
         vm.onAgeCancelled()
@@ -191,7 +191,7 @@ class ResultViewModelAgeTest {
     @Test
     fun `offline the warning does not open`() {
         online = false
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         assertFalse(vm.checks().online)
         vm.onAgeRequested()
         assertEquals(CheckState.IDLE, vm.checks().age)
@@ -200,15 +200,15 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `only the registrable domain is sent, once`() {
-        val vm = shown("https://paypal.com@www.a.example/p?q=secret#frag")
+        val vm = shown("https://paypal.com@www.a.example.com/p?q=secret#frag")
         vm.askAndConfirm()
-        assertEquals(listOf("a.example"), client.requested.map { it.domain })
+        assertEquals(listOf("a.example.com"), client.requested.map { it.domain })
         assertEquals(server, client.requested.single().server)
     }
 
     @Test
     fun `a recent domain raises the level, announces it once and keeps the payload`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         val before = vm.content().verdict!!
         assertEquals(VerdictLevel.NO_RISK_SIGNAL, before.level)
         client.outcome = RdapOutcome.Registered(registeredAtMillis = 123L, ageDays = 4)
@@ -224,7 +224,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `an old domain keeps the level, announces nothing and shows its date`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         client.outcome = RdapOutcome.Registered(registeredAtMillis = 1L, ageDays = 5_000)
         vm.askAndConfirm()
         assertEquals(VerdictLevel.NO_RISK_SIGNAL, vm.content().verdict!!.level)
@@ -235,7 +235,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `a 404 is information only`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         client.outcome = RdapOutcome.NotFound
         vm.askAndConfirm()
         val verdict = vm.content().verdict!!
@@ -246,7 +246,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `a heavier local verdict never falls after the answer`() {
-        val vm = shown("https://evil.example/")
+        val vm = shown("https://evil.example.com/")
         client.outcome = RdapOutcome.Registered(1L, 9_000)
         vm.askAndConfirm()
         assertEquals(VerdictLevel.DANGEROUS, vm.content().verdict!!.level)
@@ -255,7 +255,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `a failure leaves the verdict alone, says so and can be asked again with the warning`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         val before = vm.content().verdict
         client.outcome = RdapOutcome.Failed(RdapFailure.TIMEOUT)
         vm.askAndConfirm()
@@ -269,7 +269,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `a check is not offered again once it is done`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         vm.askAndConfirm()
         vm.onAgeRequested()
         vm.onAgeConfirmed()
@@ -279,7 +279,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `cancelling while it runs drops the answer`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         val gate = CompletableDeferred<Unit>()
         client.gate = gate
         val before = vm.content().verdict
@@ -294,7 +294,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `closing the screen while it runs drops the answer`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         val gate = CompletableDeferred<Unit>()
         client.gate = gate
         vm.askAndConfirm()
@@ -306,7 +306,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `a second tap while it runs sends nothing more`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         client.gate = CompletableDeferred()
         vm.askAndConfirm()
         vm.askAndConfirm()
@@ -315,7 +315,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `the two checks add up in either order and neither drops the other's signals`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         client.outcome = RdapOutcome.Registered(1L, 10)
         vm.askAndConfirm()
         vm.onTraceRequested()
@@ -330,7 +330,7 @@ class ResultViewModelAgeTest {
 
     @Test
     fun `a trace first and then the age keeps the redirect signals`() {
-        val vm = shown("https://a.example/")
+        val vm = shown("https://a.example.com/")
         vm.onTraceRequested()
         vm.onTraceConfirmed()
         client.outcome = RdapOutcome.Registered(1L, 50)
@@ -364,12 +364,13 @@ class ResultViewModelAgeTest {
     private fun interleaved(traceFirst: Boolean): Pair<com.lookfirst.domain.verdict.Verdict, List<VerdictLevel>> {
         val work = StepDispatcher()
         val vm = viewModel(work)
-        vm.show(Untrusted("https://a.example/"))
+        vm.show(Untrusted("https://a.example.com/"))
         drain(vm, work, mutableListOf())
         val tGate = CompletableDeferred<Unit>().also { traceGate = it }
         val aGate = CompletableDeferred<Unit>().also { client.gate = it }
         traceOutcome = {
-            TraceOutcome.Completed(RedirectTrace(it, listOf(canonical("https://evil.example/login")), TraceEnd.Final))
+            val hops = listOf(canonical("https://evil.example.com/login"))
+            TraceOutcome.Completed(RedirectTrace(it, hops, TraceEnd.Final))
         }
         client.outcome = RdapOutcome.Registered(1L, 5)
         vm.onTraceRequested()

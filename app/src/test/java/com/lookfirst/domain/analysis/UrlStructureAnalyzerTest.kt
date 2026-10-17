@@ -19,25 +19,25 @@ class UrlStructureAnalyzerTest {
 
     @Test
     fun userinfoShowsTheRealHost() {
-        val signals = UrlStructureAnalyzer.on("https://paypal.com@evil-pay.example/login")
+        val signals = UrlStructureAnalyzer.on("https://paypal.com@evil-pay.example.com/login")
         assertEquals(setOf(SignalCode.USERINFO_AT), signals.codes())
-        assertEquals("evil-pay.example", signals.of(SignalCode.USERINFO_AT).evidence?.value)
+        assertEquals("evil-pay.example.com", signals.of(SignalCode.USERINFO_AT).evidence?.value)
         assertEquals(Severity.DANGEROUS, signals.of(SignalCode.USERINFO_AT).severity)
     }
 
     @Test
     fun userinfoWithoutDotOrNumberIsSuspiciousOnly() {
-        val plain = UrlStructureAnalyzer.on("https://support@evil.example/login")
+        val plain = UrlStructureAnalyzer.on("https://support@evil.example.com/login")
         assertEquals(Severity.SUSPICIOUS, plain.of(SignalCode.USERINFO_AT).severity)
-        val ip = UrlStructureAnalyzer.on("https://2130706433@evil.example/")
+        val ip = UrlStructureAnalyzer.on("https://2130706433@evil.example.com/")
         assertEquals(Severity.DANGEROUS, ip.of(SignalCode.USERINFO_AT).severity)
-        val dotted = UrlStructureAnalyzer.on("https://user:paypal.com@evil.example/")
+        val dotted = UrlStructureAnalyzer.on("https://user:paypal.com@evil.example.com/")
         assertEquals(Severity.DANGEROUS, dotted.of(SignalCode.USERINFO_AT).severity)
     }
 
     @Test
     fun userinfoWithPasswordAndLastAtWins() {
-        assertEquals(setOf(SignalCode.USERINFO_AT), codes("https://bank.com:pw@x@evil.example/"))
+        assertEquals(setOf(SignalCode.USERINFO_AT), codes("https://bank.com:pw@x@evil.example.com/"))
     }
 
     @Test
@@ -58,14 +58,14 @@ class UrlStructureAnalyzerTest {
 
     @Test
     fun normalizedHostsAreNoLongerIncomplete() {
-        assertTrue(UrlStructureAnalyzer.on("https://café.example/menu").isEmpty())
+        assertTrue(UrlStructureAnalyzer.on("https://café.example.com/menu").isEmpty())
         assertEquals(setOf(SignalCode.URL_HOST_ENCODED), codes("https://%70aypal.com/login"))
-        assertTrue(SignalCode.ANALYSIS_INCOMPLETE !in codes("https://cafe.example/menu"))
+        assertTrue(SignalCode.ANALYSIS_INCOMPLETE !in codes("https://cafe.example.com/menu"))
     }
 
     @Test
     fun hostThatFailsNormalizationStaysIncompleteAndMalformed() {
-        val signals = UrlStructureAnalyzer.on("https://a%C3.example/menu")
+        val signals = UrlStructureAnalyzer.on("https://a%C3.example.com/menu")
         assertEquals(Severity.CAUTION, signals.of(SignalCode.ANALYSIS_INCOMPLETE).severity)
         assertEquals(Severity.SUSPICIOUS, signals.of(SignalCode.URL_MALFORMED).severity)
         assertEquals(1, signals.count { it.code == SignalCode.URL_MALFORMED })
@@ -77,8 +77,8 @@ class UrlStructureAnalyzerTest {
     fun shortenerAndUserinfoUseTheNormalizedHost() {
         assertEquals(setOf(SignalCode.SHORTENER), codes("https://ｂｉｔ.ｌｙ/x"))
         assertEquals(setOf(SignalCode.SHORTENER), codes("https://bit.ly\u3002/x"))
-        val signals = UrlStructureAnalyzer.on("https://paypal.com@ｅvil.example/")
-        assertEquals("evil.example", signals.of(SignalCode.USERINFO_AT).evidence?.value)
+        val signals = UrlStructureAnalyzer.on("https://paypal.com@ｅvil.example.com/")
+        assertEquals("evil.example.com", signals.of(SignalCode.USERINFO_AT).evidence?.value)
     }
 
     @Test
@@ -88,7 +88,7 @@ class UrlStructureAnalyzerTest {
 
     @Test
     fun unusualPortIsCautionWithPortAsEvidence() {
-        val signals = UrlStructureAnalyzer.on("https://parking-pay.example:8443/zone/12")
+        val signals = UrlStructureAnalyzer.on("https://parking-pay.example.com:8443/zone/12")
         assertEquals(setOf(SignalCode.UNUSUAL_PORT), signals.codes())
         assertEquals("8443", signals.of(SignalCode.UNUSUAL_PORT).evidence?.value)
         assertEquals(Severity.CAUTION, signals.of(SignalCode.UNUSUAL_PORT).severity)
@@ -114,7 +114,7 @@ class UrlStructureAnalyzerTest {
         assertEquals(setOf(SignalCode.SHORTENER), codes("https://t.co/AbCdEf"))
         assertEquals(setOf(SignalCode.SHORTENER), codes("https://go.bit.ly/x"))
         assertTrue(codes("https://notbit.ly/x").isEmpty())
-        assertTrue(codes("https://bit.ly.evil.example/x").isEmpty())
+        assertTrue(codes("https://bit.ly.evil.example.com/x").isEmpty())
         assertTrue(codes("https://example.com/bit.ly").isEmpty())
     }
 
@@ -139,7 +139,7 @@ class UrlStructureAnalyzerTest {
         assertTrue(SignalCode.URL_MALFORMED in codes("https://example.com:99999/"))
         assertTrue(SignalCode.URL_MALFORMED in codes("https://?x=1"))
         assertTrue(SignalCode.URL_MALFORMED in codes("https://exa mple.com/"))
-        assertTrue(SignalCode.URL_MALFORMED in codes("https://a<b.example/"))
+        assertTrue(SignalCode.URL_MALFORMED in codes("https://a<b.example.com/"))
         assertTrue(SignalCode.URL_MALFORMED in codes("https://[1:2:3]/"))
         assertTrue(SignalCode.URL_MALFORMED in codes("https://[1::2::3]/"))
         assertFalse(SignalCode.URL_MALFORMED in codes("https://[2001:db8::1]/"))

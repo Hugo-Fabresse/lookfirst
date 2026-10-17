@@ -44,7 +44,11 @@ class OptionalChecksScreenTest {
 
     private fun text(id: Int, vararg args: Any): String = RuntimeEnvironment.getApplication().getString(id, *args)
 
-    private fun show(raw: String = "https://a.example/start", checks: OptionalChecks?, withVerdict: Boolean = true) {
+    private fun show(
+        raw: String = "https://a.example.com/start",
+        checks: OptionalChecks?,
+        withVerdict: Boolean = true,
+    ) {
         val parsed = PayloadParser.parse(raw).toUiState() as ResultUiState.Content
         val state = parsed.copy(
             verdict = if (withVerdict) AnalyzeScan(NoReputationLists())(raw, "test") else null,
@@ -79,7 +83,7 @@ class OptionalChecksScreenTest {
 
     private val ageButton get() = composeRule.onNodeWithText(text(R.string.age_check))
 
-    private val target = AgeTarget("a.example", "rdap.registry.example")
+    private val target = AgeTarget("a.example.com", "rdap.registry.example")
 
     private val dialogCancel
         get() = hasText(text(R.string.action_cancel)) and !hasContentDescription(text(R.string.a11y_cancel_resume))
@@ -107,14 +111,14 @@ class OptionalChecksScreenTest {
 
     @Test
     fun `an http link has the button disabled and says why`() {
-        show(raw = "http://a.example/", checks = OptionalChecks(httpsOnly = true))
+        show(raw = "http://a.example.com/", checks = OptionalChecks(httpsOnly = true))
         traceButton.performScrollTo().assertIsNotEnabled()
         composeRule.onNodeWithText(text(R.string.trace_https_only)).assertExists()
     }
 
     @Test
     fun `a link on another port has the button disabled and says why`() {
-        show(raw = "https://a.example:8443/", checks = OptionalChecks(unusualPort = true))
+        show(raw = "https://a.example.com:8443/", checks = OptionalChecks(unusualPort = true))
         traceButton.performScrollTo().assertIsNotEnabled()
         composeRule.onNodeWithText(text(R.string.trace_port_only)).assertExists()
     }
@@ -187,7 +191,7 @@ class OptionalChecksScreenTest {
     fun `the link will open stays the scanned address and Open is unchanged`() {
         show(checks = OptionalChecks(trace = CheckState.DONE, levelChangedTo = VerdictLevel.CAUTION))
         composeRule.onNodeWithText(text(R.string.link_will_open)).assertExists()
-        composeRule.onNodeWithText("a.example").assertExists()
+        composeRule.onNodeWithText("a.example.com").assertExists()
         composeRule.onNodeWithContentDescription(text(R.string.open_in_browser)).assertExists()
     }
 
@@ -236,7 +240,8 @@ class OptionalChecksScreenTest {
     fun `the domain age warning names the registry and the only thing that is sent`() {
         show(checks = OptionalChecks(ageTarget = target, age = CheckState.WARNING))
         composeRule.onNodeWithText(text(R.string.warn_rdap_title)).assertExists()
-        composeRule.onNodeWithText(text(R.string.warn_rdap_body, "a.example", "rdap.registry.example")).assertExists()
+        val body = text(R.string.warn_rdap_body, "a.example.com", "rdap.registry.example")
+        composeRule.onNodeWithText(body).assertExists()
         composeRule.onNode(dialogCancel).assertIsFocused()
         TouchGuard.track(partiallyObscured = true) {
             composeRule.onNodeWithText(text(R.string.warn_continue)).performClick()

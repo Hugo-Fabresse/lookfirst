@@ -78,11 +78,6 @@ class ResultViewModel @Inject constructor(
         mutableState.update { if (it is ResultUiState.Content) it.copy(confirmingSecretCopy = false) else it }
     }
 
-    /** The user came back to LookFirst: a secret we put on the clipboard is removed (T-SCH-11). */
-    fun onReturned() {
-        clipboard.clearSensitive()
-    }
-
     /** Cancel / back: forget the content. */
     fun clear() {
         parsing?.cancel()

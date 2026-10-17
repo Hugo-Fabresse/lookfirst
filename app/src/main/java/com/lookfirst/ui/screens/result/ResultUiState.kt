@@ -29,6 +29,8 @@ data class ResultContent(
     @StringRes val typeLabel: Int,
     /** The real host of a web link, shown large. Null for any other type. */
     val host: Untrusted?,
+    /** The host has non-ASCII characters: it may imitate another site (homograph). */
+    val nonLatinHost: Boolean,
     val fields: List<ResultField>,
     /** The sanitized text, shown in the monospace container (secret ones only after "show"). */
     val exact: Untrusted,

@@ -89,7 +89,7 @@ internal fun NotAnalysedBanner(modifier: Modifier = Modifier) {
 
 /** Host of a web link: the only large text. For `user@host` it is the real host, the one a browser connects to. */
 @Composable
-internal fun UrlHost(host: String, modifier: Modifier = Modifier) {
+internal fun UrlHost(host: String, nonLatin: Boolean, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = stringResource(R.string.link_will_open),
@@ -101,6 +101,29 @@ internal fun UrlHost(host: String, modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onBackground,
         )
+        if (nonLatin) NonLatinHostWarning()
+    }
+}
+
+/** Marker under a host with non-ASCII characters: it may imitate another site. Bold text and icon, not colour alone. */
+@Composable
+private fun NonLatinHostWarning() {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+    ) {
+        Row(modifier = Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(
+                painter = painterResource(R.drawable.ic_warning),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+            )
+            Text(
+                text = stringResource(R.string.host_non_latin_warning),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+            )
+        }
     }
 }
 

@@ -19,15 +19,14 @@ import org.robolectric.RobolectricTestRunner
 class ResultViewModelTest {
     private class FakeClipboard : ClipboardWriter {
         val copies = mutableListOf<Pair<String, Boolean>>()
-        var clears = 0
 
         override fun copy(text: String, sensitive: Boolean) {
             copies += text to sensitive
         }
 
-        override fun clearSensitive() {
-            clears++
-        }
+        override fun onAppStopped() = Unit
+
+        override fun onWindowFocused() = Unit
     }
 
     private val clipboard = FakeClipboard()
@@ -54,6 +53,7 @@ class ResultViewModelTest {
             assertEquals(FieldKind.WARNING, content.fields[0].kind)
             assertEquals("paypal.com", content.fields[0].value.value)
             assertFalse(content.containsSecret)
+            assertFalse(content.nonLatinHost)
         }
     }
 
@@ -144,10 +144,13 @@ class ResultViewModelTest {
     }
 
     @Test
-    fun returningToTheAppAsksTheClipboardToDropASecret() {
+    fun clearForgetsTheSecretState() {
         val vm = viewModel()
-        vm.onReturned()
-        assertEquals(1, clipboard.clears)
+        vm.show(Untrusted("WIFI:T:WPA;S:HomeNet;P:hunter2;;"))
+        vm.clear()
+        vm.show(Untrusted("hello"))
+        vm.onCopy()
+        assertEquals(listOf("hello" to false), clipboard.copies)
     }
 
     @Test
@@ -158,6 +161,13 @@ class ResultViewModelTest {
         val field = viewModel()
         field.show(Untrusted("otpauth://totp/Example:alice?secret=ABC&issuer=Goo%E2%80%8Bgle"))
         assertTrue(field.content().hiddenCharCount >= 1)
+    }
+
+    @Test
+    fun aNonAsciiHostIsFlagged() {
+        val vm = viewModel()
+        vm.show(Untrusted("https://p\u0430ypal.com/login"))
+        assertTrue(vm.content().nonLatinHost)
     }
 
     @Test

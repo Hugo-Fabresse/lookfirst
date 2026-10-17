@@ -1,6 +1,10 @@
 package com.lookfirst.ui.screens.result
 
+import android.os.SystemClock
+import android.view.MotionEvent
+import android.view.View
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
@@ -12,6 +16,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.lookfirst.R
 import com.lookfirst.domain.decoder.PayloadParser
+import com.lookfirst.ui.components.TouchGuard
+import com.lookfirst.ui.components.isPartiallyObscured
 import com.lookfirst.ui.theme.LookFirstTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -29,6 +35,7 @@ class ResultScreenTest {
     private var copies = 0
     private var confirms = 0
     private var dismisses = 0
+    private var root: View? = null
 
     private fun text(id: Int, vararg args: Any): String = RuntimeEnvironment.getApplication().getString(id, *args)
 
@@ -38,6 +45,7 @@ class ResultScreenTest {
     private fun show(state: ResultUiState) {
         composeRule.setContent {
             LookFirstTheme {
+                root = LocalView.current
                 ResultScreen(
                     state = state,
                     snackbarHostState = SnackbarHostState(),
@@ -194,6 +202,68 @@ class ResultScreenTest {
         composeRule.onNode(dialogCancel).performClick()
         assertEquals(1, dismisses)
         assertEquals(0, copies)
+    }
+
+    @Test
+    fun aNonLatinHostGetsAWarningAndAnAsciiHostDoesNot() {
+        showScanned("https://p\u0430ypal.com/login")
+        composeRule.onNodeWithText(text(R.string.host_non_latin_warning)).assertExists()
+    }
+
+    @Test
+    fun anAsciiHostHasNoHomographWarning() {
+        showScanned("https://paypal.com/login")
+        composeRule.onAllNodesWithText(text(R.string.host_non_latin_warning)).assertCountEquals(0)
+    }
+
+    private fun touch(down: Long, time: Long, action: Int, x: Float, y: Float, flags: Int): MotionEvent {
+        val properties = arrayOf(MotionEvent.PointerProperties().apply { id = 0 })
+        val coords = arrayOf(
+            MotionEvent.PointerCoords().apply {
+                this.x = x
+                this.y = y
+            },
+        )
+        return MotionEvent.obtain(down, time, action, 1, properties, coords, 0, 0, 1f, 1f, 0, 0, 0, flags)
+    }
+
+    /** Dispatches a real tap on Copy the way MainActivity does, with the overlay flag when [obscured]. */
+    private fun tapCopy(obscured: Boolean) {
+        val center = composeRule.onNodeWithText(text(R.string.action_copy)).fetchSemanticsNode().boundsInRoot.center
+        val start = SystemClock.uptimeMillis()
+        val flags = if (obscured) MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED else 0
+        val events = listOf(
+            touch(start, start, MotionEvent.ACTION_DOWN, center.x, center.y, flags),
+            touch(start, start + 50, MotionEvent.ACTION_UP, center.x, center.y, flags),
+        )
+        for (event in events) {
+            TouchGuard.track(event.isPartiallyObscured()) { root!!.dispatchTouchEvent(event) }
+        }
+        composeRule.waitForIdle()
+    }
+
+    @Test
+    fun aTapOnCopyUnderAnOverlayCopiesNothingAndSaysWhy() {
+        showScanned("https://example.com")
+        tapCopy(obscured = true)
+        assertEquals(0, copies)
+        composeRule.onNodeWithText(text(R.string.overlay_blocked)).assertExists()
+    }
+
+    @Test
+    fun theSameTapWithoutAnOverlayCopies() {
+        showScanned("https://example.com")
+        tapCopy(obscured = false)
+        assertEquals(1, copies)
+    }
+
+    @Test
+    fun cancelStaysUsableUnderAnOverlay() {
+        showScanned("https://example.com")
+        TouchGuard.track(partiallyObscured = true) {
+            composeRule.onNodeWithText(text(R.string.action_cancel)).performClick()
+        }
+        assertEquals(1, cancels)
     }
 
     @Test

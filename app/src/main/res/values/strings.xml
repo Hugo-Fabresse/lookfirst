@@ -84,4 +84,6 @@
         <item quantity="one">The content hides %1$d invisible character. It is made visible below.</item>
         <item quantity="other">The content hides %1$d invisible characters. They are made visible below.</item>
     </plurals>
+    <string name="overlay_blocked">Another app is covering LookFirst. Close it to continue.</string>
+    <string name="host_non_latin_warning">This address contains non-Latin characters: it can imitate another site.</string>
 </resources>

@@ -15,6 +15,7 @@ internal fun ParseResult.toUiState(): ResultUiState = when (this) {
         ResultContent(
             typeLabel = payload.typeLabel(),
             host = (payload as? ScanPayload.Url)?.rawHost?.takeIf { it.value.isNotEmpty() },
+            nonLatinHost = (payload as? ScanPayload.Url)?.nonAsciiHost == true,
             fields = payload.fields(),
             exact = payload.raw,
             hiddenCharCount = hiddenChars.size + fieldHiddenChars.sumOf { it.chars.size },

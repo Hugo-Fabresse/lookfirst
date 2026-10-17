@@ -84,4 +84,6 @@
         <item quantity="one">Le contenu cache %1$d caractère invisible. Il est rendu visible ci-dessous.</item>
         <item quantity="other">Le contenu cache %1$d caractères invisibles. Ils sont rendus visibles ci-dessous.</item>
     </plurals>
+    <string name="overlay_blocked">Une autre application recouvre LookFirst. Fermez-la pour continuer.</string>
+    <string name="host_non_latin_warning">Cette adresse contient des caractères non latins : elle peut imiter un autre site.</string>
 </resources>

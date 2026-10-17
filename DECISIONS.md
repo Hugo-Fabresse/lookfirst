@@ -19,3 +19,8 @@ DECISION [ci] : règles semgrep du registre non figées — acceptable en mode r
 DECISION [ci] : vérification Gradle sha256 seule, pas de PGP — beaucoup d'artefacts Google non signés
 DECISION [tests] : Robolectric hors ligne, sdk 34 seulement — un autre sdk = nouvelle coordonnée android-all + métadonnées à cache froid
 DECISION [deps] : Renovate désactivé pour android-all-instrumented — suit la version de Robolectric
+DECISION [ux] : D14 — plusieurs QR dans une image : le premier seulement, signalé à l'écran — un choix dans une liste expose au leurre
+DECISION [ux] : D15 — SEPA / paiement et crypto : Copier seulement — pas d'Intent générique sûr, les apps de paiement sont la cible
+DECISION [ux] : D16 — listes > 14 jours = raison CAUTION ; bundle signé initial dans l'APK (ADR-0005) — jamais de listes absentes au 1er lancement
+DECISION [ux] : D17 — Suspect et Danger : Ouvrir derrière une confirmation (Annuler par défaut) — l'utilisateur décide, aligné sur T-UI-2
+DECISION [ux] : D18 — « Contrôles effectués : … » au lieu de « Vérifié : … » — ne pas ressembler à un label de confiance

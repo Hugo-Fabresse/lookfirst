@@ -17,7 +17,7 @@ Gradle modules are suggested; they can start as packages and be split later. Dep
 |---|---|---|
 | Presentation | `ui` (Compose, ViewModels) | Camera screen, verdict screen, action buttons, settings, history screen |
 | Domain | `domain` (pure Kotlin, no Android) | Models (`ScanPayload`, `Verdict`, `Reason`), use cases (`AnalyzeScan`, `ResolveRedirects`, `LookupDomainAge`), analyser interfaces |
-| Domain | `domain.parser` | `PayloadParser`: raw string -> sealed `ScanPayload` (Url, Wifi, Sms, Tel, Mail, Otpauth, Epc, Crypto, AppLink, Text, Unknown). Strict size and charset limits |
+| Domain | `domain.parser` | `PayloadParser`: raw string -> sealed `ScanPayload` (Url, Wifi, Sms, Tel, Mail, Geo, Otpauth, Epc, Crypto, AppLink, Text, Unknown). Strict size and charset limits |
 | Domain | `domain.analysis` | Analysers, each `ScanPayload -> List<Signal>`: `UrlStructure` (userinfo `@` tricks, IP host, odd ports, shorteners), `HomoglyphIdn` (punycode, mixed scripts, confusables, bidi), `Typosquatting` (edit distance vs an embedded brand list), `Reputation` (local list lookup), per-type rules (`WifiRules`, `OtpauthRules`, `PaymentRules`, `SchemeRules`, `SmsRules`) |
 | Domain | `domain.verdict` | `VerdictEngine`: merges signals into a level and ordered reasons |
 | Data | `data.scan.camera` | CameraX + `BarcodeDecoder`, frame analysis, torch |
@@ -56,13 +56,14 @@ flowchart TD
     K --> E3
 ```
 
-Dotted edges are the only network paths. Re-running the verdict after an optional action adds signals; it never removes the confirmation step.
+Dotted edges are the only network paths. Re-running the verdict after an optional action produces a new `Verdict` bound to the same payload id (the displayed content does not change); it adds signals and never removes the confirmation step.
 
 ## Verdict model
 
 ```
 Verdict(level, reasons: List<Reason>, payload)
-Reason(code, severity, messageResId, evidence)   // evidence = exact fragment, e.g. the suspicious host
+Reason(code, severity, messageResId, shortLabelResId, evidence)   // evidence = exact fragment, e.g. the suspicious host
+Severity = INFO | CAUTION | SUSPICIOUS | DANGEROUS
 ```
 
 | Level | Meaning | Typical triggers |
@@ -73,7 +74,7 @@ Reason(code, severity, messageResId, evidence)   // evidence = exact fragment, e
 | `NO_RISK_SIGNAL` | Nothing found by LookFirst's checks | Label: "No risk signal detected" |
 
 Rules:
-- The level is the maximum severity of the reasons. Reasons are sorted by severity and written as full plain sentences ("The address looks like paypal.com but uses a Cyrillic 'a'").
+- The level is the maximum severity of the reasons, `INFO` excluded: an `INFO` reason (for example `REDIRECT_FINAL`, the final destination found by tracing) is displayed but never raises the level. Reasons are sorted by severity and written as full plain sentences ("The address looks like paypal.com but uses a Cyrillic 'a'").
 - Never the words "safe" or "secure", no green padlock. `NO_RISK_SIGNAL` always carries: "This does not guarantee the site is safe. Lists only know threats that were already reported."
 - Every verdict shows the decoded content verbatim, escaped, with bidi/control characters made visible (`<U+202E>`), so the user can verify what the analyser saw.
 - Unknown or unparsable content defaults to `CAUTION`, never `NO_RISK_SIGNAL`.
@@ -104,6 +105,7 @@ Everything else works in airplane mode. An instrumented test should assert that 
 - http/https: the analysed URL is converted to canonical form (host as punycode, URL percent-encoded) and `Uri.getHost()` is re-checked to equal the analysed host just before the Intent. `ACTION_VIEW` with `CATEGORY_BROWSABLE`. A verified App Link could be captured by a non-browser app, so LookFirst resolves the default browser and calls `setPackage` on it; if a non-browser handler exists for the URL, the verdict says so. Custom Tab if the browser supports it (declare `<queries>` for `CustomTabsService`); never call `warmup()`, `mayLaunchUrl()` or any prefetch with scanned data. No WebView inside LookFirst.
 - tel/sms/mailto: `ACTION_DIAL` (never `ACTION_CALL`), `ACTION_SENDTO` with `smsto:` or `mailto:`; the user still presses send in the target app.
 - Wi-Fi: API 30+ `ACTION_WIFI_ADD_NETWORKS` (system confirmation, Intent restricted to system packages). Below 30, show the credentials and open the Wi-Fi settings; never reconfigure silently. No `WifiNetworkSuggestion`.
+- geo: `ACTION_VIEW` with a `geo:` URI built from parsed coordinates, sent to the default maps app; the user confirms there, LookFirst fetches nothing.
 - otpauth: **Copy only** at MVP (sensitive clip flag). Never an implicit Intent: the URI contains the seed.
 - App deep links and unknown schemes (decision D12): **Copy only**, no Open button, no advanced setting.
 - No URI permission grants, no `PendingIntent` from scan data, no extras taken from scan data.
@@ -124,7 +126,7 @@ Off by default. When on: Room database with scheme, host, level and timestamp; n
 
 Lists are produced by a **separate, minimal repository and workflow** (not the app's build CI): pinned upstream fetch -> validation -> reduction to a compact index -> Ed25519 signature -> publication on Codeberg (decisions D10, D13). The signing key is a secret of that workflow's environment only. Details and risks: `threat-model.md` (CI / supply chain) and ADR-0002.
 
-The bundle contains: the reputation index, the Public Suffix List, the IANA RDAP bootstrap file, the top-domains allow-list, and a signed manifest `{version (monotonic integer), generatedAt, files with hashes}`. The app rejects a manifest whose version is lower than or equal to the installed one (anti-rollback), and shows the lists' age on every verdict.
+The bundle contains: the reputation index, the Public Suffix List, the IANA RDAP bootstrap file, the top-domains allow-list, and a signed manifest `{version (monotonic integer), generatedAt, files with hashes}`. An initial signed bundle is embedded in the APK so lists are never absent on first launch (ADR-0005). The app rejects a manifest whose version is lower than or equal to the installed one (anti-rollback), and shows the lists' age on every verdict.
 
 ## Verdict immutability
 

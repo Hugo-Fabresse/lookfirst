@@ -82,3 +82,7 @@ DECISION [image-scan] : textes err_image_too_big et err_image_corrupt ajoutés (
 DECISION [image-scan] : lecture multi-QR seulement si ≤ 30 motifs de repérage candidats, un seul thread dédié, nouvelle lecture refusée (BUSY) tant qu'il est occupé — QRCodeMultiReader est cubique et non annulable
 DECISION [verdict] : sans listes de réputation (NoReputationLists), toute URL http(s) est au moins CAUTION (LISTS_MISSING) — voulu tant que l'epic Listes n'existe pas
 DECISION [verdict] : le CAUTION systématique sans listes (NoReputationLists) est provisoire — à revoir par l'epic Listes
+DECISION [verdict-ui] : niveaux = conteneurs fixes (rouge, orange, ambre, bleu-gris) hors couleurs dynamiques, jamais vert — silhouette d'icône + libellé portent le sens, contraste AA testé clair et sombre
+DECISION [verdict-ui] : la ligne « Contrôles effectués » d'un contenu qui n'est pas un lien web cite type, caractères cachés et cohérence des champs — la version « adresse, alphabets… » serait fausse pour un Wi-Fi
+DECISION [verdict-ui] : Ouvrir est affiché mais désactivé (description d'accessibilité) tant que LF-19 n'existe pas — la pile garde sa forme finale, rien ne s'ouvre
+DECISION [verdict-ui] : lettres non ASCII de l'hôte soulignées (pas de pointillé : Compose n'en a pas dans un texte) ; l'imitation de marque a une phrase par type (le caractère exact n'est pas connu de l'UI)

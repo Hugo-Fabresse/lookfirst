@@ -21,8 +21,6 @@
     <string name="secret_hide">Masquer</string>
     <string name="secret_masked">••••••••</string>
     <string name="not_openable">Ce type de contenu ne peut pas être ouvert depuis LookFirst. Vous pouvez seulement le copier.</string>
-    <string name="not_analysed_banner">Pas encore analysé</string>
-    <string name="not_analysed_body">Contenu décodé tel quel. Aucune vérification n\'a été faite.</string>
     <string name="result_scan_title">Résultat du scan</string>
     <string name="unreadable_title">Contenu non analysable</string>
     <string name="exact_content_title">Contenu exact</string>
@@ -64,7 +62,6 @@
     <string name="camera_unavailable">La caméra ne peut pas être ouverte : elle est absente ou utilisée par une autre application. Fermez l\'autre application et réessayez, ou scannez une image à la place.</string>
     <string name="camera_retry">Réessayer</string>
     <string name="a11y_back">Retour</string>
-    <string name="a11y_banner">%1$s. %2$s</string>
     <string name="a11y_content_collapsed">Contenu exact, réduit, bouton, double-toucher pour afficher</string>
     <string name="a11y_content_expanded">Contenu exact, affiché, bouton, double-toucher pour réduire</string>
     <string name="a11y_invisible_char">Caractère %1$s, %2$s</string>
@@ -74,7 +71,7 @@
     <string name="a11y_line_break">saut de ligne</string>
     <string name="a11y_invisible_other">caractère invisible</string>
     <string name="a11y_masked">masqué</string>
-    <string name="a11y_copy_exact">Copier le contenu exact</string>
+    <string name="a11y_copy_exact">%1$s, contenu exact</string>
     <string name="a11y_cancel_resume">Annuler et reprendre le scan</string>
     <plurals name="chars_more">
         <item quantity="one">… (%1$d caractère de plus non affiché)</item>
@@ -85,7 +82,6 @@
         <item quantity="other">Le contenu cache %1$d caractères invisibles. Ils sont rendus visibles ci-dessous.</item>
     </plurals>
     <string name="overlay_blocked">Une autre application recouvre LookFirst. Fermez-la pour continuer.</string>
-    <string name="host_non_latin_warning">Cette adresse contient des caractères non latins : elle peut imiter un autre site.</string>
     <string name="pick_other_image">Choisir une autre image</string>
     <string name="back_to_camera">Retour à la caméra</string>
     <string name="image_title">Image</string>

@@ -8,6 +8,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
 
 @Composable
@@ -20,5 +21,8 @@ fun LookFirstTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composa
         darkTheme -> darkColorScheme()
         else -> lightColorScheme()
     }
-    MaterialTheme(colorScheme = colorScheme, content = content)
+    val palette = if (darkTheme) DarkVerdictPalette else LightVerdictPalette
+    CompositionLocalProvider(LocalVerdictPalette provides palette) {
+        MaterialTheme(colorScheme = colorScheme, content = content)
+    }
 }

@@ -40,6 +40,8 @@ data class ResultContent(
     val containsSecret: Boolean,
     /** Deep links and dangerous schemes: Copy is labelled "Copy only" and cannot be opened. */
     val copyOnly: Boolean,
+    /** The image held several QR codes: only the first is shown, and the screen says so (D14). */
+    val multipleCodes: Boolean = false,
 )
 
 enum class FieldKind {

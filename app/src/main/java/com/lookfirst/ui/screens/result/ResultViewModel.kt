@@ -45,15 +45,18 @@ class ResultViewModel @Inject constructor(
     private var copyIsSecret = false
     private var parsing: Job? = null
 
-    /** Starts showing [content]. Ignored while another content is displayed. */
-    fun show(content: Untrusted) {
+    /**
+     * Starts showing [content]. Ignored while another content is displayed. [multipleCodes]: the image it comes
+     * from held other codes, a line says that only this one is shown (D14).
+     */
+    fun show(content: Untrusted, multipleCodes: Boolean = false) {
         if (scanned != null) return
         scanned = content
         mutableState.value = ResultUiState.Parsing
         parsing = viewModelScope.launch {
             val parsed = withContext(parseDispatcher) { PayloadParser.parse(content.value) }
             copyIsSecret = (parsed as? ParseResult.Ok)?.payload?.containsSecret() == true
-            mutableState.value = parsed.toUiState()
+            mutableState.value = parsed.toUiState(multipleCodes)
         }
     }
 

@@ -86,4 +86,14 @@
     </plurals>
     <string name="overlay_blocked">Une autre application recouvre LookFirst. Fermez-la pour continuer.</string>
     <string name="host_non_latin_warning">Cette adresse contient des caractères non latins : elle peut imiter un autre site.</string>
+    <string name="pick_other_image">Choisir une autre image</string>
+    <string name="back_to_camera">Retour à la caméra</string>
+    <string name="image_title">Image</string>
+    <string name="reading_image">Lecture de l\'image…</string>
+    <string name="err_no_qr">Aucun QR code trouvé dans cette image. Essayez une image plus nette, bien cadrée, sans reflet.</string>
+    <string name="err_unreadable">Un QR code a été repéré, mais il est trop abîmé pour être lu.</string>
+    <string name="err_image_too_big">Cette image est trop volumineuse pour être lue en sécurité. Choisissez-en une plus légère.</string>
+    <string name="err_image_corrupt">Cette image ne peut pas être ouverte. Elle est peut-être abîmée ou d\'un format non pris en charge.</string>
+    <string name="err_multi_qr">Plusieurs QR codes dans l\'image : seul le premier est affiché.</string>
+    <string name="err_image_busy">L\'image précédente est encore en cours de lecture. Patientez un instant, puis réessayez.</string>
 </resources>

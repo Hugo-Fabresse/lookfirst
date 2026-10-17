@@ -58,3 +58,7 @@ DECISION [result] : hôte non ASCII = avertissement « caractères non latins »
 DECISION [result] : presse-papiers vidé sur le focus de la fenêtre après avoir quitté l'app, label aléatoire comparé sans jamais lire le texte — API 29+ ne donne la lecture qu'avec le focus
 DECISION [result] : TouchGuard protège Copier seulement (écran et dialogue), message si bloqué — Annuler et Retour restent toujours utilisables
 DECISION [result] : FLAG_SECURE et capture des récents désactivée tant qu'un contenu avec secret est affiché — l'utilisateur peut le révéler
+DECISION [image-scan] : bornes — 10 Mio lus au plus, 25 Mpx déclarés max, décodage à ~4 Mpx, octets magiques jpeg/png/webp/heif avant le décodeur, URI content:// seulement — image piégée (T-IMG-1/2)
+DECISION [image-scan] : pas d'aperçu de l'image sur l'écran d'échec — l'image n'est pas conservée après la lecture (T-IMG-4)
+DECISION [image-scan] : textes err_image_too_big et err_image_corrupt ajoutés (absents d'ux.md §7) — « trop volumineuse » et « format illisible » ne se confondent pas avec « aucun QR »
+DECISION [image-scan] : lecture multi-QR seulement si ≤ 30 motifs de repérage candidats, un seul thread dédié, nouvelle lecture refusée (BUSY) tant qu'il est occupé — QRCodeMultiReader est cubique et non annulable

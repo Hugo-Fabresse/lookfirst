@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,13 +27,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lookfirst.R
 
 /**
- * Scan home screen (ux.md 5.2, 5.3). [cameraContent] is the live viewfinder: a slot, so that the screen
- * stays testable without a camera.
+ * Scan home screen (ux.md 5.2, 5.3) and the image scan screens (5.4). [cameraContent] is the live viewfinder: a
+ * slot, so that the screen stays testable without a camera.
  */
 @Composable
 fun ScanScreen(
@@ -42,33 +46,44 @@ fun ScanScreen(
     onTorchToggle: () -> Unit,
     onOpenSettings: () -> Unit,
     onCameraRetry: () -> Unit,
+    onPickImage: () -> Unit,
+    onBackToCamera: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(modifier = Modifier.safeDrawingPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            TopBar(state = state, onTorchToggle = onTorchToggle, onOpenSettings = onOpenSettings)
-            when (state) {
-                is ScanUiState.Scanning -> ScanningContent(state, cameraContent)
-                ScanUiState.PermissionRationale -> PermissionContent(
-                    icon = R.drawable.ic_camera,
-                    message = R.string.camera_rationale,
-                    actionLabel = R.string.allow_camera,
-                    onAction = onRequestPermission,
-                )
-                ScanUiState.PermissionDenied -> PermissionContent(
-                    icon = R.drawable.ic_camera_off,
-                    message = R.string.camera_denied,
-                    actionLabel = R.string.open_android_settings,
-                    onAction = onOpenAndroidSettings,
-                )
-                ScanUiState.CameraUnavailable -> PermissionContent(
-                    icon = R.drawable.ic_camera_off,
-                    message = R.string.camera_unavailable,
-                    actionLabel = R.string.camera_retry,
-                    onAction = onCameraRetry,
-                )
-                // The Result screen is on top: nothing to draw, the camera is released.
-                ScanUiState.Captured -> Unit
+        if (state is ScanUiState.ImageFailed) {
+            ImageFailureScreen(reason = state.reason, onPickAnother = onPickImage, onBackToCamera = onBackToCamera)
+        } else {
+            Column(modifier = Modifier.safeDrawingPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                TopBar(state = state, onTorchToggle = onTorchToggle, onOpenSettings = onOpenSettings)
+                when (state) {
+                    is ScanUiState.Scanning -> ScanningContent(state, cameraContent, onPickImage)
+                    ScanUiState.PermissionRationale -> PermissionContent(
+                        icon = R.drawable.ic_camera,
+                        message = R.string.camera_rationale,
+                        actionLabel = R.string.allow_camera,
+                        onAction = onRequestPermission,
+                        onPickImage = onPickImage,
+                    )
+                    ScanUiState.PermissionDenied -> PermissionContent(
+                        icon = R.drawable.ic_camera_off,
+                        message = R.string.camera_denied,
+                        actionLabel = R.string.open_android_settings,
+                        onAction = onOpenAndroidSettings,
+                        onPickImage = onPickImage,
+                    )
+                    ScanUiState.CameraUnavailable -> PermissionContent(
+                        icon = R.drawable.ic_camera_off,
+                        message = R.string.camera_unavailable,
+                        actionLabel = R.string.camera_retry,
+                        onAction = onCameraRetry,
+                        onPickImage = onPickImage,
+                    )
+                    ScanUiState.ReadingImage -> ReadingImageContent()
+                    // The Result screen is on top: nothing to draw, the camera is released.
+                    ScanUiState.Captured -> Unit
+                    is ScanUiState.ImageFailed -> Unit
+                }
             }
         }
     }
@@ -108,6 +123,7 @@ private fun TopBar(state: ScanUiState, onTorchToggle: () -> Unit, onOpenSettings
 private fun ScanningContent(
     state: ScanUiState.Scanning,
     cameraContent: @Composable (Modifier, ScanUiState.Scanning) -> Unit,
+    onPickImage: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(top = 8.dp),
@@ -123,7 +139,7 @@ private fun ScanningContent(
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center,
         )
-        PickImageButton()
+        PickImageButton(onPickImage)
     }
 }
 
@@ -133,6 +149,7 @@ private fun PermissionContent(
     @StringRes message: Int,
     @StringRes actionLabel: Int,
     onAction: () -> Unit,
+    onPickImage: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
@@ -152,15 +169,31 @@ private fun PermissionContent(
             textAlign = TextAlign.Center,
         )
         Button(onClick = onAction, modifier = Modifier.fillMaxWidth()) { Text(stringResource(actionLabel)) }
-        PickImageButton()
+        PickImageButton(onPickImage)
     }
 }
 
-/** Image scan arrives with LF-10; shown now (ux.md 5.2) but disabled so that it cannot be mistaken for working. */
 @Composable
-private fun PickImageButton() {
-    // TODO(LF-10): enable and launch the Photo Picker once the image scan exists.
-    OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
+private fun ReadingImageContent() {
+    val reading = stringResource(R.string.reading_image)
+    Column(
+        modifier = Modifier.fillMaxSize().semantics(mergeDescendants = true) { contentDescription = reading },
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator()
+        Text(
+            text = reading,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+    }
+}
+
+/** Opens the system image picker (no storage permission); the image is read only once the user has picked it. */
+@Composable
+private fun PickImageButton(onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         Icon(painter = painterResource(R.drawable.ic_image), contentDescription = null, modifier = Modifier.size(20.dp))
         Text(text = stringResource(R.string.pick_image), modifier = Modifier.padding(start = 8.dp))
     }

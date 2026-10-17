@@ -39,8 +39,8 @@ fun LookFirstNavHost(
             ScanRoute(
                 viewModel = scanViewModel,
                 analyzerFactory = analyzerFactory,
-                onCodeRead = { content ->
-                    resultViewModel.show(content)
+                onCodeRead = { content, multipleCodes ->
+                    resultViewModel.show(content, multipleCodes)
                     navController.navigate(ROUTE_RESULT) { launchSingleTop = true }
                 },
             )

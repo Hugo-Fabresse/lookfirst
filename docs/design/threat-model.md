@@ -98,8 +98,8 @@ Status legend: **M** mitigated by design; **A** accepted explicitly (reason give
 | ID | Threat | Counter-measure | Status |
 |---|---|---|---|
 | T-IMG-1 | Booby-trapped image exploiting a native image decoder (E) | Platform decoders only (patched by OS updates), on a background thread; allowed types jpeg, png, webp, heif; no SVG or PDF | M; platform zero-day residual A |
-| T-IMG-2 | Decompression bomb: small file, huge dimensions (D) | Read bounds first, refuse above ~25 MP or 20 MB, downsample to ~2048 px; catch `OutOfMemoryError` | M |
-| T-IMG-3 | Image with several QRs so the user acts on the wrong one (S) | List every code found; the user selects; each is analysed separately | M |
+| T-IMG-2 | Decompression bomb or CPU bomb: small file, huge dimensions, or a page of finder patterns (D) | Magic bytes checked before the decoder (jpeg, png, webp, heif); read at most 10 MiB (cancellable, descriptor closed); refuse above 25 MP declared; downsample to ~4 MP; catch `OutOfMemoryError`; ZXing's multi-code reader is cubic in the finder patterns and cannot be cancelled, so it only runs when at most 30 candidates are counted first (otherwise the plain reader, unreadable on failure); one read at a time on a dedicated thread | M |
+| T-IMG-3 | Image with several QRs so the user acts on the wrong one (S) | Only the first code in reading order is used and the Result screen says "several QR codes: only the first is shown" (D14: a choice among codes exposes the user to a decoy) | M |
 | T-IMG-4 | Metadata leakage (EXIF) (I) | Image read once in memory, never copied, saved or uploaded | M |
 
 ## Verdict and UI

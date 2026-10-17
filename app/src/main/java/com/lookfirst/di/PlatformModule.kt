@@ -9,6 +9,8 @@ import com.lookfirst.data.platform.ClipboardWriter
 import com.lookfirst.data.scan.camera.DefaultQrAnalyzerFactory
 import com.lookfirst.data.scan.camera.QrAnalyzerFactory
 import com.lookfirst.data.scan.camera.ZxingBarcodeDecoder
+import com.lookfirst.data.scan.image.BoundedImageQrReader
+import com.lookfirst.data.scan.image.ImageQrReader
 import com.lookfirst.domain.scan.BarcodeDecoder
 import dagger.Binds
 import dagger.Module
@@ -32,4 +34,7 @@ abstract class PlatformModule {
 
     @Binds
     abstract fun bindQrAnalyzerFactory(impl: DefaultQrAnalyzerFactory): QrAnalyzerFactory
+
+    @Binds
+    abstract fun bindImageQrReader(impl: BoundedImageQrReader): ImageQrReader
 }

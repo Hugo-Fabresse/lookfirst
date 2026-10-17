@@ -3,6 +3,8 @@ package com.lookfirst.ui.screens.scan
 import app.cash.turbine.test
 import com.lookfirst.data.platform.AppSettingsOpener
 import com.lookfirst.data.platform.CameraPermission
+import com.lookfirst.data.scan.image.ImageQrReader
+import com.lookfirst.data.scan.image.ImageReadResult
 import com.lookfirst.domain.model.Untrusted
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -21,9 +23,13 @@ class ScanViewModelTest {
         }
     }
 
+    private object ImageNeverUsed : ImageQrReader {
+        override suspend fun read(uri: android.net.Uri): ImageReadResult = error("no image in these tests")
+    }
+
     private val settings = FakeSettings()
 
-    private fun viewModel(permission: FakePermission) = ScanViewModel(permission, settings)
+    private fun viewModel(permission: FakePermission) = ScanViewModel(permission, settings, ImageNeverUsed)
 
     @Test
     fun startsWithRationaleWhenPermissionIsMissing() {

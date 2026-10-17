@@ -20,7 +20,7 @@
     <string name="settings_unmetered_only">Unmetered network only</string>
     <string name="lists_updating">Updating</string>
     <string name="lists_update_failed">Update failed: the previous list is kept.</string>
-    <string name="lists_rejected">List rejected: the signature check failed. The previous list is kept.</string>
+    <string name="lists_rejected">List refused by the integrity checks. The previous list is kept.</string>
     <string name="lists_offline">Offline</string>
     <string name="lists_up_to_date">Already up to date.</string>
     <string name="settings_about_link">About and privacy</string>

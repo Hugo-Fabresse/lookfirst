@@ -20,7 +20,7 @@
     <string name="settings_unmetered_only">Réseau non limité uniquement</string>
     <string name="lists_updating">Mise à jour en cours</string>
     <string name="lists_update_failed">Échec de la mise à jour : la liste précédente est conservée.</string>
-    <string name="lists_rejected">Liste refusée : la vérification de signature a échoué. La liste précédente est conservée.</string>
+    <string name="lists_rejected">Liste refusée par les contrôles d\'intégrité. La liste précédente est conservée.</string>
     <string name="lists_offline">Hors connexion</string>
     <string name="lists_up_to_date">Déjà à jour.</string>
     <string name="settings_about_link">À propos et confidentialité</string>

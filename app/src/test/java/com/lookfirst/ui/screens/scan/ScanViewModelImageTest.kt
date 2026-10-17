@@ -93,6 +93,29 @@ class ScanViewModelImageTest {
     }
 
     @Test
+    fun aCameraReadBeforeTheImageStartsWinsAndTheImageIsIgnored() {
+        val reader = FakeReader(ImageReadResult.Found("image", false))
+        val vm = viewModel(FakePermission(true), reader)
+        vm.onCodeRead("camera")
+        vm.onImagePicked(uri)
+        assertEquals(ScanUiState.Captured, vm.state.value)
+        assertEquals(emptyList<Uri>(), reader.reads)
+    }
+
+    @Test
+    fun aCameraReadWhileTheImageIsBeingReadIsIgnored() = runBlocking {
+        val gate = CompletableDeferred<Unit>()
+        val vm = viewModel(FakePermission(true), FakeReader(ImageReadResult.Found("image", false), gate))
+        vm.events.test {
+            vm.onImagePicked(uri)
+            vm.onCodeRead("camera")
+            gate.complete(Unit)
+            assertEquals(Untrusted("image"), (awaitItem() as ScanEvent.CodeRead).content)
+            expectNoEvents()
+        }
+    }
+
+    @Test
     fun backToCameraAfterAFailureResumesScanning() {
         val vm = viewModel(FakePermission(true), FakeReader(ImageReadResult.Failed(ImageFailure.NO_QR)))
         vm.onImagePicked(uri)

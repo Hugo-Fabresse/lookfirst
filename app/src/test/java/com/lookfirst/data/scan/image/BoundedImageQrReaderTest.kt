@@ -1,7 +1,11 @@
 package com.lookfirst.data.scan.image
 
+import android.content.ContentProvider
+import android.content.ContentValues
+import android.database.Cursor
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.common.BitMatrix
@@ -9,17 +13,24 @@ import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.lookfirst.data.scan.camera.ZxingBarcodeDecoder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.GraphicsMode
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.InputStream
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.zip.CRC32
 import kotlin.random.Random
 
@@ -39,6 +50,12 @@ class BoundedImageQrReaderTest {
         val uri = Uri.parse("$scheme://lookfirst.test/image/1")
         shadowOf(context.contentResolver).registerInputStream(uri, stream)
         return runBlocking { reader.read(uri) }
+    }
+
+    private fun readFromProvider(name: String, file: File): ImageReadResult {
+        Robolectric.setupContentProvider(FileProvider::class.java, "lookfirst.fd")
+        FileProvider.files[name] = file
+        return runBlocking { reader.read(Uri.parse("content://lookfirst.fd/$name")) }
     }
 
     private fun failure(result: ImageReadResult): ImageFailure = (result as ImageReadResult.Failed).reason
@@ -92,9 +109,73 @@ class BoundedImageQrReaderTest {
     }
 
     @Test
+    fun sampleSizeRoundsUpSoAnExtremeRatioStaysBounded() {
+        // 1 x 100 000 000: with rounding down the width would reach 0 and the bound would never hold.
+        val sample = BoundedImageQrReader.sampleSizeFor(1, 100_000_000)
+        assertEquals(32, sample)
+        assertTrue(1L * ((100_000_000 + sample - 1) / sample) <= BoundedImageQrReader.MAX_DECODE_PIXELS)
+    }
+
+    @Test
     fun anImageDeclaringTooManyPixelsIsRefusedBeforeDecoding() {
         val result = read(withDeclaredSize(png(qrBitmap("https://example.com/x", size = 100)), 20_000, 20_000))
         assertEquals(ImageFailure.TOO_LARGE, failure(result))
+    }
+
+    @Test
+    fun aGridOfFinderPatternsIsRefusedFastInsteadOfFreezingTheMultiReader() {
+        val grid = finderPatternGrid(size = 1200)
+        val started = System.nanoTime()
+        val result = read(png(grid))
+        val millis = (System.nanoTime() - started) / 1_000_000
+        println("finder pattern grid refused in $millis ms")
+        assertEquals(ImageFailure.UNREADABLE, failure(result))
+        assertTrue("took $millis ms", millis < 2_000)
+    }
+
+    @Test
+    fun aSecondReadIsRefusedWhileTheFirstOneStillRuns() = runBlocking {
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val blocking = object : InputStream() {
+            override fun read(): Int = read(ByteArray(1), 0, 1)
+
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                started.countDown()
+                release.await(10, TimeUnit.SECONDS)
+                return -1
+            }
+        }
+        val firstUri = Uri.parse("content://lookfirst.test/image/slow")
+        shadowOf(context.contentResolver).registerInputStream(firstUri, blocking)
+        val first = async(Dispatchers.Default) { reader.read(firstUri) }
+        assertTrue(started.await(10, TimeUnit.SECONDS))
+        assertEquals(ImageFailure.BUSY, failure(read(png(qrBitmap("https://example.com/b")))))
+        release.countDown()
+        first.await()
+        val again = read(png(qrBitmap("https://example.com/b")))
+        assertEquals(ImageReadResult.Found("https://example.com/b", false), again)
+    }
+
+    @Test
+    fun aFileDescriptorOverTheBoundIsRefusedFromItsSizeAlone() {
+        val sparse = File.createTempFile("lf10", ".bin").apply { deleteOnExit() }
+        RandomAccessFile(sparse, "rw").use { it.setLength(BoundedImageQrReader.MAX_FILE_BYTES + 1) }
+        assertEquals(ImageFailure.TOO_LARGE, failure(readFromProvider("big", sparse)))
+    }
+
+    @Test
+    fun aFileDescriptorIsReadLikeAStream() {
+        val file = File.createTempFile("lf10", ".png").apply { deleteOnExit() }
+        file.writeBytes(png(qrBitmap("https://example.com/fd")))
+        assertEquals(ImageReadResult.Found("https://example.com/fd", false), readFromProvider("ok", file))
+    }
+
+    @Test
+    fun aFileDescriptorOfAnotherFormatIsRefusedByItsMagicBytes() {
+        val file = File.createTempFile("lf10", ".gif").apply { deleteOnExit() }
+        file.writeBytes("GIF89a".toByteArray() + ByteArray(40))
+        assertEquals(ImageFailure.CORRUPT, failure(readFromProvider("gif", file)))
     }
 
     @Test
@@ -174,6 +255,28 @@ class BoundedImageQrReaderTest {
         return draw(matrix(right, size), size, size, offsetX = size + 40, into = bitmap)
     }
 
+    /** A page full of finder patterns (7 x 7 modules, 1:1:3:1:1): the shape that freezes the multi-code reader. */
+    private fun finderPatternGrid(size: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply { eraseColor(0xFFFFFFFF.toInt()) }
+        val module = 3
+        val pitch = 9 * module
+        for (y in module until size - 7 * module step pitch) {
+            for (x in module until size - 7 * module step pitch) drawFinderPattern(bitmap, x, y, module)
+        }
+        return bitmap
+    }
+
+    private fun drawFinderPattern(bitmap: Bitmap, left: Int, top: Int, module: Int) {
+        for (dy in 0 until 7 * module) {
+            for (dx in 0 until 7 * module) {
+                val mx = dx / module
+                val my = dy / module
+                val ring = mx == 0 || mx == 6 || my == 0 || my == 6
+                if (ring || (mx in 2..4 && my in 2..4)) bitmap.setPixel(left + dx, top + dy, 0xFF000000.toInt())
+            }
+        }
+    }
+
     /** Keeps the quiet zone and the three finder patterns and scrambles every data module: spotted, not decodable. */
     private fun garbledQr(text: String): Bitmap {
         val modules = matrix(text, 0)
@@ -209,6 +312,30 @@ class BoundedImageQrReaderTest {
         val crc = CRC32().apply { update(copy, IHDR_TYPE, IHDR_LENGTH + 4) }
         ByteBuffer.wrap(copy).putInt(IHDR_DATA + IHDR_LENGTH, crc.value.toInt())
         return copy
+    }
+
+    /** Serves files by name through a real file descriptor (`openFileDescriptor`), like a document provider. */
+    class FileProvider : ContentProvider() {
+        override fun onCreate() = true
+
+        override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor = ParcelFileDescriptor.open(
+            files.getValue(uri.lastPathSegment.orEmpty()),
+            ParcelFileDescriptor.MODE_READ_ONLY,
+        )
+
+        override fun query(uri: Uri, p: Array<String>?, s: String?, a: Array<String>?, o: String?): Cursor? = null
+
+        override fun getType(uri: Uri): String? = null
+
+        override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+
+        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<String>?) = 0
+
+        override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<String>?) = 0
+
+        companion object {
+            val files = mutableMapOf<String, File>()
+        }
     }
 
     private companion object {

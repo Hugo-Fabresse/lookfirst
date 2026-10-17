@@ -3,6 +3,7 @@ package com.lookfirst.ui.screens.result
 import androidx.annotation.StringRes
 import com.lookfirst.R
 import com.lookfirst.domain.model.Untrusted
+import com.lookfirst.domain.verdict.Verdict
 
 /** State of the Result screen (ux.md 5.5, 5.6). The content shown never changes once it is [Content]. */
 sealed interface ResultUiState {
@@ -15,8 +16,15 @@ sealed interface ResultUiState {
     /** Too large or empty: nothing trustworthy to show or copy (ux.md 5.5). */
     data class Unreadable(val reason: UnreadableReason) : ResultUiState
 
-    /** Decoded content. [confirmingSecretCopy] is the only part that changes: the dialog of ux.md 4.6. */
-    data class Content(val content: ResultContent, val confirmingSecretCopy: Boolean = false) : ResultUiState
+    /**
+     * Decoded content. [verdict] is null for the instant the analysis runs (the screen shows "Analysing..." in the
+     * space of the banner, nothing moves when it arrives). [confirmingSecretCopy] is the dialog of ux.md 4.6.
+     */
+    data class Content(
+        val content: ResultContent,
+        val verdict: Verdict? = null,
+        val confirmingSecretCopy: Boolean = false,
+    ) : ResultUiState
 }
 
 enum class UnreadableReason(@StringRes val message: Int) {
@@ -28,9 +36,11 @@ enum class UnreadableReason(@StringRes val message: Int) {
 data class ResultContent(
     @StringRes val typeLabel: Int,
     /** The real host of a web link, shown large. Null for any other type. */
-    val host: Untrusted?,
-    /** The host has non-ASCII characters: it may imitate another site (homograph). */
-    val nonLatinHost: Boolean,
+    val host: HostDisplay?,
+    /** A web link: the "checks run" line of the no-risk level names the address checks. */
+    val isWebLink: Boolean,
+    /** What Open would do for this type, null when there is no Open (deep link, payment, text...). */
+    val openKind: OpenKind?,
     val fields: List<ResultField>,
     /** The sanitized text, shown in the monospace container (secret ones only after "show"). */
     val exact: Untrusted,
@@ -55,3 +65,14 @@ enum class FieldKind {
 }
 
 data class ResultField(@StringRes val label: Int, val value: Untrusted, val kind: FieldKind = FieldKind.PLAIN)
+
+/**
+ * A host as the user must read it (ux.md 4.4). [shown] is the Unicode form when it was normalized, with the
+ * registrable domain starting at [strongFrom] (drawn bold); [technical] is the punycode form a browser will use,
+ * only when it differs. Not normalized ([normalized] false): the host as typed, drawn with its invisible characters
+ * as tokens.
+ */
+data class HostDisplay(val shown: Untrusted, val technical: String?, val strongFrom: Int, val normalized: Boolean)
+
+/** The action behind the Open button (the button itself comes with LF-19). */
+enum class OpenKind { BROWSER, DIALER, SMS, MAIL, MAPS, WIFI }

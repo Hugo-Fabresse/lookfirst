@@ -6,6 +6,7 @@ import android.view.View
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -15,7 +16,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.lookfirst.R
+import com.lookfirst.data.reputation.NoReputationLists
 import com.lookfirst.domain.decoder.PayloadParser
+import com.lookfirst.domain.usecase.AnalyzeScan
 import com.lookfirst.ui.components.TouchGuard
 import com.lookfirst.ui.components.isPartiallyObscured
 import com.lookfirst.ui.theme.LookFirstTheme
@@ -60,7 +63,15 @@ class ResultScreenTest {
 
     private fun showScanned(raw: String, confirmingSecretCopy: Boolean = false) {
         val state = PayloadParser.parse(raw).toUiState()
-        show(if (state is ResultUiState.Content) state.copy(confirmingSecretCopy = confirmingSecretCopy) else state)
+        val analysed = if (state is ResultUiState.Content) {
+            state.copy(
+                verdict = AnalyzeScan(NoReputationLists())(raw, "test"),
+                confirmingSecretCopy = confirmingSecretCopy,
+            )
+        } else {
+            state
+        }
+        show(analysed)
     }
 
     @Test
@@ -77,9 +88,9 @@ class ResultScreenTest {
     }
 
     @Test
-    fun urlShowsTheNotAnalysedBannerTheRealHostAndOnlyCancelAndCopy() {
+    fun urlShowsTheVerdictBannerTheRealHostAndCancelCopyAndAnInertOpen() {
         showScanned("https://paypal.com@evil.example/login")
-        composeRule.onNodeWithText(text(R.string.not_analysed_banner), substring = true).assertExists()
+        composeRule.onNodeWithText(text(R.string.level_dangerous)).assertExists()
         composeRule.onNodeWithText(text(R.string.type_url_https)).assertExists()
         composeRule.onNodeWithText(text(R.string.link_will_open)).assertExists()
         composeRule.onNodeWithText("evil.example").assertExists()
@@ -88,7 +99,7 @@ class ResultScreenTest {
         composeRule.onNodeWithText("https://paypal.com@evil.example/login").assertExists()
         composeRule.onNodeWithText(text(R.string.action_cancel)).assertExists()
         composeRule.onNodeWithText(text(R.string.action_copy)).assertExists()
-        composeRule.onAllNodesWithText("Open", substring = true).assertCountEquals(0)
+        composeRule.onNodeWithContentDescription(text(R.string.a11y_open_unavailable)).assertIsNotEnabled()
     }
 
     @Test
@@ -215,18 +226,6 @@ class ResultScreenTest {
         composeRule.onNode(dialogCancel).performClick()
         assertEquals(1, dismisses)
         assertEquals(0, copies)
-    }
-
-    @Test
-    fun aNonLatinHostGetsAWarningAndAnAsciiHostDoesNot() {
-        showScanned("https://p\u0430ypal.com/login")
-        composeRule.onNodeWithText(text(R.string.host_non_latin_warning)).assertExists()
-    }
-
-    @Test
-    fun anAsciiHostHasNoHomographWarning() {
-        showScanned("https://paypal.com/login")
-        composeRule.onAllNodesWithText(text(R.string.host_non_latin_warning)).assertCountEquals(0)
     }
 
     private fun touch(down: Long, time: Long, action: Int, x: Float, y: Float, flags: Int): MotionEvent {

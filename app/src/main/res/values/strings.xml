@@ -21,8 +21,6 @@
     <string name="secret_hide">Hide</string>
     <string name="secret_masked">••••••••</string>
     <string name="not_openable">This type of content cannot be opened from LookFirst. You can only copy it.</string>
-    <string name="not_analysed_banner">Not analysed yet</string>
-    <string name="not_analysed_body">Decoded as is. No check was made.</string>
     <string name="result_scan_title">Scan result</string>
     <string name="unreadable_title">Content cannot be analysed</string>
     <string name="exact_content_title">Exact content</string>
@@ -64,7 +62,6 @@
     <string name="camera_unavailable">The camera cannot be opened: it is missing or used by another app. Close the other app and try again, or scan an image instead.</string>
     <string name="camera_retry">Try again</string>
     <string name="a11y_back">Back</string>
-    <string name="a11y_banner">%1$s. %2$s</string>
     <string name="a11y_content_collapsed">Exact content, collapsed, button, double-tap to expand</string>
     <string name="a11y_content_expanded">Exact content, expanded, button, double-tap to collapse</string>
     <string name="a11y_invisible_char">Character %1$s, %2$s</string>
@@ -85,7 +82,6 @@
         <item quantity="other">The content hides %1$d invisible characters. They are made visible below.</item>
     </plurals>
     <string name="overlay_blocked">Another app is covering LookFirst. Close it to continue.</string>
-    <string name="host_non_latin_warning">This address contains non-Latin characters: it can imitate another site.</string>
     <string name="pick_other_image">Choose another image</string>
     <string name="back_to_camera">Back to camera</string>
     <string name="image_title">Image</string>

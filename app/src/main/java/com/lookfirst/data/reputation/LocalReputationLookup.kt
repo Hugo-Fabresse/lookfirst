@@ -31,7 +31,7 @@ class LocalReputationLookup @Inject internal constructor(private val store: Repu
         val registrable = if (host.kind == HostKind.DOMAIN) bundle.publicSuffixList.registrableDomain(ascii) else null
         val allowlisted = registrable != null && bundle.allowlist.contains(Lfix.keyOf(Lfix.KIND_DOMAIN, registrable))
         val hostListed = bundle.phishing.contains(Lfix.keyOf(Lfix.KIND_HOST, ascii)) &&
-            !(allowlisted && ascii == registrable)
+            !(allowlisted && (ascii == registrable || ascii == "www.$registrable"))
         val domainListed = !allowlisted &&
             registrable != null &&
             domainCandidates(ascii, registrable).any { bundle.phishing.contains(Lfix.keyOf(Lfix.KIND_DOMAIN, it)) }

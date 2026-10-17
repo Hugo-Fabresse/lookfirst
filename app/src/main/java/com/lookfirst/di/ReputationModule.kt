@@ -1,6 +1,8 @@
 package com.lookfirst.di
 
 import android.content.Context
+import com.lookfirst.BuildConfig
+import com.lookfirst.data.reputation.AndroidDirectorySync
 import com.lookfirst.data.reputation.AssetEmbeddedBundle
 import com.lookfirst.data.reputation.LocalReputationLookup
 import com.lookfirst.data.reputation.ReputationStore
@@ -31,6 +33,8 @@ abstract class ReputationModule {
             root = File(context.filesDir, "reputation"),
             embedded = AssetEmbeddedBundle(context.assets),
             clock = System::currentTimeMillis,
+            directorySync = AndroidDirectorySync,
+            acceptTestKeys = BuildConfig.DEBUG,
         )
     }
 }

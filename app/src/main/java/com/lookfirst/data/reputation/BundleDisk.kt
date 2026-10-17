@@ -31,8 +31,14 @@ internal class LoadedBundle(
 
 internal class Pointer(val version: BundleVersion, val manifestSha256: String)
 
+/** Forces a directory entry (a rename) to storage. Android: `Os.open` + `Os.fsync`; tests pass a recorder. */
+internal fun interface DirectorySync {
+    @Throws(IOException::class)
+    fun sync(directory: File)
+}
+
 /** File-system layout and atomic operations of the store: `bundles/<epoch>-<version>`, `tmp/`, `current`, `state`. */
-internal class BundleDisk(val root: File) {
+internal class BundleDisk(val root: File, private val directorySync: DirectorySync) {
     val bundles = File(root, "bundles")
     val tmp = File(root, "tmp")
     private val pointerFile = File(root, "current")
@@ -77,7 +83,11 @@ internal class BundleDisk(val root: File) {
     fun swapPointer(pointer: Pointer, onTemporaryWritten: () -> Unit) {
         val text = "${pointer.version.epoch} ${pointer.version.bundle} ${pointer.manifestSha256}\n"
         writeAtomically(pointerFile, text, onTemporaryWritten)
+        directorySync.sync(root)
     }
+
+    /** Makes the rename of a bundle directory durable (sync of `bundles/`). */
+    fun syncBundlesDirectory() = directorySync.sync(bundles)
 
     fun writeState(state: StoreState) = writeAtomically(stateFile, state.serialize()) {}
 

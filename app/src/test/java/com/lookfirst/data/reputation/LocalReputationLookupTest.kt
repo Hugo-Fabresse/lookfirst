@@ -22,7 +22,8 @@ class LocalReputationLookupTest {
     private fun host(text: String): NormalizedHost = (HostNormalizer.normalize(text) as HostResult.Normalized).host
 
     private fun lookupWith(spec: BundleSpec?): LocalReputationLookup {
-        val store = ReputationStore(File(folder.root, "rep"), null, { clock })
+        val store =
+            ReputationStore(File(folder.root, "rep"), null, { clock }, directorySync = {}, acceptTestKeys = true)
         if (spec != null) {
             val candidate = BundleBuilder.build(store.newCandidateDirectory(), spec).directory
             assertTrue(store.install(candidate) is InstallResult.Installed)
@@ -94,7 +95,7 @@ class LocalReputationLookupTest {
     fun allowlistWinsOverDomainEntries() {
         // Index and allow-list both hold good.com (a hash collision or a poisoned list): the allow-list is first.
         val spec = BundleSpec(
-            phishing = listOf("d:good.com", "h:good.com", "h:cdn.good.com", "d:other.good.com"),
+            phishing = listOf("d:good.com", "h:good.com", "h:www.good.com", "h:cdn.good.com", "d:other.good.com"),
             allowlist = listOf("d:good.com"),
         )
         val bundle = unverified(spec)
@@ -107,6 +108,7 @@ class LocalReputationLookupTest {
             ReputationResult.NotListed,
             result("x.other.good.com"),
         )
+        assertEquals("h: www. + popular domain is ignored", ReputationResult.NotListed, result("www.good.com"))
         assertEquals("h: of a specific subdomain stays valid", listed, result("cdn.good.com"))
     }
 

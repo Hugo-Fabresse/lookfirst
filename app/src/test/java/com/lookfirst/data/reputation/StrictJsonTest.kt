@@ -76,4 +76,35 @@ class StrictJsonTest {
             StrictJson.parse(text.toByteArray())
         }
     }
+
+    @Test
+    fun unicodeEscapesAreExactlyFourAsciiHexDigits() {
+        assertEquals(Json.Str("A\u00e9"), (parse("""{"k":"\u0041\u00E9"}""") as Json.Obj).fields["k"])
+        listOf(
+            """\u12""",
+            """\u12G4""",
+            """\u+123""",
+            """\u 123""",
+            """\u\u0041""",
+            """\uff1""",
+            "\\u\u0661234",
+        ).forEach {
+            assertNull("accepted: $it", parse("""{"k":"$it"}"""))
+        }
+    }
+
+    @Test
+    fun nulAndLoneSurrogatesAreRefusedButPairsAreKept() {
+        listOf(
+            """\u0000""",
+            """\ud800""",
+            """\udc00""",
+            """\ud800x""",
+            """\ud800\u0041""",
+            """\udc00\ud800""",
+        ).forEach {
+            assertNull("accepted: $it", parse("""{"k":"$it"}"""))
+        }
+        assertEquals(Json.Str("\uD83D\uDE00"), (parse("""{"k":"\ud83d\ude00"}""") as Json.Obj).fields["k"])
+    }
 }

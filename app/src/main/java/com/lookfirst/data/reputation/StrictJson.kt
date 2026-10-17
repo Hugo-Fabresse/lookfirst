@@ -12,6 +12,7 @@ private const val MAX_INTEGER_DIGITS = 15
 private const val UNICODE_ESCAPE_LENGTH = 4
 private const val HEX_RADIX = 16
 private const val FIRST_PRINTABLE = 0x20
+private const val DECIMAL_OFFSET = 10
 
 /** JSON values the bundle manifest can contain. Numbers are integers only. */
 internal sealed interface Json {
@@ -128,26 +129,54 @@ internal object StrictJson {
             return null
         }
 
-        private fun readEscape(): Char? {
+        private fun readEscape(): String? {
             if (atEnd()) return null
             return when (val e = text[pos++]) {
-                '"', '\\', '/' -> e
-                'b' -> '\b'
-                'f' -> '\u000C'
-                'n' -> '\n'
-                'r' -> '\r'
-                't' -> '\t'
+                '"', '\\', '/' -> e.toString()
+                'b' -> "\b"
+                'f' -> "\u000C"
+                'n' -> "\n"
+                'r' -> "\r"
+                't' -> "\t"
                 'u' -> readUnicodeEscape()
                 else -> null
             }
         }
 
-        private fun readUnicodeEscape(): Char? {
+        /** `\uXXXX` with exactly four ASCII hex digits. NUL and unpaired surrogates are refused. */
+        private fun readUnicodeEscape(): String? {
+            val first = readHex4() ?: return null
+            val c = first.toChar()
+            return when {
+                first == 0 -> null
+                c.isLowSurrogate() -> null
+                c.isHighSurrogate() -> {
+                    if (!text.startsWith("\\u", pos)) return null
+                    pos += 2
+                    val low = readHex4()?.toChar() ?: return null
+                    if (low.isLowSurrogate()) String(charArrayOf(c, low)) else null
+                }
+                else -> c.toString()
+            }
+        }
+
+        private fun readHex4(): Int? {
             if (pos + UNICODE_ESCAPE_LENGTH > text.length) return null
-            val digits = text.substring(pos, pos + UNICODE_ESCAPE_LENGTH)
-            if (!digits.all { Character.digit(it, HEX_RADIX) >= 0 }) return null
+            var value = 0
+            for (i in 0 until UNICODE_ESCAPE_LENGTH) {
+                val digit = hexValue(text[pos + i])
+                if (digit < 0) return null
+                value = value * HEX_RADIX + digit
+            }
             pos += UNICODE_ESCAPE_LENGTH
-            return digits.toInt(HEX_RADIX).toChar()
+            return value
+        }
+
+        private fun hexValue(c: Char): Int = when (c) {
+            in '0'..'9' -> c - '0'
+            in 'a'..'f' -> c - 'a' + DECIMAL_OFFSET
+            in 'A'..'F' -> c - 'A' + DECIMAL_OFFSET
+            else -> -1
         }
 
         private fun readInteger(): Json? {

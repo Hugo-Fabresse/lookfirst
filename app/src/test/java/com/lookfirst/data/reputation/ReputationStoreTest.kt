@@ -17,10 +17,17 @@ class ReputationStoreTest {
     private class Crash : RuntimeException()
 
     private var clock = NOW
+    private val synced = mutableListOf<String>()
     private val root get() = File(folder.root, "reputation")
 
-    private fun store(embedded: EmbeddedBundleSource? = null, crashAt: InstallStage? = null) =
-        ReputationStore(root, embedded, { clock }, onStage = { if (it == crashAt) throw Crash() })
+    private fun store(embedded: EmbeddedBundleSource? = null, crashAt: InstallStage? = null) = ReputationStore(
+        root,
+        embedded,
+        { clock },
+        directorySync = { synced += it.name },
+        acceptTestKeys = true,
+        onStage = { if (it == crashAt) throw Crash() },
+    )
 
     private fun stage(store: ReputationStore, spec: BundleSpec): File =
         BundleBuilder.build(store.newCandidateDirectory(), spec).directory
@@ -341,5 +348,24 @@ class ReputationStoreTest {
         assertNotNull(s.current())
         assertEquals(RejectReason.ROLLBACK, reasonOf(install(s, day10)))
         assertEquals(InstallResult.UpToDate, install(s, day12))
+    }
+
+    @Test
+    fun renamesAreMadeDurableByFsyncOfBundlesThenRoot() {
+        val s = store()
+        install(s, day10)
+        assertEquals(listOf("bundles", "reputation"), synced)
+    }
+
+    @Test
+    fun testKeysInANonDebugBuildTrustNothing() {
+        assertFalse("this test assumes the test keys are pinned", PinnedKeys.KEYS_ARE_PRODUCTION)
+        install(store(), day10)
+        val release = ReputationStore(root, embeddedFrom(embeddedDir(day12)), { clock }, directorySync = {})
+        assertNull("installed and embedded bundles are both ignored", release.current())
+        val candidate = BundleBuilder.build(release.newCandidateDirectory(), day12).directory
+        assertEquals(RejectReason.BAD_SIGNATURE, reasonOf(release.install(candidate)))
+        assertNull(release.current())
+        assertEquals(versionOf(day10.generatedAt), store().current()?.version?.bundle)
     }
 }

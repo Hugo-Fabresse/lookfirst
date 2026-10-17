@@ -33,9 +33,17 @@ class ReputationStore internal constructor(
     private val clock: () -> Long,
     private val pinnedRing: KeyRing = PinnedKeys.epochZeroRing(),
     private val recoveryKey: ByteArray = PinnedKeys.recoveryKeyR,
+    directorySync: DirectorySync,
+    private val acceptTestKeys: Boolean = false,
     private val onStage: (InstallStage) -> Unit = {},
 ) {
-    private val disk = BundleDisk(root)
+    private val disk = BundleDisk(root, directorySync)
+
+    /**
+     * Fail closed: while the pinned keys are the test keys (anyone can sign with them) a non-debug build trusts no
+     * bundle at all, installed, embedded or downloaded; lookups then say "lists missing".
+     */
+    private val keysTrusted = PinnedKeys.KEYS_ARE_PRODUCTION || acceptTestKeys
     private val lock = Any()
 
     @Volatile private var loaded: LoadedBundle? = null
@@ -46,11 +54,13 @@ class ReputationStore internal constructor(
 
     /** The bundle to look hosts up in, loading it on first use. Null when nothing usable is installed. */
     internal fun current(): LoadedBundle? {
+        if (!keysTrusted) return null
         loaded?.let { return it }
         return synchronized(lock) { ensureLoaded() }
     }
 
     private fun ensureLoaded(): LoadedBundle? {
+        if (!keysTrusted) return null
         if (!loadAttempted) {
             loadAttempted = true
             loaded = loadInstalledOrEmbedded()
@@ -90,7 +100,7 @@ class ReputationStore internal constructor(
     /** Verifies [candidate] and, if every check passes, installs it atomically. The candidate is consumed. */
     internal fun install(candidate: File): InstallResult = synchronized(lock) {
         val result = try {
-            installLocked(candidate)
+            if (keysTrusted) installLocked(candidate) else InstallResult.Rejected(RejectReason.BAD_SIGNATURE)
         } catch (@Suppress("SwallowedException") ignored: IOException) {
             InstallResult.Rejected(RejectReason.STORAGE)
         }
@@ -149,6 +159,7 @@ class ReputationStore internal constructor(
         val target = disk.directoryOf(manifest.version)
         target.deleteRecursively()
         if (!candidate.renameTo(target)) return InstallResult.Rejected(RejectReason.STORAGE)
+        disk.syncBundlesDirectory()
         onStage(InstallStage.DIRECTORY_RENAMED)
         disk.swapPointer(Pointer(manifest.version, manifestSha)) { onStage(InstallStage.POINTER_WRITTEN) }
         onStage(InstallStage.POINTER_SWAPPED)

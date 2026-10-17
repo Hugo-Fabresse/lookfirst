@@ -19,7 +19,9 @@
 set -euo pipefail
 
 # stdin: dexdump -d output; $1: file with the final descriptors (Lx/y;) of the app classes.
-# Prints "<app classes seen> <Log calls from app classes>".
+# Counts, in app classes: android.util.Log calls, System.out / System.err reads, printStackTrace calls
+# (none is removed by R8 unless a rule says so, all can leak scanned content to logcat).
+# Prints "<app classes seen> <calls from app classes>".
 scan() {
   awk -v names="$1" '
     BEGIN { while ((getline l < names) > 0) app[l] = 1 }
@@ -30,7 +32,7 @@ scan() {
       if (inapp) seen++
       next
     }
-    inapp && /Landroid\/util\/Log;\.[A-Za-z]+:/ { calls++; print "LOG CALL in " cur ": " $0 > "/dev/stderr" }
+    inapp && /Landroid\/util\/Log;\.[A-Za-z]+:|Ljava\/lang\/System;\.(out|err):|;\.printStackTrace:/ { calls++; print "LOG CALL in " cur ": " $0 > "/dev/stderr" }
     END { print seen + 0, calls + 0 }'
 }
 
@@ -41,13 +43,18 @@ if [ "${1:-}" = --self-test ]; then
   clean=$(printf "  Class descriptor  : 'La/b;'\n    invoke-static {v0}, Ljava/lang/String;.valueOf:(I)Ljava/lang/String;\n" | scan "$tmp/names" 2>/dev/null)
   dirty=$(printf "  Class descriptor  : 'La/b;'\n%s\n" "$log" | scan "$tmp/names" 2>/dev/null)
   other=$(printf "  Class descriptor  : 'Lc/d;'\n%s\n" "$log" | scan "$tmp/names" 2>/dev/null)
+  sysout=$(printf "  Class descriptor  : 'La/b;'\n    sget-object v0, Ljava/lang/System;.out:Ljava/io/PrintStream;\n" | scan "$tmp/names" 2>/dev/null)
+  stack=$(printf "  Class descriptor  : 'La/b;'\n    invoke-virtual {v0}, Ljava/lang/Throwable;.printStackTrace:()V\n" | scan "$tmp/names" 2>/dev/null)
+  if [ "$sysout" != "1 1" ] || [ "$stack" != "1 1" ]; then echo "self-test failed: '$sysout' '$stack'"; exit 1; fi
   if [ "$clean" != "1 0" ] || [ "$dirty" != "1 1" ] || [ "$other" != "0 0" ]; then
     echo "self-test failed: '$clean' '$dirty' '$other'"; exit 1
   fi
   echo "r8 log check self-test: ok"; exit 0
 fi
 
-apk=$(ls app/build/outputs/apk/release/*.apk | head -n1)
+apks=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null || true)
+[ -n "$apks" ] && [ "$(printf '%s\n' "$apks" | wc -l)" -eq 1 ] || { echo "expected exactly one release APK, found: ${apks:-none}"; exit 1; }
+apk=$apks
 mapping=app/build/outputs/mapping/release/mapping.txt
 config=app/build/outputs/mapping/release/configuration.txt
 [ -f "$apk" ] && [ -f "$mapping" ] && [ -f "$config" ] || { echo "release APK or R8 outputs missing"; exit 1; }
@@ -66,10 +73,12 @@ awk '/^com\.lookfirst\..* -> .*:$/ { n = $3; sub(/:$/, "", n); gsub(/\./, "/", n
 unzip -q -o "$apk" 'classes*.dex' -d "$tmp/dex"
 total_seen=0; total_calls=0
 for dex in "$tmp"/dex/classes*.dex; do
-  read -r seen calls < <("$dexdump" -d "$dex" | scan "$tmp/names")
+  "$dexdump" -d "$dex" > "$tmp/dump.txt" || { echo "dexdump failed on $dex"; exit 1; }
+  [ -s "$tmp/dump.txt" ] || { echo "dexdump output is empty for $dex"; exit 1; }
+  read -r seen calls <<< "$(scan "$tmp/names" < "$tmp/dump.txt")"
   total_seen=$((total_seen + seen)); total_calls=$((total_calls + calls))
 done
-echo "app classes in the dex: $total_seen / $(wc -l < "$tmp/names") mapped; android.util.Log calls from app classes: $total_calls"
+echo "app classes in the dex: $total_seen / $(wc -l < "$tmp/names") mapped; Log / System.out / printStackTrace calls from app classes: $total_calls"
 [ "$total_seen" -gt 0 ] || { echo "no app class found in the dex: the check would be vacuous"; exit 1; }
-[ "$total_calls" -eq 0 ] || { echo "R8 left android.util.Log calls in the app code"; exit 1; }
+[ "$total_calls" -eq 0 ] || { echo "R8 left Log / System.out / printStackTrace calls in the app code"; exit 1; }
 echo "R8 removed all android.util.Log calls from the app code"

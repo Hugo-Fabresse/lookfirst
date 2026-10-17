@@ -8,17 +8,11 @@ import com.lookfirst.domain.redirect.TRACE_TIMEOUT_MILLIS
 import com.lookfirst.domain.redirect.TraceEnd
 import com.lookfirst.domain.redirect.TraceFailure
 import com.lookfirst.domain.redirect.TraceOutcome
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
 import java.net.InetAddress
-import java.net.SocketTimeoutException
 import java.util.concurrent.Executor
-import java.util.concurrent.RejectedExecutionException
 
 private const val HTTPS_PORT = 443
-private const val MAX_CONNECT_ATTEMPTS = 3
-private const val ABANDON_GRACE_MILLIS = 250L
 private const val HTTPS = "https"
 private const val MAX_RAW_LOCATION_KEPT = 200
 
@@ -28,46 +22,31 @@ private const val MAX_RAW_LOCATION_KEPT = 200
  * Per address: the host is resolved once, EVERY returned address is checked ([AddressFilter]) and one blocked address
  * refuses the host; the connection then goes to a checked IP, so the address that was checked is the address that is
  * contacted (no rebinding window: a host is never resolved twice in one trace). Redirects are followed by hand: at most
- * [MAX_HOPS], https only, each `Location` goes through [LocationResolver]. The blocking work runs on [executor]; the
- * caller waits with a time limit and, when it gives up (timeout or cancel), the open connection is closed.
+ * [MAX_HOPS], https only, each `Location` goes through [LocationResolver]. The blocking work runs on the given executor under
+ * a time limit ([BoundedWork]); the checks and the connection are those of [CheckedConnector].
  */
 internal class SocketRedirectTracer(
-    private val resolver: HostResolver,
-    private val transport: HopTransport,
-    private val executor: Executor,
-    private val clock: MonotonicClock = MonotonicClock { System.nanoTime() / NANOS_PER_MILLI },
-    private val timeoutMillis: Long = TRACE_TIMEOUT_MILLIS,
+    resolver: HostResolver,
+    transport: HopTransport,
+    executor: Executor,
+    clock: MonotonicClock = MonotonicClock { System.nanoTime() / NANOS_PER_MILLI },
+    timeoutMillis: Long = TRACE_TIMEOUT_MILLIS,
 ) : RedirectTracer {
+    private val connector = CheckedConnector(resolver, transport)
+    private val work = BoundedWork(executor, clock, timeoutMillis)
+
     override suspend fun trace(start: CanonicalUrl): TraceOutcome {
         if (start.scheme != HTTPS) return TraceOutcome.Failed(TraceFailure.NOT_HTTPS)
-        val budget = TimeBudget(clock, timeoutMillis)
-        val abort = AbortHandle()
-        val done = CompletableDeferred<TraceOutcome>()
-        try {
-            executor.execute { done.complete(runGuarded(start, budget, abort)) }
-        } catch (ignored: RejectedExecutionException) {
-            return TraceOutcome.Failed(TraceFailure.NETWORK)
-        }
-        try {
-            // A blocked resolver cannot be interrupted: the caller is released after the budget and the worker is abandoned.
-            return withTimeoutOrNull(timeoutMillis + ABANDON_GRACE_MILLIS) { done.await() }
-                ?: TraceOutcome.Failed(TraceFailure.TIMEOUT)
-        } finally {
-            if (!done.isCompleted) abort.abort()
-        }
+        return work.run(::failed) { budget, abort -> Walk(start, budget, abort).run() }
     }
 
-    @Suppress("TooGenericExceptionCaught")
-    private fun runGuarded(start: CanonicalUrl, budget: TimeBudget, abort: AbortHandle): TraceOutcome = try {
-        Walk(start, budget, abort).run()
-    } catch (ignored: SocketTimeoutException) {
-        TraceOutcome.Failed(TraceFailure.TIMEOUT)
-    } catch (ignored: IOException) {
-        TraceOutcome.Failed(TraceFailure.NETWORK)
-    } catch (ignored: RuntimeException) {
-        // A bug or a platform quirk must end the check, never the app.
-        TraceOutcome.Failed(TraceFailure.NETWORK)
-    }
+    private fun failed(failure: WorkFailure): TraceOutcome = TraceOutcome.Failed(
+        when (failure) {
+            WorkFailure.TIMEOUT -> TraceFailure.TIMEOUT
+            WorkFailure.REJECTED -> TraceFailure.BUSY
+            WorkFailure.NETWORK -> TraceFailure.NETWORK
+        },
+    )
 
     /** One trace: its state (visited addresses, resolved hosts) lives and dies with it. */
     private inner class Walk(
@@ -120,39 +99,20 @@ internal class SocketRedirectTracer(
         private fun badLocation(raw: String) = TraceEnd.BadLocation(Untrusted(raw.take(MAX_RAW_LOCATION_KEPT)))
 
         /** The addresses of the host, all checked; null when one of them is in a blocked range. */
-        private fun checkedAddresses(url: CanonicalUrl): List<InetAddress>? {
-            val host = url.host.removePrefix("[").removeSuffix("]")
-            val addresses = resolved.getOrPut(host) {
-                budget.requireRemaining()
-                resolver.resolve(host).distinct()
-            }
-            if (addresses.isEmpty()) throw IOException("no address")
-            return if (addresses.any { AddressFilter.isBlocked(it) }) null else addresses
-        }
+        private fun checkedAddresses(url: CanonicalUrl): List<InetAddress>? =
+            connector.checkedAddresses(bareHost(url), budget, resolved)
 
         private fun request(url: CanonicalUrl, addresses: List<InetAddress>): ResponseHead {
             val head = exchange(url, addresses, rangeProbe = false)
             return if (head.rejectsHead) exchange(url, addresses, rangeProbe = true) else head
         }
 
-        /** Tries the checked addresses in order; an unreachable one falls through to the next, a timeout ends it all. */
         private fun exchange(url: CanonicalUrl, addresses: List<InetAddress>, rangeProbe: Boolean): ResponseHead {
-            val hostHeader = url.host
-            val bytes = requestBytes(url, hostHeader, rangeProbe)
-            val host = url.host.removePrefix("[").removeSuffix("]")
-            var failure: IOException? = null
-            for (address in addresses.take(MAX_CONNECT_ATTEMPTS)) {
-                budget.requireRemaining()
-                try {
-                    return transport.exchange(HopTarget(host, address, HTTPS_PORT), bytes, budget, abort)
-                } catch (timeout: SocketTimeoutException) {
-                    throw timeout
-                } catch (io: IOException) {
-                    failure = io
-                }
-            }
-            throw failure ?: IOException("no address")
+            val bytes = requestBytes(url, url.host, rangeProbe)
+            return connector.exchange(bareHost(url), addresses, bytes, budget, abort)
         }
+
+        private fun bareHost(url: CanonicalUrl) = url.host.removePrefix("[").removeSuffix("]")
     }
 
     private sealed interface Step {

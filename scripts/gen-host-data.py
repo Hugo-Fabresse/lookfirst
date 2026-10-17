@@ -2,15 +2,19 @@
 """Generates the host-normalization data files of LF-16 from the official sources, and proves where they come from (LF-20).
 
 Usage:
-  scripts/gen-host-data.py --download DIR     download every source into DIR and check its SHA-256
-  scripts/gen-host-data.py --verify           download, check, regenerate in a temp dir and compare byte for byte
-                                              with the committed files (exit code 1 on any difference)
+  scripts/gen-host-data.py --download DIR     download every source (and the IANA RDAP bootstrap) into DIR, check SHA-256
+  scripts/gen-host-data.py --verify           download the Unicode / PSL sources, check, regenerate in a temp dir and
+                                              compare byte for byte with the committed files (exit code 1 on any
+                                              difference). rdap-dns.json is checked OFFLINE: committed file against the
+                                              pinned hash and SHA256SUMS
+  scripts/gen-host-data.py --check-rdap-fresh download the IANA RDAP bootstrap and say (::warning::, exit 1) if it is
+                                              no longer the pinned one: a reminder to review it, never a build failure
   scripts/gen-host-data.py SOURCE_DIR OUT_DIR generate OUT_DIR (app/src/main/resources/lookfirst/host) from SOURCE_DIR,
                                               after checking the SHA-256 of every source file in it
 
 SOURCES below is the single list of inputs: exact versioned URL + expected SHA-256 of each file. To update Unicode or
 the PSL, change the URL, the version and the SHA-256 there, run --download, generate, review the diff (docs/adr/0006).
-Output is plain text, one record per line: "LOW HIGH VALUE..." in hexadecimal (code points), '#' lines are comments.
+Output is plain text (except rdap-dns.json, copied as is), one record per line: "LOW HIGH VALUE..." in hexadecimal (code points), '#' lines are comments.
 Each file starts with comments naming its source URL, version and SHA-256; SHA256SUMS lists the SHA-256 of the files.
 Deterministic: same input, same output. Python standard library only.
 """
@@ -51,6 +55,12 @@ SOURCES = {
     "test_psl.txt": (f"{PSL}/tests/test_psl.txt", "PSL " + PSL_VERSION,
                      "8f50ad958916d6a8f79fba2363501475571acce752757f9126fe9d2f17dd920d"),
 }
+# IANA RDAP bootstrap (RFC 9224), embedded as is (LF-27). The URL is not versioned: the SHA-256 pins the content. --verify
+# only checks the committed copy against this hash; a new IANA publication is noticed by --check-rdap-fresh (a warning)
+# and handled by hand (docs/design/reputation-sources.md, "Updating the RDAP bootstrap").
+RDAP_NAME = "rdap-dns.json"
+RDAP_URL = "https://data.iana.org/rdap/dns.json"
+RDAP_SHA256 = "e3419eb0b28dcc3a68dd3bb0e64429cb0d376c3883ca4c42317aea65fc0ab471"
 TEST_SOURCES = ("IdnaTestV2.txt", "test_psl.txt")
 ROOT = Path(__file__).resolve().parent.parent
 MAIN_OUT = ROOT / "app/src/main/resources/lookfirst/host"
@@ -63,10 +73,58 @@ def sha256_of(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def download(dest):
+def fetch(url):
+    """HTTPS only, size-bounded, no redirect to a non-https URL. Returns (data, error)."""
+    try:
+        with urllib.request.urlopen(url, timeout=120) as response:  # nosemgrep: fixed https URLs from SOURCES
+            data = response.read(MAX_BYTES + 1)
+            final_url = response.geturl()
+    except (urllib.error.URLError, TimeoutError, OSError) as error:  # HTTPError is a URLError
+        return None, f"download failed ({type(error).__name__}) {url}"
+    if not final_url.startswith("https://"):
+        return None, "redirected to a non-https URL"
+    return data, None
+
+
+def check_rdap_fresh():
+    """Warns (not a failure of the build) when the IANA RDAP bootstrap is no longer the pinned one."""
+    data, error = fetch(RDAP_URL)
+    if error:
+        print(f"::warning::RDAP bootstrap freshness not checked: {error}")
+        return [f"{RDAP_NAME}: {error}"]
+    actual = sha256_of(data)
+    if len(data) > MAX_BYTES or actual != RDAP_SHA256:
+        print(f"::warning::The IANA RDAP bootstrap changed (sha256 {actual}, pinned {RDAP_SHA256}). "
+              "Review it and update the pin: docs/design/reputation-sources.md, Updating the RDAP bootstrap.")
+        return [f"{RDAP_NAME}: no longer the pinned file"]
+    print("ok", RDAP_NAME, "still the pinned file")
+    return []
+
+
+def check_committed_rdap(path):
+    """Offline: the committed copy is the pinned file and SHA256SUMS says so."""
+    failures = []
+    if not path.exists() or sha256_of(path.read_bytes()) != RDAP_SHA256:
+        failures.append(f"{RDAP_NAME}: committed file is not the pinned one ({RDAP_SHA256})")
+    sums = (MAIN_OUT / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
+    if f"{RDAP_SHA256}  {RDAP_NAME}" not in sums:
+        failures.append(f"{RDAP_NAME}: SHA256SUMS does not list the pinned hash")
+    return failures
+
+
+def download(dest, with_rdap=False):
     """Downloads every source into dest (HTTPS only, size-bounded) and checks its SHA-256. Returns the failures."""
     dest.mkdir(parents=True, exist_ok=True)
     failures = []
+    if with_rdap:
+        data, error = fetch(RDAP_URL)
+        if error:
+            failures.append(f"{RDAP_NAME}: {error}")
+        elif len(data) > MAX_BYTES or sha256_of(data) != RDAP_SHA256:
+            failures.append(f"{RDAP_NAME}: sha256 {sha256_of(data)}, expected {RDAP_SHA256} ({RDAP_URL})")
+        else:
+            (dest / RDAP_NAME).write_bytes(data)
+            print("ok", RDAP_NAME, RDAP_SHA256)
     for name, (url, _version, expected) in SOURCES.items():
         if not url.startswith("https://"):
             failures.append(f"{name}: not an https URL")
@@ -120,7 +178,7 @@ def compare(expected_dir, actual_dir, names):
 
 
 def write_sums(out):
-    names = sorted(p.name for p in out.glob("*.txt"))
+    names = sorted(p.name for p in [*out.glob("*.txt"), *out.glob("*.json")])
     with open(out / "SHA256SUMS", "w", encoding="utf-8", newline="\n") as f:
         for name in names:
             f.write(f"{sha256_of((out / name).read_bytes())}  {name}\n")
@@ -129,12 +187,15 @@ def write_sums(out):
 def main():
     args = sys.argv[1:]
     if len(args) == 2 and args[0] == "--download":
-        failures = download(Path(args[1]))
+        failures = download(Path(args[1]), with_rdap=True)
+    elif args == ["--check-rdap-fresh"]:
+        failures = check_rdap_fresh()
     elif args == ["--verify"]:
         with tempfile.TemporaryDirectory() as tmp:
             src_dir, out_dir = Path(tmp) / "src", Path(tmp) / "out"
-            failures = download(src_dir)
+            failures = download(src_dir) + check_committed_rdap(MAIN_OUT / RDAP_NAME)
             if not failures:
+                (src_dir / RDAP_NAME).write_bytes((MAIN_OUT / RDAP_NAME).read_bytes())
                 generate(src_dir, out_dir)
                 failures = compare(out_dir, MAIN_OUT, sorted(p.name for p in out_dir.iterdir()))
                 failures += compare(src_dir, TEST_OUT, TEST_SOURCES)
@@ -144,6 +205,8 @@ def main():
                 failures += [f"{n}: in test data but not a source" for n in sorted(extra_tests)]
     elif len(args) == 2 and not args[0].startswith("-"):
         failures = check_sources(Path(args[0]))
+        if not (Path(args[0]) / RDAP_NAME).exists():
+            failures.append(f"{RDAP_NAME}: missing in {args[0]}")
         if not failures:
             generate(Path(args[0]), Path(args[1]))
     else:
@@ -277,6 +340,11 @@ def generate_files():
         for rule in sorted(private - icann):
             f.write(rule + "\n")
     print("public-suffix-list.txt", len(icann), len(private))
+
+    # RDAP bootstrap: embedded byte for byte (JSON has no comments; where it comes from is SOURCES and SHA256SUMS).
+    # The app reads it with a strict, bounded parser and keeps only https servers (data/reputation/RdapBootstrap).
+    (out / RDAP_NAME).write_bytes((src / RDAP_NAME).read_bytes())
+    print(RDAP_NAME)
 
 
 if __name__ == "__main__":

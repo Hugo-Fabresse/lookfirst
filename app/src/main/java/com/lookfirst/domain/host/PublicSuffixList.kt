@@ -20,19 +20,27 @@ internal class PublicSuffixList private constructor(
      * Number of labels of the public suffix of [labels]; the unlisted-TLD default rule `*` gives 1. A matching
      * exception rule wins and removes its leftmost label; otherwise the longest rule wins.
      */
-    fun suffixLabelCount(labels: List<String>): Int {
+    fun suffixLabelCount(labels: List<String>): Int = suffixLabelCount(labels, includePrivate = true)
+
+    /** [includePrivate] false: the rules of the private section (blogspot.com, github.io...) are ignored. */
+    private fun suffixLabelCount(labels: List<String>, includePrivate: Boolean): Int {
         var best = 1
         for (start in labels.indices) {
             val candidate = labels.subList(start, labels.size).joinToString(".")
             val count = labels.size - start
             if (candidate in exceptions) return count - 1
-            if (candidate in rules) best = maxOf(best, count)
-            if (start + 1 < labels.size && labels.subList(start + 1, labels.size).joinToString(".") in wildcards) {
+            if (candidate in rules && counts(candidate, privateRules, includePrivate)) best = maxOf(best, count)
+            val parent = if (start + 1 < labels.size) labels.subList(start + 1, labels.size).joinToString(".") else null
+            if (parent != null && parent in wildcards && counts(parent, privateWildcards, includePrivate)) {
                 best = maxOf(best, count)
             }
         }
         return best
     }
+
+    /** A rule counts when private rules are wanted, or when it is not one of them. */
+    private fun counts(rule: String, privateOnes: Set<String>, includePrivate: Boolean): Boolean =
+        includePrivate || rule !in privateOnes
 
     /**
      * The registrable domain (public suffix plus one label) of [asciiHost], or null if the host is itself a public
@@ -42,6 +50,18 @@ internal class PublicSuffixList private constructor(
         val labels = asciiHost.lowercase(Locale.ROOT).split('.')
         if (labels.any { it.isEmpty() }) return null
         val suffix = suffixLabelCount(labels)
+        return if (labels.size <= suffix) null else labels.takeLast(suffix + 1).joinToString(".")
+    }
+
+    /**
+     * The registrable domain under the ICANN section only: what a registry knows. `user.github.io` gives `github.io`,
+     * not `user.github.io` (nobody can ask the `io` registry about a name its owner registered at GitHub). Null if the
+     * host is itself a public suffix of the ICANN section or has an empty label.
+     */
+    fun icannRegistrableDomain(asciiHost: String): String? {
+        val labels = asciiHost.lowercase(Locale.ROOT).split('.')
+        if (labels.any { it.isEmpty() }) return null
+        val suffix = suffixLabelCount(labels, includePrivate = false)
         return if (labels.size <= suffix) null else labels.takeLast(suffix + 1).joinToString(".")
     }
 

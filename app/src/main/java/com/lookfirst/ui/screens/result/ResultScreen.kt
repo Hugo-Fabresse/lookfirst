@@ -95,7 +95,7 @@ fun ResultScreen(
                         state.content,
                         state.verdict,
                         state.checks,
-                        checkActions.onTrace,
+                        checkActions,
                     )
                 }
             }
@@ -108,6 +108,7 @@ fun ResultScreen(
             )
         }
         TraceSheet((state as? ResultUiState.Content)?.checks?.trace, checkActions, notifyOverlay)
+        AgeSheet((state as? ResultUiState.Content)?.checks, checkActions, notifyOverlay)
         if (state is ResultUiState.Content && state.confirmingOpen) {
             OpenAnywayDialog(
                 dangerous = state.verdict?.level == VerdictLevel.DANGEROUS,
@@ -147,7 +148,7 @@ private fun Loading() {
 }
 
 @Composable
-private fun ContentBody(content: ResultContent, verdict: Verdict?, checks: OptionalChecks?, onTrace: () -> Unit) {
+private fun ContentBody(content: ResultContent, verdict: Verdict?, checks: OptionalChecks?, actions: ChecksActions) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -179,7 +180,7 @@ private fun ContentBody(content: ResultContent, verdict: Verdict?, checks: Optio
             HiddenCharsNote(content.hiddenCharCount)
         }
         verdict?.let { ReasonList(it) }
-        if (verdict != null && checks != null) OptionalChecksSection(checks, onTrace)
+        if (verdict != null && checks != null) OptionalChecksSection(checks, actions)
         ExactContent(text = content.exact.value, containsSecret = content.containsSecret)
         verdict?.listsInfo()?.let { ListsAgeLine(it) }
     }

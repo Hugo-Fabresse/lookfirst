@@ -3,6 +3,8 @@ package com.lookfirst.ui.screens.result
 import androidx.annotation.StringRes
 import com.lookfirst.R
 import com.lookfirst.domain.model.Untrusted
+import com.lookfirst.domain.rdap.RdapOutcome
+import com.lookfirst.domain.rdap.RdapUnavailable
 import com.lookfirst.domain.verdict.Verdict
 import com.lookfirst.domain.verdict.VerdictLevel
 
@@ -84,7 +86,7 @@ data class HostDisplay(val shown: Untrusted, val technical: String?, val strongF
 enum class OpenKind { BROWSER, DIALER, SMS, MAIL, MAPS, WIFI }
 
 /** Where the redirect check stands. The warning is shown every time, never remembered. */
-enum class TraceState {
+enum class CheckState {
     IDLE,
 
     /** The warning sheet (ux.md 5.12) is open. */
@@ -96,9 +98,15 @@ enum class TraceState {
     /** No trace could be made: the section says so, the verdict is the local analysis. */
     FAILED,
 
+    /** Nothing was sent: both network workers were taken. The section says "try again in a moment". */
+    BUSY,
+
     /** The trace was made and its signals are in the verdict: the check is not offered again. */
     DONE,
 }
+
+/** What a domain-age check would send and to whom: the registrable domain (ASCII, as sent) and the registry host. */
+data class AgeTarget(val domain: String, val server: String)
 
 /**
  * The optional, network-using checks of a web link (ux.md 3.7). [httpsOnly]: the link is plain `http://`, which the
@@ -106,12 +114,19 @@ enum class TraceState {
  * (TalkBack announces it through a live region, nothing is announced otherwise).
  */
 data class OptionalChecks(
-    val trace: TraceState = TraceState.IDLE,
+    val trace: CheckState = CheckState.IDLE,
     val httpsOnly: Boolean = false,
     /** The link names a port other than 443: the tracer only contacts 443 (T-NET-2). */
     val unusualPort: Boolean = false,
     val online: Boolean = true,
     val levelChangedTo: VerdictLevel? = null,
+    /** The domain-age check (RDAP). It needs the registry named by the installed lists, not the link's scheme or port. */
+    val age: CheckState = CheckState.IDLE,
+    /** Set when a registry can be asked; null with [ageUnavailable] set (or both null before the plan is known). */
+    val ageTarget: AgeTarget? = null,
+    val ageUnavailable: RdapUnavailable? = null,
+    /** The registry's answer once [age] is DONE: [RdapOutcome.Registered] or [RdapOutcome.NotFound]. */
+    val ageOutcome: RdapOutcome? = null,
 ) {
     /** The link itself allows a trace (https, port 443). */
     val traceable: Boolean get() = !httpsOnly && !unusualPort

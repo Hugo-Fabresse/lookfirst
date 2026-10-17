@@ -38,7 +38,14 @@ sealed interface TraceEnd {
 }
 
 /** Why no trace could be made. Shown as one generic sentence; the detail never reaches the user or the logs. */
-enum class TraceFailure { NOT_HTTPS, TIMEOUT, NETWORK }
+enum class TraceFailure {
+    NOT_HTTPS,
+    TIMEOUT,
+    NETWORK,
+
+    /** Both network workers are taken (blocked DNS lookups still running): nothing was sent, try again soon. */
+    BUSY,
+}
 
 sealed interface TraceOutcome {
     data class Completed(val trace: RedirectTrace) : TraceOutcome

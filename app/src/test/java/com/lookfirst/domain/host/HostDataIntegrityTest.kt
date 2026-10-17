@@ -20,6 +20,9 @@ class HostDataIntegrityTest {
         "virama.txt",
     )
 
+    /** Copied as is from its source: no comment header possible, provenance is scripts/gen-host-data.py. */
+    private val verbatimFiles = setOf("rdap-dns.json")
+
     private fun resource(name: String): ByteArray =
         checkNotNull(javaClass.getResourceAsStream("/lookfirst/host/$name")) { name }.use { it.readBytes() }
 
@@ -33,7 +36,7 @@ class HostDataIntegrityTest {
     @Test
     fun sumsListEveryDataFileExactlyOnce() {
         val names = sums().map { it.first }
-        assertEquals(expectedFiles, names.toSet())
+        assertEquals(expectedFiles + verbatimFiles, names.toSet())
         assertEquals(names.size, names.toSet().size)
     }
 

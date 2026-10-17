@@ -64,8 +64,11 @@ fun interface HostResolver {
     fun resolve(host: String): List<InetAddress>
 }
 
-/** What the transport needs to reach a host: [address] has been checked, [host] is for SNI and the certificate. */
-internal class HopTarget(val host: String, val address: InetAddress, val port: Int)
+/**
+ * What the transport needs to reach a host: [address] has been checked, [host] is for SNI and the certificate.
+ * [maxBody] is the largest response body to read after the head (0: the body is never read).
+ */
+internal class HopTarget(val host: String, val address: InetAddress, val port: Int, val maxBody: Int = 0)
 
 /** Sends one request to a checked address and reads the response head only. Throws [IOException] on any failure. */
 internal fun interface HopTransport {

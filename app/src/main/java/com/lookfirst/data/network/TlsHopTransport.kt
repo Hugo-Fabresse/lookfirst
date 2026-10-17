@@ -23,7 +23,8 @@ internal object SystemHostResolver : HostResolver {
  * One TLS connection per request, to an IP address that was already checked. The socket is created directly (no system
  * proxy: [Proxy.NO_PROXY]), the TLS layer is the platform default (system trust anchors and the app's Network Security
  * Config), the server name sent is the host we meant to reach, and the certificate is checked for that host
- * ([CertificateHostCheck]). Only the response head is read, then everything is closed.
+ * ([CertificateHostCheck]). The response head is read, and a body only when the target asks for one (RDAP, capped);
+ * then everything is closed.
  */
 internal class TlsHopTransport(private val sslFactory: SSLSocketFactory = SSLSocketFactoryHolder.default) :
     HopTransport {
@@ -45,7 +46,9 @@ internal class TlsHopTransport(private val sslFactory: SSLSocketFactory = SSLSoc
             verify(target.host, secure)
             secure.outputStream.write(request)
             secure.outputStream.flush()
-            return HttpHead.read(secure.inputStream) { secure.soTimeout = budget.requireRemaining() }
+            return HttpHead.readResponse(secure.inputStream, target.maxBody) {
+                secure.soTimeout = budget.requireRemaining()
+            }
         } finally {
             closeQuietly(tls)
             closeQuietly(plain)

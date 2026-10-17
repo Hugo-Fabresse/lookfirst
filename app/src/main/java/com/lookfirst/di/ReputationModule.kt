@@ -3,11 +3,13 @@ package com.lookfirst.di
 import android.content.Context
 import com.lookfirst.data.reputation.AndroidDirectorySync
 import com.lookfirst.data.reputation.DefaultListUpdateControl
+import com.lookfirst.data.reputation.EmbeddedRdapPlanner
 import com.lookfirst.data.reputation.ListSources
 import com.lookfirst.data.reputation.ListStore
 import com.lookfirst.data.reputation.ListUpdateControl
 import com.lookfirst.data.reputation.LocalReputationLookup
 import com.lookfirst.domain.analysis.ReputationLookup
+import com.lookfirst.domain.rdap.RdapPlanner
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -22,6 +24,9 @@ import javax.inject.Singleton
 abstract class ReputationModule {
     @Binds
     abstract fun bindReputationLookup(impl: LocalReputationLookup): ReputationLookup
+
+    @Binds
+    abstract fun bindRdapPlanner(impl: EmbeddedRdapPlanner): RdapPlanner
 
     @Binds
     abstract fun bindListUpdateControl(impl: DefaultListUpdateControl): ListUpdateControl

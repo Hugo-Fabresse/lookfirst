@@ -51,6 +51,23 @@ Points to know:
 - The publisher sees the phone's IP address at each update. The About screen says so.
 - A list that is wrong about a domain gives a false "reported by public phishing lists". The verdict wording says "reported", with the list name.
 
+## Updating the RDAP bootstrap (LF-27)
+
+`app/src/main/resources/lookfirst/host/rdap-dns.json` is the IANA file copied as is and shipped in the APK, pinned by
+SHA-256 in `scripts/gen-host-data.py` (`RDAP_SHA256`) and listed in `SHA256SUMS`. `data-provenance` checks the committed copy
+against the pin offline (a red build means someone edited it) and, in a separate step that never fails the build, downloads
+IANA's file again: a `::warning::` annotation means IANA published a new one. Then, by hand:
+
+1. Download `https://data.iana.org/rdap/dns.json` and compare it with the committed file (`diff` of the `services`: added,
+   removed and changed TLDs and servers; the `publication` date).
+2. Check that no `https` URL points to an unexpected host (a registry operator you do not recognise, a host that is not
+   under the TLD operator's or its known back-end provider's domain). Servers that are `http://` are ignored by the app
+   and need no action; a TLD whose only server is `http://` simply has no domain-age button.
+3. Replace the file, set `RDAP_SHA256` in the script, run `python3 scripts/gen-host-data.py <SOURCE_DIR> app/src/main/resources/lookfirst/host`
+   (SOURCE_DIR from `--download`) to refresh `SHA256SUMS`, then `--verify`. Update the publication date quoted in DECISIONS.md.
+4. Ship it with the next app version (there is no other way to update it: no download, no signed bundle). The test
+   `EmbeddedRdapPlannerTest` reads the real file at build time.
+
 ## Sources consulted
 
 - CERT Polska Warning List: https://cert.pl/en/warning-list/ and https://hole.cert.pl/domains/v2/domains.txt

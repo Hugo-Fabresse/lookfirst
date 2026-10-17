@@ -12,6 +12,28 @@
         android:required="false" />
     <!-- No INTERNET yet: added by the ticket that downloads the reputation lists. -->
 
+    <!-- Package visibility (API 30+), resolution only: which browsers exist, whether an app other than a browser
+         would capture an https link (App Links; best effort, hostless filters only), and the system add-network dialog. No QUERY_ALL_PACKAGES. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="http" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.APP_BROWSER" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.WIFI_ADD_NETWORKS" />
+        </intent>
+    </queries>
+
     <application
         android:name=".LookFirstApp"
         android:allowBackup="false"

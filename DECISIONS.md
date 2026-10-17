@@ -85,5 +85,11 @@ DECISION [verdict] : sans listes de réputation (NoReputationLists), toute URL h
 DECISION [verdict] : le CAUTION systématique sans listes (NoReputationLists) est provisoire — à revoir par l'epic Listes
 DECISION [verdict-ui] : niveaux = conteneurs fixes (rouge, orange, ambre, bleu-gris) hors couleurs dynamiques, jamais vert — silhouette d'icône + libellé portent le sens, contraste AA testé clair et sombre
 DECISION [verdict-ui] : la ligne « Contrôles effectués » d'un contenu qui n'est pas un lien web cite type, caractères cachés et cohérence des champs — la version « adresse, alphabets… » serait fausse pour un Wi-Fi
-DECISION [verdict-ui] : Ouvrir est affiché mais désactivé (description d'accessibilité) tant que LF-19 n'existe pas — la pile garde sa forme finale, rien ne s'ouvre
+DECISION [verdict-ui] : Ouvrir est affiché mais désactivé (description d'accessibilité) tant que LF-19 n'existe pas — la pile garde sa forme finale, rien ne s'ouvre  (levé par LF-19)
 DECISION [verdict-ui] : lettres non ASCII de l'hôte soulignées (pas de pointillé : Compose n'en a pas dans un texte) ; l'imitation de marque a une phrase par type (le caractère exact n'est pas connu de l'UI)
+DECISION [open] : seul ActionExecutor lance un Intent, test d'architecture avec liste blanche explicite (OpenIntents, AppSettingsOpener, ScanRoute pour les launchers) — T-SCH-8
+DECISION [open] : URL canonique reconstruite depuis les champs analysés, userinfo retiré, sans schéma = https ; refus (« ne peut pas être ouvert de façon sûre ») si hôte/port inutilisable ou si Uri.parse relit un autre hôte/port
+DECISION [open] : pas de Custom Tabs (androidx.browser = nouvelle dépendance) ; navigateur par défaut via setPackage, pas de navigateur par défaut = rien ne s'ouvre
+DECISION [open] : mailto sans cc ni bcc (seul « À » est affiché, un destinataire caché serait une fuite) ; pas de createChooser (l'app par défaut de l'utilisateur reste respectée)
+DECISION [open] : Wi-Fi sans dialogue système (API < 30, WEP, mot de passe invalide) = réglages Wi-Fi ouverts mais on reste sur l'écran pour garder les identifiants visibles
+DECISION [open] : NON_BROWSER_HANDLER calculé à l'affichage du verdict (avant tout clic) ; Open désactivé tant que le niveau est inconnu

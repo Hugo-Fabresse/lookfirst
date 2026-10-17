@@ -3,6 +3,7 @@ package com.lookfirst.domain.analysis
 import com.lookfirst.domain.model.Severity
 import com.lookfirst.domain.model.SignalCode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -139,6 +140,9 @@ class UrlStructureAnalyzerTest {
         assertTrue(SignalCode.URL_MALFORMED in codes("https://?x=1"))
         assertTrue(SignalCode.URL_MALFORMED in codes("https://exa mple.com/"))
         assertTrue(SignalCode.URL_MALFORMED in codes("https://a<b.example/"))
+        assertTrue(SignalCode.URL_MALFORMED in codes("https://[1:2:3]/"))
+        assertTrue(SignalCode.URL_MALFORMED in codes("https://[1::2::3]/"))
+        assertFalse(SignalCode.URL_MALFORMED in codes("https://[2001:db8::1]/"))
     }
 
     @Test

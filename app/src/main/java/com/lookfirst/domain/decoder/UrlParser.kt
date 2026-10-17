@@ -1,5 +1,6 @@
 package com.lookfirst.domain.decoder
 
+import com.lookfirst.domain.host.Ipv6Check
 import com.lookfirst.domain.model.HostKind
 import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.Untrusted
@@ -113,7 +114,7 @@ internal object UrlParser {
     private fun isForbiddenHostChar(c: Char): Boolean = c <= ' ' || c.code == ASCII_MAX || c in FORBIDDEN_HOST_CHARS
 
     private fun classifyIpv6(host: String, issues: MutableSet<UrlIssue>): HostKind {
-        val valid = host.contains(':') && host.all { it == ':' || it == '.' || HostNumbers.isAsciiHex(it) }
+        val valid = Ipv6Check.isValid(host)
         if (!valid) issues += UrlIssue.INVALID_HOST_CHARS
         return HostKind.IPV6
     }

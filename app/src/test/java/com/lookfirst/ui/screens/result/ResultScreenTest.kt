@@ -6,6 +6,7 @@ import android.view.View
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
@@ -23,6 +24,7 @@ import com.lookfirst.ui.components.TouchGuard
 import com.lookfirst.ui.components.isPartiallyObscured
 import com.lookfirst.ui.theme.LookFirstTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,6 +40,9 @@ class ResultScreenTest {
     private var copies = 0
     private var confirms = 0
     private var dismisses = 0
+    private var opens = 0
+    private var openConfirms = 0
+    private var openDismisses = 0
     private var root: View? = null
 
     private fun text(id: Int, vararg args: Any): String = RuntimeEnvironment.getApplication().getString(id, *args)
@@ -56,17 +61,21 @@ class ResultScreenTest {
                     onCopy = { copies++ },
                     onConfirmSecretCopy = { confirms++ },
                     onDismissSecretCopy = { dismisses++ },
+                    onOpen = { opens++ },
+                    onConfirmOpen = { openConfirms++ },
+                    onDismissOpen = { openDismisses++ },
                 )
             }
         }
     }
 
-    private fun showScanned(raw: String, confirmingSecretCopy: Boolean = false) {
+    private fun showScanned(raw: String, confirmingSecretCopy: Boolean = false, confirmingOpen: Boolean = false) {
         val state = PayloadParser.parse(raw).toUiState()
         val analysed = if (state is ResultUiState.Content) {
             state.copy(
                 verdict = AnalyzeScan(NoReputationLists())(raw, "test"),
                 confirmingSecretCopy = confirmingSecretCopy,
+                confirmingOpen = confirmingOpen,
             )
         } else {
             state
@@ -88,7 +97,7 @@ class ResultScreenTest {
     }
 
     @Test
-    fun urlShowsTheVerdictBannerTheRealHostAndCancelCopyAndAnInertOpen() {
+    fun urlShowsTheVerdictBannerTheRealHostAndCancelCopyAndAnOpen() {
         showScanned("https://paypal.com@evil.example/login")
         composeRule.onNodeWithText(text(R.string.level_dangerous)).assertExists()
         composeRule.onNodeWithText(text(R.string.type_url_https)).assertExists()
@@ -99,9 +108,56 @@ class ResultScreenTest {
         composeRule.onNodeWithText("https://paypal.com@evil.example/login").assertExists()
         composeRule.onNodeWithText(text(R.string.action_cancel)).assertExists()
         composeRule.onNodeWithText(text(R.string.action_copy)).assertExists()
-        composeRule.onNodeWithContentDescription(
-            text(R.string.a11y_open_unavailable, text(R.string.action_open_anyway)),
-        ).assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(text(R.string.action_open_anyway)).assertIsEnabled()
+    }
+
+    @Test
+    fun openWaitsForTheVerdict() {
+        val state = PayloadParser.parse("https://example.com/").toUiState()
+        show(state)
+        composeRule.onNodeWithContentDescription(text(R.string.open_in_browser)).assertIsNotEnabled()
+    }
+
+    @Test
+    fun openIsAnExplicitTapAtCautionLevel() {
+        showScanned("https://example.com/")
+        assertEquals(0, opens)
+        composeRule.onNodeWithContentDescription(text(R.string.open_in_browser)).performClick()
+        assertEquals(1, opens)
+    }
+
+    @Test
+    fun openIsIgnoredWhileAnOverlayCoversTheWindow() {
+        showScanned("https://example.com/")
+        TouchGuard.track(partiallyObscured = true) {
+            composeRule.onNodeWithContentDescription(text(R.string.open_in_browser)).performClick()
+        }
+        assertEquals(0, opens)
+    }
+
+    @Test
+    fun theOpenAnywayDialogAsksWithTheHostAndConfirmsOnlyOnItsButton() {
+        showScanned("https://paypal.com@evil.example/login", confirmingOpen = true)
+        composeRule.onNodeWithText(text(R.string.dialog_open_title)).assertExists()
+        composeRule.onNodeWithText(text(R.string.dialog_open_danger_body)).assertExists()
+        assertTrue(composeRule.onAllNodesWithText("evil.example").fetchSemanticsNodes().size >= 2)
+        val dialogOpen = hasText(text(R.string.action_open_anyway)) and
+            !hasContentDescription(text(R.string.action_open_anyway))
+        TouchGuard.track(partiallyObscured = true) { composeRule.onNode(dialogOpen).performClick() }
+        assertEquals(0, openConfirms)
+        composeRule.onNode(dialogOpen).performClick()
+        assertEquals(1, openConfirms)
+        val dialogCancel = hasText(text(R.string.action_cancel)) and
+            !hasContentDescription(text(R.string.a11y_cancel_resume))
+        composeRule.onNode(dialogCancel).performClick()
+        assertEquals(1, openDismisses)
+        assertEquals(0, opens)
+    }
+
+    @Test
+    fun aSuspiciousDialogUsesTheSuspiciousWording() {
+        showScanned("https://192.0.2.1/login", confirmingOpen = true)
+        composeRule.onNodeWithText(text(R.string.dialog_open_suspicious_body)).assertExists()
     }
 
     @Test

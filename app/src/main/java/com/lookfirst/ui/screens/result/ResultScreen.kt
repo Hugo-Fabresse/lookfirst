@@ -47,8 +47,8 @@ private val MinTarget = 48.dp
 
 /**
  * Verdict of a scan (ux.md 4, 5.7 to 5.11): level banner, main reason, the host to be opened, the other reasons,
- * the exact content and the Cancel / Copy / Open stack pinned at the bottom. Back is Cancel. Open is shown but
- * stays disabled until LF-19 (nothing is ever opened from here).
+ * the exact content and the Cancel / Copy / Open stack pinned at the bottom. Back is Cancel. Open is available once
+ * the verdict is known; at SUSPICIOUS and DANGEROUS it first asks "Open anyway?" (the dialog is [OpenAnywayDialog]).
  */
 @Composable
 fun ResultScreen(
@@ -58,6 +58,9 @@ fun ResultScreen(
     onCopy: () -> Unit,
     onConfirmSecretCopy: () -> Unit,
     onDismissSecretCopy: () -> Unit,
+    onOpen: () -> Unit,
+    onConfirmOpen: () -> Unit,
+    onDismissOpen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -77,7 +80,7 @@ fun ResultScreen(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
                 ActionStack(
-                    actions = (state as? ResultUiState.Content)?.toActions(onCopy),
+                    actions = (state as? ResultUiState.Content)?.toActions(onCopy, onOpen),
                     onCancel = onCancel,
                     onBlocked = notifyOverlay,
                 )
@@ -95,6 +98,15 @@ fun ResultScreen(
             CopySecretDialog(
                 onConfirm = onConfirmSecretCopy,
                 onDismiss = onDismissSecretCopy,
+                onBlocked = notifyOverlay,
+            )
+        }
+        if (state is ResultUiState.Content && state.confirmingOpen) {
+            OpenAnywayDialog(
+                dangerous = state.verdict?.level == VerdictLevel.DANGEROUS,
+                host = state.content.host?.shown?.value,
+                onConfirm = onConfirmOpen,
+                onDismiss = onDismissOpen,
                 onBlocked = notifyOverlay,
             )
         }
@@ -198,17 +210,22 @@ private fun UnreadableContent(reason: UnreadableReason) {
 
 private class CopyAction(val copyOnly: Boolean, val onClick: () -> Unit)
 
-/** Open as shown for now: its label and whether it is the emphasised button. Never clickable before LF-19. */
-private class OpenAction(@StringRes val label: Int, val filled: Boolean)
+/** Open as shown: its label, whether it is the emphasised button, and whether the level is known (else disabled). */
+private class OpenAction(@StringRes val label: Int, val filled: Boolean, val enabled: Boolean, val onClick: () -> Unit)
 
 /** What the stack holds for one content: [cancelFilled] unless the level makes Open the main action. */
 private class Actions(val copy: CopyAction, val open: OpenAction?, val cancelFilled: Boolean)
 
-private fun ResultUiState.Content.toActions(onCopy: () -> Unit): Actions {
+private fun ResultUiState.Content.toActions(onCopy: () -> Unit, onOpen: () -> Unit): Actions {
     val level = verdict?.level
     val heavy = level == VerdictLevel.DANGEROUS || level == VerdictLevel.SUSPICIOUS
     val open = content.openKind?.let { kind ->
-        OpenAction(label = if (heavy) R.string.action_open_anyway else kind.label(), filled = !heavy && level != null)
+        OpenAction(
+            label = if (heavy) R.string.action_open_anyway else kind.label(),
+            filled = !heavy && level != null,
+            enabled = level != null && !opening,
+            onClick = onOpen,
+        )
     }
     // Cancel is the filled button when the level is heavy, while the analysis runs, and whenever there is no Open.
     return Actions(CopyAction(content.copyOnly, onCopy), open, cancelFilled = open == null || !open.filled)
@@ -231,7 +248,7 @@ private fun OpenKind.label(): Int = when (this) {
 /**
  * Pinned actions, in the fixed order Cancel, Copy, Open (ux.md 4.1); only the emphasis changes with the level.
  * [actions] is null when there is nothing trustworthy to copy. Copy is guarded: a click arriving while another
- * window covers ours is ignored and explained (T-UI-3); Cancel stays available. Open is disabled until LF-19.
+ * window covers ours is ignored and explained (T-UI-3), and so is Open; Cancel stays available.
  */
 @Composable
 private fun ActionStack(actions: Actions?, onCancel: () -> Unit, onBlocked: () -> Unit) {
@@ -261,21 +278,22 @@ private fun ActionStack(actions: Actions?, onCancel: () -> Unit, onBlocked: () -
                     .heightIn(min = MinTarget)
                     .semantics { contentDescription = copySpoken },
             ) { Text(copyLabel) }
-            actions.open?.let { OpenButton(it) }
+            actions.open?.let { OpenButton(it, onBlocked) }
         }
     }
 }
 
 @Composable
-private fun OpenButton(open: OpenAction) {
-    val spoken = stringResource(R.string.a11y_open_unavailable, stringResource(open.label))
+private fun OpenButton(open: OpenAction, onBlocked: () -> Unit) {
+    val label = stringResource(open.label)
     val modifier = Modifier
         .fillMaxWidth()
         .heightIn(min = MinTarget)
-        .semantics { contentDescription = spoken }
+        .semantics { contentDescription = label }
+    val onClick = guarded(onBlocked = onBlocked, action = open.onClick)
     if (open.filled) {
-        Button(onClick = {}, enabled = false, modifier = modifier) { Text(stringResource(open.label)) }
+        Button(onClick = onClick, enabled = open.enabled, modifier = modifier) { Text(label) }
     } else {
-        OutlinedButton(onClick = {}, enabled = false, modifier = modifier) { Text(stringResource(open.label)) }
+        OutlinedButton(onClick = onClick, enabled = open.enabled, modifier = modifier) { Text(label) }
     }
 }

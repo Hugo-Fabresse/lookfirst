@@ -85,7 +85,7 @@ DECISION [verdict] : sans listes de réputation (NoReputationLists), toute URL h
 DECISION [verdict] : le CAUTION systématique sans listes (NoReputationLists) est provisoire — à revoir par l'epic Listes
 DECISION [verdict-ui] : niveaux = conteneurs fixes (rouge, orange, ambre, bleu-gris) hors couleurs dynamiques, jamais vert — silhouette d'icône + libellé portent le sens, contraste AA testé clair et sombre
 DECISION [verdict-ui] : la ligne « Contrôles effectués » d'un contenu qui n'est pas un lien web cite type, caractères cachés et cohérence des champs — la version « adresse, alphabets… » serait fausse pour un Wi-Fi
-DECISION [verdict-ui] : Ouvrir est affiché mais désactivé (description d'accessibilité) tant que LF-19 n'existe pas — la pile garde sa forme finale, rien ne s'ouvre
+DECISION [verdict-ui] : Ouvrir est affiché mais désactivé (description d'accessibilité) tant que LF-19 n'existe pas — la pile garde sa forme finale, rien ne s'ouvre  (levé par LF-19)
 DECISION [verdict-ui] : lettres non ASCII de l'hôte soulignées (pas de pointillé : Compose n'en a pas dans un texte) ; l'imitation de marque a une phrase par type (le caractère exact n'est pas connu de l'UI)
 DECISION [lists] : clés épinglées = clés de test tant que LF-25 n'a pas généré S et R ; PinnedKeys.KEYS_ARE_PRODUCTION=false fait refuser tout bundle hors build debug (ReputationStore), suffixe de version -testkeys, et échouer la publication (tâche verifyPinnedKeysAreProduction avec -Plookfirst.publish=true ou signingConfig release) — l'APK ne peut pas faire confiance à des clés dont la privée est dans les sources de test
 DECISION [lists] : chemin de fichier du manifeste = [a-zA-Z0-9._-]{1,64} (majuscules admises) — le document de design interdisait NOTICE.txt avec sa propre règle ; sans dossier ni « .. »
@@ -93,3 +93,9 @@ DECISION [lists] : la liste blanche suit la même tolérance de variation que l'
 DECISION [lists] : fichiers requis au téléphone = index Phishing.Database, allowlist.idx, public-suffix-list.txt ; rdap-dns.json, brands.txt, NOTICE.txt sont vérifiés (taille, SHA-256) et installés s'ils sont présents, leur format et leurs seuils viennent avec les tickets qui les consomment
 DECISION [lists] : Listed l'emporte sur ListsStale (un hit reste un hit) ; NotListed devient ListsStale(âge) au-delà de 14 jours ; âge = max(horloge, plus récent generatedAt validé vu) − generatedAt du bundle
 DECISION [lists] : le bundle embarqué (assets/reputation/, aucun pour l'instant) est vérifié avec les clés de l'APK (époque 0), remplace l'installé s'il est plus récent, et ne baisse jamais le plancher enregistré
+DECISION [open] : seul ActionExecutor lance un Intent, test d'architecture avec liste blanche explicite (OpenIntents, AppSettingsOpener, ScanRoute pour les launchers) — T-SCH-8
+DECISION [open] : URL canonique reconstruite depuis les champs analysés, userinfo retiré, sans schéma = https ; refus (« ne peut pas être ouvert de façon sûre ») si hôte/port inutilisable ou si Uri.parse relit un autre hôte/port
+DECISION [open] : pas de Custom Tabs (androidx.browser = nouvelle dépendance) ; navigateur par défaut via setPackage, pas de navigateur par défaut = rien ne s'ouvre
+DECISION [open] : mailto sans cc ni bcc (seul « À » est affiché, un destinataire caché serait une fuite) ; pas de createChooser (l'app par défaut de l'utilisateur reste respectée)
+DECISION [open] : Wi-Fi sans dialogue système (API < 30, WEP, mot de passe invalide) = réglages Wi-Fi ouverts mais on reste sur l'écran pour garder les identifiants visibles
+DECISION [open] : NON_BROWSER_HANDLER calculé à l'affichage du verdict (avant tout clic) ; Open désactivé tant que le niveau est inconnu

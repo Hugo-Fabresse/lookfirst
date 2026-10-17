@@ -152,6 +152,11 @@
     </plurals>
     <string name="fewer_signals">Show fewer signals</string>
     <string name="action_open_anyway">Open anyway</string>
+    <string name="dialog_open_title">Open anyway?</string>
+    <string name="dialog_open_danger_body">LookFirst found serious danger signals. If you continue, you do so at your own risk.</string>
+    <string name="dialog_open_suspicious_body">LookFirst found risk signals. If you continue, you do so at your own risk.</string>
+    <string name="open_unsafe">LookFirst cannot guarantee that this link opens the address it analysed. Copy it if needed.</string>
+    <string name="open_no_app">No app can open this content.</string>
     <string name="open_in_browser">Open in browser</string>
     <string name="open_dialer">Open the dialer</string>
     <string name="write_sms">Write the SMS</string>
@@ -159,7 +164,6 @@
     <string name="open_in_maps">Open in Maps</string>
     <string name="add_wifi_network">Add this network</string>
     <string name="open_wifi_settings">Open Wi-Fi settings</string>
-    <string name="a11y_open_unavailable">%1$s: not available yet in this version</string>
     <string name="a11y_risk_signal_n">Risk signal %1$d of %2$d: %3$s</string>
     <string name="a11y_technical_form">Technical form: %1$s</string>
     <string name="a11y_dash">dash</string>

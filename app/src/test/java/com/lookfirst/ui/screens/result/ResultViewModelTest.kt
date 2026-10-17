@@ -3,10 +3,14 @@ package com.lookfirst.ui.screens.result
 import android.os.Looper
 import app.cash.turbine.test
 import com.lookfirst.R
+import com.lookfirst.data.platform.ActionExecutor
 import com.lookfirst.data.platform.ClipboardWriter
+import com.lookfirst.data.platform.OpenOutcome
 import com.lookfirst.data.platform.PayloadIdGenerator
 import com.lookfirst.data.platform.RegionHintProvider
+import com.lookfirst.data.platform.SystemDialogRequest
 import com.lookfirst.data.reputation.NoReputationLists
+import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
 import com.lookfirst.domain.usecase.AnalyzeScan
@@ -40,12 +44,27 @@ class ResultViewModelTest {
         override fun onWindowFocused() = Unit
     }
 
+    private class FakeActions : ActionExecutor {
+        val opened = mutableListOf<ScanPayload>()
+        var nonBrowserHandler = false
+        var outcome: OpenOutcome = OpenOutcome.Started
+
+        override fun hasNonBrowserHandler(url: ScanPayload.Url): Boolean = nonBrowserHandler
+
+        override fun open(payload: ScanPayload): OpenOutcome {
+            opened += payload
+            return outcome
+        }
+    }
+
     private val clipboard = FakeClipboard()
+    private val actions = FakeActions()
     private var region: String? = null
     private var nextId = 0
 
     private fun viewModel() = ResultViewModel(
         clipboard = clipboard,
+        actions = actions,
         analyzeScan = AnalyzeScan(NoReputationLists()),
         regionHints = RegionHintProvider { region },
         payloadIds = PayloadIdGenerator { "id-${++nextId}" },
@@ -285,6 +304,7 @@ class ResultViewModelTest {
     fun aFailingAnalysisIsCautionAndIncompleteNeverNoRisk() {
         val vm = ResultViewModel(
             clipboard = clipboard,
+            actions = actions,
             analyzeScan = AnalyzeScan(NoReputationLists()),
             regionHints = RegionHintProvider { error("boom") },
             payloadIds = PayloadIdGenerator { "id-x" },
@@ -302,6 +322,7 @@ class ResultViewModelTest {
         val queue = QueueDispatcher()
         val vm = ResultViewModel(
             clipboard = clipboard,
+            actions = actions,
             analyzeScan = AnalyzeScan(NoReputationLists()),
             regionHints = RegionHintProvider { null },
             payloadIds = PayloadIdGenerator { "id-${++nextId}" },
@@ -339,5 +360,157 @@ class ResultViewModelTest {
         text.show(Untrusted("hello"))
         assertFalse(text.content().copyOnly)
         assertEquals(R.string.type_text, text.content().typeLabel)
+    }
+
+    private fun shown(raw: String): ResultViewModel = viewModel().also { it.show(Untrusted(raw)) }
+
+    @Test
+    fun nothingIsOpenedByShowingAContent() {
+        shown("https://example.com/")
+        shown("tel:+33123456789")
+        assertTrue(actions.opened.isEmpty())
+    }
+
+    @Test
+    fun openAtCautionStartsTheActionAtOnceAndClosesTheScreen() = runBlocking {
+        val vm = shown("https://example.com/")
+        vm.events.test {
+            vm.onOpen()
+            assertEquals(ResultEvent.Opened, awaitItem())
+        }
+        assertEquals(1, actions.opened.size)
+        assertEquals("https://example.com/", (actions.opened[0] as ScanPayload.Url).raw.value)
+    }
+
+    @Test
+    fun suspiciousAndDangerousNeedTheConfirmationFirst() {
+        for (raw in listOf("https://192.0.2.1/login", "https://paypal.com@evil.example/login")) {
+            val vm = shown(raw)
+            vm.onOpen()
+            assertTrue(raw, (vm.state.value as ResultUiState.Content).confirmingOpen)
+            assertTrue(raw, actions.opened.isEmpty())
+            vm.onDismissOpen()
+            assertFalse((vm.state.value as ResultUiState.Content).confirmingOpen)
+            assertTrue(raw, actions.opened.isEmpty())
+            vm.onOpen()
+            vm.onConfirmOpen()
+            assertEquals(raw, 1, actions.opened.size)
+            actions.opened.clear()
+        }
+    }
+
+    @Test
+    fun confirmingWithoutTheDialogDoesNothing() {
+        val vm = shown("https://192.0.2.1/login")
+        vm.onConfirmOpen()
+        assertTrue(actions.opened.isEmpty())
+    }
+
+    @Test
+    fun contentWithoutOpenNeverReachesTheExecutor() {
+        for (raw in listOf(
+            "monappli://pay",
+            "javascript:alert(1)",
+            "hello",
+            "otpauth://totp/a:b?secret=JBSWY3DPEHPK3PXP",
+        )) {
+            val vm = shown(raw)
+            vm.onOpen()
+            vm.onConfirmOpen()
+            assertTrue(raw, actions.opened.isEmpty())
+        }
+    }
+
+    @Test
+    fun openWaitsForTheVerdictAndForTheEndOfAnyCopyConfirmation() {
+        val vm = viewModel()
+        vm.onOpen()
+        assertTrue(actions.opened.isEmpty())
+        vm.show(Untrusted("WIFI:T:WPA;S:Net;P:hunter22;;"))
+        vm.onCopy()
+        vm.onOpen()
+        assertTrue(actions.opened.isEmpty())
+    }
+
+    @Test
+    fun failuresAreTypedEventsAndKeepTheScreen() = runBlocking {
+        val vm = shown("https://example.com/")
+        vm.events.test {
+            actions.outcome = OpenOutcome.Unsafe
+            vm.onOpen()
+            assertEquals(ResultEvent.OpenFailed(unsafe = true), awaitItem())
+            actions.outcome = OpenOutcome.NoApp
+            vm.onOpen()
+            assertEquals(ResultEvent.OpenFailed(unsafe = false), awaitItem())
+            actions.outcome = OpenOutcome.StartedKeepScreen
+            vm.onOpen()
+            expectNoEvents()
+        }
+        assertTrue(vm.state.value is ResultUiState.Content)
+    }
+
+    @Test
+    fun aLinkCapturedByAnotherAppGetsTheReasonBeforeAnyTap() {
+        actions.nonBrowserHandler = true
+        val verdict = shown("https://example.com/").verdict()
+        assertTrue(verdict.reasons.any { it.code == SignalCode.NON_BROWSER_HANDLER })
+        assertEquals(VerdictLevel.CAUTION, verdict.level)
+        assertTrue(actions.opened.isEmpty())
+    }
+
+    @Test
+    fun noReasonWhenOnlyBrowsersHandleTheLink() {
+        val verdict = shown("https://example.com/").verdict()
+        assertFalse(verdict.reasons.any { it.code == SignalCode.NON_BROWSER_HANDLER })
+    }
+
+    @Test
+    fun onlyWebLinksAreAskedAboutHandlers() {
+        actions.nonBrowserHandler = true
+        val vm = shown("tel:+33123456789")
+        assertFalse(vm.verdict().reasons.any { it.code == SignalCode.NON_BROWSER_HANDLER })
+    }
+
+    @Test
+    fun aSecondTapOnOpenWhileOpeningDoesNothing() {
+        val vm = shown("https://example.com/")
+        vm.onOpen()
+        assertTrue((vm.state.value as ResultUiState.Content).opening)
+        vm.onOpen()
+        assertEquals(1, actions.opened.size)
+    }
+
+    @Test
+    fun theOpeningFlagIsClearedWhenNothingWasStarted() {
+        for (outcome in listOf(OpenOutcome.Unsafe, OpenOutcome.NoApp, OpenOutcome.StartedKeepScreen)) {
+            actions.outcome = outcome
+            val vm = shown("https://example.com/")
+            vm.onOpen()
+            assertFalse(outcome.toString(), (vm.state.value as ResultUiState.Content).opening)
+        }
+    }
+
+    @Test
+    fun aSystemDialogIsHandedToTheScreenAndOnlyAcceptanceClosesIt() = runBlocking {
+        val request = SystemDialogRequest(android.content.Intent("test"))
+        actions.outcome = OpenOutcome.NeedsResult(request)
+        val vm = shown("WIFI:T:WPA;S:Net;P:hunter2222;;")
+        vm.events.test {
+            vm.onOpen()
+            assertEquals(ResultEvent.LaunchSystemDialog(request), awaitItem())
+            vm.onSystemDialogResult(accepted = false)
+            expectNoEvents()
+            assertFalse((vm.state.value as ResultUiState.Content).opening)
+            vm.onOpen()
+            assertEquals(ResultEvent.LaunchSystemDialog(request), awaitItem())
+            vm.onSystemDialogResult(accepted = true)
+            assertEquals(ResultEvent.Opened, awaitItem())
+        }
+    }
+
+    @Test
+    fun anObfuscatedIpv4IsShownAsDottedDecimal() {
+        val host = shown("http://0x7f.1/").content().host
+        assertEquals("127.0.0.1", host?.shown?.value)
     }
 }

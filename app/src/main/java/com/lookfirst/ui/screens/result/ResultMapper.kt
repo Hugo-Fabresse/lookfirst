@@ -8,6 +8,7 @@ import com.lookfirst.domain.model.HostKind
 import com.lookfirst.domain.model.ParseResult
 import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.Untrusted
+import com.lookfirst.domain.open.CanonicalUrl
 
 private const val CRYPTO_GROUP_SIZE = 4
 
@@ -62,7 +63,7 @@ internal fun ScanPayload.Url.hostDisplay(): HostDisplay? {
 }
 
 internal fun ScanPayload.openKind(): OpenKind? = when (this) {
-    is ScanPayload.Url -> if (scheme == "http" || scheme == "https" || scheme.isEmpty()) OpenKind.BROWSER else null
+    is ScanPayload.Url -> if (CanonicalUrl.of(this) != null) OpenKind.BROWSER else null
     is ScanPayload.Tel -> OpenKind.DIALER
     is ScanPayload.Sms -> OpenKind.SMS
     is ScanPayload.Mail -> OpenKind.MAIL

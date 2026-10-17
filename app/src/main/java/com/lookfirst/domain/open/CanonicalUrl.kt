@@ -1,13 +1,9 @@
 package com.lookfirst.domain.open
 
-import com.lookfirst.domain.host.HostResult
-import com.lookfirst.domain.host.Ipv4Check
 import com.lookfirst.domain.model.HostKind
 import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.UrlIssue
 
-private const val HTTP_SCHEME = "http"
-private const val HTTPS_SCHEME = "https"
 private const val HEX_DIGITS = "0123456789ABCDEF"
 private const val ASCII_MAX = 0x7F
 private const val NIBBLE_BITS = 4
@@ -40,9 +36,8 @@ data class CanonicalUrl(val value: String, val scheme: String, val host: String,
          * text before `@`) is dropped: it names nobody and only helps to disguise the host.
          */
         fun of(url: ScanPayload.Url): CanonicalUrl? {
-            val scheme = url.scheme.ifEmpty { HTTPS_SCHEME }
-            val host = asciiHost(url)
-            if ((scheme != HTTP_SCHEME && scheme != HTTPS_SCHEME) || host == null) return null
+            val scheme = url.effectiveWebScheme() ?: return null
+            val host = asciiHost(url) ?: return null
             if (url.issues.any { it in BLOCKING_ISSUES }) return null
             val text = StringBuilder(scheme).append("://").append(host)
             url.port?.let { text.append(':').append(it) }
@@ -55,11 +50,7 @@ data class CanonicalUrl(val value: String, val scheme: String, val host: String,
         /** IPv6 in brackets, IPv4 (even written `0x7f.1`) as dotted decimal, a name as punycode. */
         private fun asciiHost(url: ScanPayload.Url): String? {
             if (url.hostKind == HostKind.IPV6) return "[${url.rawHost.value.lowercase()}]"
-            val host = (url.normalizedHostResult as? HostResult.Normalized)?.host ?: return null
-            return when (host.kind) {
-                HostKind.IPV4, HostKind.IPV4_OBFUSCATED -> Ipv4Check.toDotted(host.ascii)
-                else -> host.ascii
-            }
+            return url.openedHost()?.ascii
         }
 
         /** A browser reads `\` as `/` in a web path: say it once, in the canonical form. */

@@ -83,6 +83,9 @@ class ListStore internal constructor(
 
     @Volatile private var maxSeenMillis = 0L
 
+    /** Sources whose recorded time is in the future of the clock and of the publisher's `Date`; memory only. */
+    private val unknownAgeSources = HashSet<Int>()
+
     /** The indexes to look hosts up in; null when none is installed or when a load/installation holds the lock. */
     internal fun current(): LoadedLists? {
         if (loadAttempted) return loaded
@@ -104,6 +107,13 @@ class ListStore internal constructor(
         val lists = loaded ?: return null
         return ListsSummary(lists.sources.sumOf { it.index.entryCount }, ageDays(lists))
     }
+
+    /**
+     * The age the lookup judges staleness by: -1 (unknown, shown as `LISTS_STALE`) while a source's recorded time
+     * lies after both the device clock and the publisher's `Date` (recorded with a wrong clock); else [ageDays].
+     */
+    internal fun staleAgeDays(lists: LoadedLists): Int =
+        if (lists.sources.any { it.source.id in unknownAgeSources }) -1 else ageDays(lists)
 
     /** Whole days since the oldest source was last confirmed, against `max(clock, latest time ever seen)`. */
     internal fun ageDays(lists: LoadedLists): Int {
@@ -127,19 +137,18 @@ class ListStore internal constructor(
     }
 
     /**
-     * The time recorded for a successful contact: `max(clock, latest time seen)`. When the publisher's `Date` is
-     * known and the clock is more than a day ahead of it, the clock is wrong and the server's time is used instead
-     * (LF-32), with the latest time seen brought back to at most one day after it.
+     * The time recorded for a successful contact: `max(clock, latest time seen)`, never below the device clock. The
+     * publisher's `Date` is untrusted (the publisher chooses it): it may only bring a latest time seen that lies
+     * more than a day after it back down, and never below the clock (LF-32). It is never used to lift a limit.
      */
-    private fun referenceClock(serverTime: Long? = null): Long {
-        val c = clock()
-        val base = if (serverTime != null && c > serverTime + DAY_MILLIS) serverTime else c
-        return maxOf(base, cappedMaxSeen(serverTime))
-    }
+    private fun referenceClock(serverTime: Long? = null): Long = maxOf(clock(), cappedMaxSeen(serverTime))
 
-    /** A latest time seen more than a day after the server's time is a wrong clock's: brought back to the server's. */
     private fun cappedMaxSeen(serverTime: Long?): Long =
-        if (serverTime != null && maxSeenMillis > serverTime + DAY_MILLIS) serverTime else maxSeenMillis
+        if (serverTime != null && maxSeenMillis > serverTime + DAY_MILLIS) {
+            maxOf(clock(), serverTime + DAY_MILLIS)
+        } else {
+            maxSeenMillis
+        }
 
     private fun daysBetween(from: Long, to: Long): Int = ((to - from).coerceAtLeast(0L) / DAY_MILLIS).toInt()
 
@@ -208,6 +217,7 @@ class ListStore internal constructor(
             // Only the age is not refreshed: the installed index is still the right one.
         }
         maxSeenMillis = seen
+        unknownAgeSources -= source.id
         loaded = loaded?.let { lists ->
             LoadedLists(
                 lists.sources.map {
@@ -235,6 +245,7 @@ class ListStore internal constructor(
         validatorMillis: Long?,
         serverTimeMillis: Long? = null,
     ): ListInstallResult = lock.withLock {
+        noteUnknownAge(source, serverTimeMillis)
         val result = try {
             installLocked(source, parsed, validatorMillis, serverTimeMillis)
         } catch (@Suppress("SwallowedException") ignored: IOException) {
@@ -251,7 +262,7 @@ class ListStore internal constructor(
         serverTimeMillis: Long?,
     ): ListInstallResult {
         val entries = parsed.keys.size.toLong()
-        val refusal = refusalFor(source, parsed, serverTimeMillis) ?: writeIndex(source, parsed)
+        val refusal = refusalFor(source, parsed) ?: writeIndex(source, parsed)
         return if (refusal != null) {
             ListInstallResult.Rejected(refusal)
         } else {
@@ -260,14 +271,23 @@ class ListStore internal constructor(
     }
 
     /** The entry bounds, then the variation limit against the installed index. Null when both pass. */
-    private fun refusalFor(source: ListSource, parsed: ParseOutcome.Parsed, serverTime: Long?): ListFailure? {
+    private fun refusalFor(source: ListSource, parsed: ParseOutcome.Parsed): ListFailure? {
         val entries = parsed.keys.size.toLong()
         val installed = ensureLoaded()?.sources?.firstOrNull { it.source.id == source.id }
         return when {
             entries < source.minEntries -> ListFailure.TOO_FEW
             entries > source.maxEntries -> ListFailure.TOO_MANY
-            installed != null && exceedsVariation(installed, parsed.keys, serverTime) -> ListFailure.VARIATION
+            installed != null && exceedsVariation(installed, parsed.keys) -> ListFailure.VARIATION
             else -> null
+        }
+    }
+
+    /** Only ever makes the app more careful: flags a recorded time that neither the clock nor `Date` can explain. */
+    private fun noteUnknownAge(source: ListSource, serverTime: Long?) {
+        val installed = ensureLoaded()?.sources?.firstOrNull { it.source.id == source.id } ?: return
+        val recorded = installed.checkedAtMillis
+        if (serverTime != null && recorded > serverTime + DAY_MILLIS && recorded > clock() + DAY_MILLIS) {
+            unknownAgeSources += source.id
         }
     }
 
@@ -275,14 +295,12 @@ class ListStore internal constructor(
      * Set difference between the installed index and the candidate (both strictly increasing, merged in one linear
      * pass over the mapped file: no copy, no hash set). An installed index that is not strictly increasing is
      * damaged and cannot serve as a baseline: it is replaced like a first install, the entry bounds still apply.
-     * An installed index confirmed after the publisher's `Date` (clock set ahead when it was recorded) has an
-     * unknown age: the limit is lifted so the phone cannot stay stuck.
+     * The tolerance depends on the local age only (recorded time against `max(clock, latest time seen)`): the
+     * publisher's `Date` never relaxes it.
      */
-    private fun exceedsVariation(installed: LoadedSource, keys: LongArray, serverTime: Long?): Boolean {
-        val unknownAge = serverTime != null && installed.checkedAtMillis > serverTime + DAY_MILLIS
-        val age = daysBetween(installed.checkedAtMillis, referenceClock(serverTime)).toLong()
-        val tolerance = if (unknownAge) null else ListVariation.tolerancePercent(age)
-        if (tolerance == null) return false
+    private fun exceedsVariation(installed: LoadedSource, keys: LongArray): Boolean {
+        val age = daysBetween(installed.checkedAtMillis, referenceClock()).toLong()
+        val tolerance = ListVariation.tolerancePercent(age) ?: return false
         val difference = installed.index.differenceTo(keys) ?: return false
         return ListVariation.exceedsTolerance(installed.index.entryCount, difference, tolerance)
     }
@@ -324,6 +342,7 @@ class ListStore internal constructor(
                 .copy(maxSeenMillis = seen),
         )
         maxSeenMillis = seen
+        unknownAgeSources -= source.id
         val index = MappedIndex.open(indexFile(source)) ?: return ListInstallResult.Rejected(ListFailure.STORAGE)
         val others = loaded?.sources.orEmpty().filter { it.source.id != source.id }
         loaded = LoadedLists(others + LoadedSource(source, index, now))

@@ -234,13 +234,8 @@ internal class PublisherDownloader internal constructor(
         } catch (@Suppress("SwallowedException") ignored: IOException) {
             SourceOutcome.Failed(ListFailure.STORAGE, retry = true)
         }
-        return if (failure !=
-            null
-        ) {
-            Fetched.Failure(failure)
-        } else {
-            Fetched.Downloaded(response.lastModified, response.date)
-        }
+        if (failure != null) return Fetched.Failure(failure)
+        return Fetched.Downloaded(response.lastModified, response.date)
     }
 
     /** Streams [body] into [target], counting bytes: more than [maxBytes] or a stalled download ends the attempt. */

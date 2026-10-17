@@ -10,3 +10,4 @@ Le *pourquoi* des choix structurants. Un fichier par décision : `NNNN-titre-cou
 | 0004 | Optional network actions (redirections et RDAP) |
 | 0005 | Initial signed bundle embedded in the APK |
 | 0006 | Embedded UTS #46 host normalization (no ICU) |
+| 0007 | ECDSA P-256 for the reputation bundle signature |

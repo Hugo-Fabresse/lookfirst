@@ -14,7 +14,8 @@ DECISION [architecture] : D9 — app 100 % locale, sans serveur ; redirections e
 DECISION [réputation] : D10 — listes de réputation publiées sur Codeberg — hébergeur européen, il voit seulement l'IP
 DECISION [scan] : D11 — décodeur ZXing — sans Google
 DECISION [deep-links] : D12 — deep links : copie seule — sécurité
-DECISION [réputation] : D13 — bundle de listes signé Ed25519, anti-rollback — intégrité
+DECISION [réputation] : D13 — bundle de listes signé, anti-rollback — intégrité (algorithme : D19)
+DECISION [réputation] : D19 — signature du bundle en ECDSA P-256 (SHA256withECDSA natif), pas Ed25519 — Ed25519 natif seulement en API 33+, minSdk 23, pas de crypto maison ni de dépendance (ADR-0007)
 DECISION [ci] : règles semgrep du registre non figées — acceptable en mode rapport (à figer avant de rendre semgrep bloquant)
 DECISION [ci] : vérification Gradle sha256 seule, pas de PGP — beaucoup d'artefacts Google non signés
 DECISION [tests] : Robolectric hors ligne, sdk 34 seulement — un autre sdk = nouvelle coordonnée android-all + métadonnées à cache froid

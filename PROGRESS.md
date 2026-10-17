@@ -38,3 +38,4 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-36 — API 23 : confiance limitée aux autorités système pour les listes, le traceur et le RDAP (audit S-8) — tests: SystemTrustTest ; androidTest TlsHostCheckTest à lancer sur API 23
 - [✅ DONE] LF-45 — icône finale (adaptative + thématique, PNG de repli API 23-25) — branche feat/LF-45-app-icon
 - [🔄 WIP]  LF-33 — couverture de la liste annoncée (À propos, Réglages, verdict) + étude d'une seconde source (aucune retenue) — branche feat/LF-33-list-coverage
+- [🔄 WIP]  LF-46 — politique de confidentialité (écran depuis À propos, FR/EN, docs/privacy.md) — branche feat/LF-46-privacy-policy

@@ -18,7 +18,7 @@ Sources: `architecture.md` (flow, verdict model, opening content, immutability, 
 ## 2. Navigation map
 
 ```
-First launch --> Scan (camera) <--> Settings --> About & privacy
+First launch --> Scan (camera) <--> Settings --> About & privacy --> Privacy policy
                     |   ^
         pick image  |   | Cancel / Copy done / action done
                     v   |
@@ -539,8 +539,15 @@ States: updating (spinner, "Mise à jour en cours"), failed ("Échec de la mise 
 |  être malveillant. Restez vigilant.  |
 |                                      |
 |  Licences                       >    |
+|  Politique de confidentialité   >    |
 +--------------------------------------+
 ```
+
+The last row opens the privacy policy (5.15).
+
+### 5.15 Privacy policy (LF-46)
+
+Static screen opened from About, back returns to About. Text only, from `privacy.xml` (FR/EN, same text as `docs/privacy.md`); no network, no state, no action. Top bar title and each section title are semantic headings; the body wraps and scrolls at any font scale. Order: version date, intro, what the app does not do, where the analysis happens, who sees what (lists, redirect tracing, domain age), clipboard and its limit, permissions (exact list of the merged manifest), data kept on the phone, contact (neutral wording, no address: the repository is private). Never says "safe".
 
 ## 6. Network disclosure table (About screen content)
 
@@ -789,6 +796,9 @@ Error handling rule: typed errors map to these strings; `Throwable.message` is n
 | about_no_guarantee_header | Ce que LookFirst ne garantit pas | What LookFirst does not guarantee |
 | about_no_guarantee_body | Un site neuf ou non signalé peut être malveillant. Restez vigilant. | A new or unreported site can be malicious. Stay alert. |
 | about_licences | Licences | Licences |
+| privacy_link | Politique de confidentialité | Privacy policy |
+| privacy_title | Politique de confidentialité | Privacy policy |
+| privacy_* | see `privacy.xml` and `docs/privacy.md` (source of truth for the policy text) | idem |
 
 ### 7.9 Accessibility descriptions (section 8)
 

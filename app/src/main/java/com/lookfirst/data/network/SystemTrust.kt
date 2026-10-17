@@ -70,7 +70,12 @@ internal class SelectingSystemTrust(private val sdk: SdkVersion, private val loa
         if (sdk.current() >= FIRST_API_WITH_NETWORK_SECURITY_CONFIG) return null
         synchronized(lock) {
             cached?.let { return it }
-            return SystemAnchors.contextFor(loadAnchors()).socketFactory.also { cached = it }
+            val context = try {
+                SystemAnchors.contextFor(loadAnchors())
+            } catch (failure: RuntimeException) {
+                throw IOException("system trust unavailable", failure)
+            }
+            return ModernTlsSocketFactory(context.socketFactory).also { cached = it }
         }
     }
 }
@@ -80,6 +85,8 @@ private fun loadAndroidCaStore(): KeyStore {
     try {
         return KeyStore.getInstance(ANDROID_CA_STORE).also { it.load(null, null) }
     } catch (failure: GeneralSecurityException) {
+        throw IOException("system authorities unavailable", failure)
+    } catch (failure: RuntimeException) {
         throw IOException("system authorities unavailable", failure)
     }
 }

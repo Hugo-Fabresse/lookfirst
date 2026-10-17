@@ -5,8 +5,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -63,6 +62,9 @@ class VerdictScreenTest {
                     onCopy = {},
                     onConfirmSecretCopy = {},
                     onDismissSecretCopy = {},
+                    onOpen = {},
+                    onConfirmOpen = {},
+                    onDismissOpen = {},
                 )
             }
         }
@@ -82,13 +84,11 @@ class VerdictScreenTest {
     }
 
     @Test
-    fun suspiciousShowsOpenAnywayWhichIsInert() {
+    fun suspiciousShowsOpenAnywayAsASecondaryButton() {
         show(analysed("https://192.0.2.1/login"))
         composeRule.onNodeWithText(text(R.string.level_suspicious)).assertExists()
         composeRule.onNodeWithText(text(R.string.action_open_anyway)).assertExists()
-        composeRule.onNodeWithContentDescription(
-            text(R.string.a11y_open_unavailable, text(R.string.action_open_anyway)),
-        ).assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(text(R.string.action_open_anyway)).assertIsEnabled()
     }
 
     @Test
@@ -230,6 +230,9 @@ class VerdictScreenTest {
                     onCopy = {},
                     onConfirmSecretCopy = {},
                     onDismissSecretCopy = {},
+                    onOpen = {},
+                    onConfirmOpen = {},
+                    onDismissOpen = {},
                 )
             }
         }
@@ -244,9 +247,6 @@ class VerdictScreenTest {
     fun aCopyOnlyContentHasNoOpenButton() {
         show(analysed("monappli://pay?to=bob"))
         composeRule.onNodeWithText(text(R.string.copy_only)).assertExists()
-        composeRule.onAllNodes(
-            hasContentDescription(text(R.string.a11y_open_unavailable, ""), substring = true),
-        ).assertCountEquals(0)
         composeRule.onAllNodesWithText(text(R.string.open_in_browser)).assertCountEquals(0)
     }
 }

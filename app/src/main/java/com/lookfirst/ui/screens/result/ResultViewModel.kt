@@ -2,18 +2,22 @@ package com.lookfirst.ui.screens.result
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lookfirst.data.platform.ActionExecutor
 import com.lookfirst.data.platform.ClipboardWriter
+import com.lookfirst.data.platform.OpenOutcome
 import com.lookfirst.data.platform.PayloadIdGenerator
 import com.lookfirst.data.platform.RegionHintProvider
 import com.lookfirst.di.DefaultDispatcher
 import com.lookfirst.domain.analysis.AnalysisContext
 import com.lookfirst.domain.decoder.PayloadParser
 import com.lookfirst.domain.model.ParseResult
+import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.Signal
 import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
 import com.lookfirst.domain.usecase.AnalyzeScan
 import com.lookfirst.domain.verdict.Verdict
+import com.lookfirst.domain.verdict.VerdictEngine
 import com.lookfirst.domain.verdict.VerdictLevel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -32,6 +36,12 @@ import javax.inject.Inject
 sealed interface ResultEvent {
     /** The text is on the clipboard: the screen shows the "Copied" snackbar. */
     data object Copied : ResultEvent
+
+    /** An app was started from an explicit Open: the screen closes, like Cancel, and scanning resumes. */
+    data object Opened : ResultEvent
+
+    /** Nothing was started: the screen says why ([unsafe]: the content cannot be opened safely; else no app). */
+    data class OpenFailed(val unsafe: Boolean) : ResultEvent
 }
 
 /**
@@ -42,6 +52,7 @@ sealed interface ResultEvent {
 @HiltViewModel
 class ResultViewModel @Inject constructor(
     private val clipboard: ClipboardWriter,
+    private val actions: ActionExecutor,
     private val analyzeScan: AnalyzeScan,
     private val regionHints: RegionHintProvider,
     private val payloadIds: PayloadIdGenerator,
@@ -54,6 +65,7 @@ class ResultViewModel @Inject constructor(
     val events = eventChannel.receiveAsFlow()
 
     private var scanned: Untrusted? = null
+    private var payload: ScanPayload? = null
     private var copyIsSecret = false
     private var parsing: Job? = null
 
@@ -70,10 +82,11 @@ class ResultViewModel @Inject constructor(
             val (parsed, ui) = withContext(workDispatcher) {
                 PayloadParser.parse(content.value).let { it to it.toUiState(multipleCodes) }
             }
-            copyIsSecret = (parsed as? ParseResult.Ok)?.payload?.containsSecret() == true
+            payload = (parsed as? ParseResult.Ok)?.payload
+            copyIsSecret = payload?.containsSecret() == true
             mutableState.value = ui
             if (parsed is ParseResult.Ok) {
-                val verdict = withContext(workDispatcher) { analyze(content.value, payloadId) }
+                val verdict = withContext(workDispatcher) { analyze(content.value, payloadId, parsed) }
                 mutableState.update { if (it is ResultUiState.Content) it.copy(verdict = verdict) else it }
             }
         }
@@ -81,12 +94,69 @@ class ResultViewModel @Inject constructor(
 
     /** Never throws: an analysis that fails is reported as incomplete (CAUTION), not as "no risk signal". */
     @Suppress("TooGenericExceptionCaught")
-    private fun analyze(raw: String, payloadId: String): Verdict = try {
-        analyzeScan(raw, payloadId, AnalysisContext(regionHints.regionHint()))
+    private fun analyze(raw: String, payloadId: String, parsed: ParseResult): Verdict = try {
+        withHandlerCheck(analyzeScan(raw, payloadId, AnalysisContext(regionHints.regionHint())), parsed)
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (ignored: Exception) {
         Verdict(VerdictLevel.CAUTION, listOf(Signal(SignalCode.ANALYSIS_INCOMPLETE)), payloadId)
+    }
+
+    /**
+     * A link that an app other than the browser would capture (App Link) says so before the user taps Open (T-SCH-12).
+     * Open itself targets the default browser; a failed check adds nothing.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun withHandlerCheck(verdict: Verdict, parsed: ParseResult): Verdict {
+        val url = (parsed as? ParseResult.Ok)?.payload as? ScanPayload.Url ?: return verdict
+        val captured = try {
+            actions.hasNonBrowserHandler(url)
+        } catch (ignored: RuntimeException) {
+            false
+        }
+        if (!captured || verdict.reasons.any { it.code == SignalCode.NON_BROWSER_HANDLER }) return verdict
+        return VerdictEngine.combine(
+            verdict.reasons + Signal(SignalCode.NON_BROWSER_HANDLER),
+            parsed,
+            verdict.payloadId,
+        )
+    }
+
+    /**
+     * Open, only from the button: straight away, or after the "Open anyway?" dialog when the level is SUSPICIOUS or
+     * DANGEROUS (ux.md 4.6, D17). Ignored while the analysis runs (the level is not known yet) and for content that
+     * has no Open.
+     */
+    fun onOpen() {
+        val current = mutableState.value as? ResultUiState.Content ?: return
+        val level = current.verdict?.level ?: return
+        if (current.content.openKind == null || current.confirmingSecretCopy) return
+        if (level == VerdictLevel.DANGEROUS || level == VerdictLevel.SUSPICIOUS) {
+            mutableState.value = current.copy(confirmingOpen = true)
+        } else {
+            startAction()
+        }
+    }
+
+    fun onConfirmOpen() {
+        val current = mutableState.value as? ResultUiState.Content ?: return
+        if (!current.confirmingOpen) return
+        mutableState.value = current.copy(confirmingOpen = false)
+        startAction()
+    }
+
+    fun onDismissOpen() {
+        mutableState.update { if (it is ResultUiState.Content) it.copy(confirmingOpen = false) else it }
+    }
+
+    private fun startAction() {
+        val shown = payload ?: return
+        when (actions.open(shown)) {
+            OpenOutcome.Started -> eventChannel.trySend(ResultEvent.Opened)
+            OpenOutcome.StartedKeepScreen -> Unit
+            OpenOutcome.Unsafe -> eventChannel.trySend(ResultEvent.OpenFailed(unsafe = true))
+            OpenOutcome.NoApp -> eventChannel.trySend(ResultEvent.OpenFailed(unsafe = false))
+        }
     }
 
     /** Copy: straight away, or after the confirmation dialog when the text contains a secret (ux.md 4.6). */
@@ -115,6 +185,7 @@ class ResultViewModel @Inject constructor(
         parsing?.cancel()
         parsing = null
         scanned = null
+        payload = null
         copyIsSecret = false
         mutableState.value = ResultUiState.NoContent
     }

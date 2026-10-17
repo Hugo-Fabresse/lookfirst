@@ -18,12 +18,13 @@ sealed interface ResultUiState {
 
     /**
      * Decoded content. [verdict] is null for the instant the analysis runs (the screen shows "Analysing..." in the
-     * space of the banner, nothing moves when it arrives). [confirmingSecretCopy] is the dialog of ux.md 4.6.
+     * space of the banner, nothing moves when it arrives). [confirmingSecretCopy] and [confirmingOpen] are the dialogs of ux.md 4.6.
      */
     data class Content(
         val content: ResultContent,
         val verdict: Verdict? = null,
         val confirmingSecretCopy: Boolean = false,
+        val confirmingOpen: Boolean = false,
     ) : ResultUiState
 }
 
@@ -74,5 +75,5 @@ data class ResultField(@StringRes val label: Int, val value: Untrusted, val kind
  */
 data class HostDisplay(val shown: Untrusted, val technical: String?, val strongFrom: Int, val normalized: Boolean)
 
-/** The action behind the Open button (the button itself comes with LF-19). */
+/** The action behind the Open button. */
 enum class OpenKind { BROWSER, DIALER, SMS, MAIL, MAPS, WIFI }

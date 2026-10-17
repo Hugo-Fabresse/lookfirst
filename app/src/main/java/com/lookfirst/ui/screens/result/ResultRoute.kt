@@ -21,6 +21,8 @@ fun ResultRoute(viewModel: ResultViewModel, onClose: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val copied = stringResource(R.string.copied)
+    val unsafe = stringResource(R.string.open_unsafe)
+    val noApp = stringResource(R.string.open_no_app)
 
     BackHandler(onBack = onClose)
     SecureWindow(enabled = (state as? ResultUiState.Content)?.content?.containsSecret == true)
@@ -29,9 +31,10 @@ fun ResultRoute(viewModel: ResultViewModel, onClose: () -> Unit) {
         val scope = this
         viewModel.events.collect { event ->
             when (event) {
-                ResultEvent.Copied -> scope.launch {
-                    snackbarHostState.currentSnackbarData?.dismiss()
-                    snackbarHostState.showSnackbar(copied)
+                ResultEvent.Copied -> scope.launch { snackbarHostState.showReplacing(copied) }
+                ResultEvent.Opened -> onClose()
+                is ResultEvent.OpenFailed -> scope.launch {
+                    snackbarHostState.showReplacing(if (event.unsafe) unsafe else noApp)
                 }
             }
         }
@@ -44,5 +47,13 @@ fun ResultRoute(viewModel: ResultViewModel, onClose: () -> Unit) {
         onCopy = viewModel::onCopy,
         onConfirmSecretCopy = viewModel::onConfirmSecretCopy,
         onDismissSecretCopy = viewModel::onDismissSecretCopy,
+        onOpen = viewModel::onOpen,
+        onConfirmOpen = viewModel::onConfirmOpen,
+        onDismissOpen = viewModel::onDismissOpen,
     )
+}
+
+private suspend fun SnackbarHostState.showReplacing(message: String) {
+    currentSnackbarData?.dismiss()
+    showSnackbar(message)
 }

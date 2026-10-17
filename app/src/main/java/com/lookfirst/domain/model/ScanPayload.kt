@@ -35,6 +35,8 @@ sealed interface ScanPayload {
         val nonAsciiHost: Boolean,
         val issues: Set<UrlIssue>,
     ) : ScanPayload {
+        override fun toString(): String = "Url(len=${raw.value.length})"
+
         val hasUserinfo: Boolean get() = userinfo != null
 
         /** UTS #46 result for [rawHost], computed once per payload (null for an IPv6 literal). Not part of equals. */
@@ -50,11 +52,17 @@ sealed interface ScanPayload {
         val security: WifiSecurity,
         val password: Untrusted?,
         val hidden: Boolean,
-    ) : ScanPayload
+    ) : ScanPayload {
+        override fun toString(): String = "Wifi(len=${raw.value.length})"
+    }
 
-    data class Sms(override val raw: Untrusted, val number: Untrusted, val body: Untrusted?) : ScanPayload
+    data class Sms(override val raw: Untrusted, val number: Untrusted, val body: Untrusted?) : ScanPayload {
+        override fun toString(): String = "Sms(len=${raw.value.length})"
+    }
 
-    data class Tel(override val raw: Untrusted, val number: Untrusted) : ScanPayload
+    data class Tel(override val raw: Untrusted, val number: Untrusted) : ScanPayload {
+        override fun toString(): String = "Tel(len=${raw.value.length})"
+    }
 
     /** `mailto:` or `MATMSG:`. */
     data class Mail(
@@ -64,9 +72,13 @@ sealed interface ScanPayload {
         val bcc: List<Untrusted>,
         val subject: Untrusted?,
         val body: Untrusted?,
-    ) : ScanPayload
+    ) : ScanPayload {
+        override fun toString(): String = "Mail(len=${raw.value.length})"
+    }
 
-    data class Geo(override val raw: Untrusted, val lat: Double, val lon: Double, val query: Untrusted?) : ScanPayload
+    data class Geo(override val raw: Untrusted, val lat: Double, val lon: Double, val query: Untrusted?) : ScanPayload {
+        override fun toString(): String = "Geo(len=${raw.value.length})"
+    }
 
     /** `otpauth://`. [secret] is the base32 seed as written. */
     data class Otpauth(
@@ -77,7 +89,9 @@ sealed interface ScanPayload {
         val account: Untrusted,
         val secret: Untrusted,
         val params: List<QueryParam>,
-    ) : ScanPayload
+    ) : ScanPayload {
+        override fun toString(): String = "Otpauth(len=${raw.value.length})"
+    }
 
     /** EPC / SEPA credit transfer QR ("BCD" lines). */
     data class Epc(
@@ -90,7 +104,9 @@ sealed interface ScanPayload {
         val currency: String?,
         val remittance: Untrusted?,
         val issues: Set<EpcIssue>,
-    ) : ScanPayload
+    ) : ScanPayload {
+        override fun toString(): String = "Epc(len=${raw.value.length})"
+    }
 
     /**
      * `bitcoin:`, `ethereum:`, ... [suffix] is what followed the address in the path (`@1/transfer`).
@@ -110,13 +126,19 @@ sealed interface ScanPayload {
         val label: Untrusted?,
         val message: Untrusted?,
         val params: List<QueryParam>,
-    ) : ScanPayload
+    ) : ScanPayload {
+        override fun toString(): String = "Crypto(len=${raw.value.length})"
+    }
 
     /** Unknown but well-formed scheme (deep link). Copy only. */
-    data class AppLink(override val raw: Untrusted, val scheme: String) : ScanPayload
+    data class AppLink(override val raw: Untrusted, val scheme: String) : ScanPayload {
+        override fun toString(): String = "AppLink(len=${raw.value.length})"
+    }
 
     /** `javascript:`, `intent:`, `file:`, `content:`, `data:`, `vbscript:`... Copy only. */
-    data class DangerousScheme(override val raw: Untrusted, val scheme: String) : ScanPayload
+    data class DangerousScheme(override val raw: Untrusted, val scheme: String) : ScanPayload {
+        override fun toString(): String = "DangerousScheme(len=${raw.value.length})"
+    }
 
     data class Text(override val raw: Untrusted) : ScanPayload {
         /**
@@ -124,10 +146,14 @@ sealed interface ScanPayload {
          * shared by every analyzer; not part of equals (LF-42).
          */
         internal val addressLikeUrl: Url? by lazy(LazyThreadSafetyMode.NONE) { computeAddressLikeUrl() }
+
+        override fun toString(): String = "Text(len=${raw.value.length})"
     }
 
     /** Claims a known format ([declaredType]) but is malformed, ambiguous, or otherwise unusable. */
-    data class Unknown(override val raw: Untrusted, val declaredType: String?) : ScanPayload
+    data class Unknown(override val raw: Untrusted, val declaredType: String?) : ScanPayload {
+        override fun toString(): String = "Unknown(len=${raw.value.length})"
+    }
 }
 
 /**

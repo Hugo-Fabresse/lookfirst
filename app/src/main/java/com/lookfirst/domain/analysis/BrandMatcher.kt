@@ -31,6 +31,7 @@ private const val MIN_TWO_EDITS_LENGTH = 10
 private const val MIN_DISTINCTIVE_LENGTH = 6
 private const val MIN_UNHINTED_TYPO_LENGTH = 8
 private const val MAX_TWO_EDITS = 2
+private const val SENSITIVE_SHORT_LENGTH = 5
 
 private const val RANK_HOMOGLYPH = 0
 private const val RANK_EMBEDDED = 1
@@ -97,7 +98,7 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
         val sk = skeletons[nameIndex]
         val rank = when {
             sk == keyword.skeleton -> RANK_HOMOGLYPH
-            isTypo(sk, keyword) -> RANK_TYPO
+            isTypo(ascii[nameIndex], sk, keyword) -> RANK_TYPO
             isCombinedInName(name, sk, keyword) || isInSubdomain(keyword) -> RANK_COMBINED
             else -> null
         }
@@ -110,18 +111,15 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
     }
 
     /** Separator removed (`la-poste`), or a small edit: needs a hint for short names (DECISIONS: TYPO). */
-    private fun isTypo(sk: String, keyword: BrandKeyword): Boolean {
+    private fun isTypo(label: String, sk: String, keyword: BrandKeyword): Boolean {
         val keywordSk = keyword.skeleton
         if (keyword.generic) return false
         if (sk.replace("-", "") == keywordSk.replace("-", "")) return true
-        val budget = when {
-            keyword.noTypo -> 0
-            keywordSk.length >= MIN_TWO_EDITS_LENGTH -> MAX_TWO_EDITS
-            keywordSk.length >= MIN_TYPO_LENGTH -> 1
-            else -> 0
-        }
-        val needsHint = keywordSk.length < MIN_UNHINTED_TYPO_LENGTH && !keyword.alwaysTypo
-        return budget > 0 && (hint || !needsHint) && editDistance(sk, keywordSk, budget) <= budget
+        val budget = typoBudget(keyword)
+        val needsHint = keyword.text.length < MIN_UNHINTED_TYPO_LENGTH && !keyword.alwaysTypo
+        if (budget == 0 || (needsHint && !hint)) return false
+        // The cheaper of the two measures: a dropped or added `m` costs one edit in the letters, two in the skeleton.
+        return minOf(editDistance(sk, keywordSk, budget), editDistance(label, keyword.text, budget)) <= budget
     }
 
     private fun isDistinctive(keyword: BrandKeyword) = !keyword.generic && keyword.text.length >= MIN_DISTINCTIVE_LENGTH
@@ -137,6 +135,18 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
             containsPart(ascii[it], keyword.text) || containsPart(skeletons[it], keyword.skeleton)
         }
     }
+}
+
+/**
+ * Edit budget of the typo rule, sized on the letters the brand is written with ([BrandKeyword.text]); the skeleton
+ * is only used to measure the distance (`m` becomes `rn`, so `tmobile` has an 8-character skeleton).
+ */
+internal fun typoBudget(keyword: BrandKeyword): Int = when {
+    keyword.noTypo -> 0
+    keyword.text.length >= MIN_TWO_EDITS_LENGTH -> MAX_TWO_EDITS
+    keyword.text.length >= MIN_TYPO_LENGTH -> 1
+    keyword.sensitiveShort && keyword.text.length == SENSITIVE_SHORT_LENGTH -> 1
+    else -> 0
 }
 
 /** True when [part] is [label] or a hyphen-delimited piece of it (`login-paypal-fr` contains `paypal`). */

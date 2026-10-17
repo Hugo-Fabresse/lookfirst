@@ -28,5 +28,6 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [🔄 WIP]  LF-28 — listes téléchargées chez leurs éditeurs (D20, ADR-0008) : CERT Polska, index construit sur le téléphone, plus de bundle ni de clés — branche feat/LF-28-direct-list-sources
 - [✅ DONE] LF-27 — âge du domaine via RDAP sur demande : bootstrap embarqué validé, client RDAP durci (même transport que le traceur), DOMAIN_RECENT 30/90 jours, bouton + feuille d'avertissement — PR #31, relecture sécu propre après correctif
 - [✅ DONE] LF-29 — gate complet rouge : règle R8 retirant Throwable.printStackTrace() en release (WorkManager fusionné dans une classe app) — branche fix/LF-29-release-stacktrace
+- [✅ DONE] LF-43 — budget et indice TYPO sur les lettres du mot-clé et non sur son squelette ; corpus légitime +12 hôtes, 0 faux positif, fraude inchangée — branche fix/LF-43-typo-length
 - [🔄 WIP]  LF-35 — garde anti-grille de motifs de repérage sur les deux lecteurs (caméra et import), seuil 30 — branche fix/LF-35-camera-finder-guard
 - [🔄 WIP]  LF-32 — limite de variation des listes sur la différence d'ensembles + ancrage de l'horloge par l'en-tête Date — branche fix/LF-32-list-set-variation

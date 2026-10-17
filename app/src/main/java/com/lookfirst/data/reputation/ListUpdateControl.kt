@@ -36,7 +36,7 @@ interface ListUpdateControl {
     /** "Update now": one run on any connected network, after an explicit tap. */
     fun updateNow()
 
-    /** The first-launch button: remembers the choice, then applies it (scheduling only starts here). */
+    /** The first-launch button: remembers the choice, applies it (scheduling only starts here), downloads if on. */
     fun completeFirstLaunch(autoUpdate: Boolean)
 
     /** Applies the stored choice to the daily job (called at every start; the job is kept if it already exists). */
@@ -110,6 +110,8 @@ class DefaultListUpdateControl internal constructor(
         preferences.setFirstLaunchDone()
         applySchedule()
         refresh()
+        // No list ships in the APK (ADR-0008): the first download starts now, on the user's explicit choice.
+        if (autoUpdate) updateNow()
     }
 
     /** Daily job on when the first-launch screen was passed and the toggle is on; otherwise off. */

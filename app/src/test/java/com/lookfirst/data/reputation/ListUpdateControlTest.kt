@@ -65,10 +65,13 @@ class ListUpdateControlTest {
 
     @Test
     fun firstLaunchWithTheToggleOnSchedulesTheDailyJob() {
+        publish()
         control.completeFirstLaunch(autoUpdate = true)
         assertTrue(preferences.firstLaunch)
         assertTrue(preferences.auto)
         assertEquals(1, scheduler.scheduled)
+        assertEquals(UpdateOutcome.UPDATED, waitForAttempt())
+        assertEquals(1, server.requests.size)
     }
 
     @Test
@@ -76,6 +79,7 @@ class ListUpdateControlTest {
         control.completeFirstLaunch(autoUpdate = false)
         assertFalse(preferences.auto)
         assertEquals(0, scheduler.scheduled)
+        assertTrue(server.requests.isEmpty())
         assertEquals(1, scheduler.cancelled)
     }
 

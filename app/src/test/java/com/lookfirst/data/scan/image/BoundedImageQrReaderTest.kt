@@ -11,7 +11,6 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
-import com.lookfirst.data.scan.camera.ZxingBarcodeDecoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
@@ -42,7 +41,7 @@ import kotlin.random.Random
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class BoundedImageQrReaderTest {
     private val context = RuntimeEnvironment.getApplication()
-    private val reader = BoundedImageQrReader(context, ZxingBarcodeDecoder(), Dispatchers.Unconfined)
+    private val reader = BoundedImageQrReader(context, Dispatchers.Unconfined)
 
     private fun read(bytes: ByteArray, scheme: String = "content"): ImageReadResult = read(bytes.inputStream(), scheme)
 
@@ -106,14 +105,16 @@ class BoundedImageQrReaderTest {
         assertEquals(2, BoundedImageQrReader.sampleSizeFor(3200, 3200))
         assertEquals(4, BoundedImageQrReader.sampleSizeFor(8000, 6000))
         assertEquals(8, BoundedImageQrReader.sampleSizeFor(10_000, 10_000))
+        // The longest side is bounded too: 100 x 20 000 is only 2 Mpx but a very tall column.
+        assertEquals(16, BoundedImageQrReader.sampleSizeFor(100, 20_000))
     }
 
     @Test
     fun sampleSizeRoundsUpSoAnExtremeRatioStaysBounded() {
         // 1 x 100 000 000: with rounding down the width would reach 0 and the bound would never hold.
         val sample = BoundedImageQrReader.sampleSizeFor(1, 100_000_000)
-        assertEquals(32, sample)
-        assertTrue(1L * ((100_000_000 + sample - 1) / sample) <= BoundedImageQrReader.MAX_DECODE_PIXELS)
+        assertEquals(65_536, sample)
+        assertTrue(1L * ((100_000_000 + sample - 1) / sample) <= BoundedImageQrReader.MAX_DECODE_SIDE)
     }
 
     @Test
@@ -131,6 +132,22 @@ class BoundedImageQrReaderTest {
         println("finder pattern grid refused in $millis ms")
         assertEquals(ImageFailure.UNREADABLE, failure(result))
         assertTrue("took $millis ms", millis < 2_000)
+    }
+
+    @Test
+    fun twelveQrCodesAreNotRefusedAndTheFirstIsReturned() {
+        val result = read(png(qrPage(codes = 12, columns = 4)))
+        assertEquals(ImageReadResult.Found("https://example.com/code/0", multiple = true), result)
+    }
+
+    @Test
+    fun aVeryTallStripedImageIsRefusedOrReducedFast() {
+        val started = System.nanoTime()
+        val result = read(png(tallStripes(width = 100, height = 40_000)))
+        val millis = (System.nanoTime() - started) / 1_000_000
+        println("LF-35 tall striped image 100x40000 read in $millis ms")
+        assertTrue(result is ImageReadResult.Failed)
+        assertTrue("took $millis ms", millis < 5_000)
     }
 
     @Test
@@ -243,6 +260,40 @@ class BoundedImageQrReaderTest {
             for (x in 0 until matrix.width) row[x] = if (matrix.get(x, y)) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
             bitmap.setPixels(row, 0, matrix.width, offsetX, y, matrix.width, 1)
         }
+        return bitmap
+    }
+
+    private fun qrPage(codes: Int, columns: Int): Bitmap {
+        val size = 400
+        val rows = (codes + columns - 1) / columns
+        val bitmap = Bitmap.createBitmap(size * columns, size * rows, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(0xFFFFFFFF.toInt())
+        }
+        for (index in 0 until codes) {
+            val code = matrix("https://example.com/code/$index", size)
+            val row = IntArray(size)
+            for (y in 0 until size) {
+                for (x in 0 until size) row[x] = if (code.get(x, y)) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+                bitmap.setPixels(row, 0, size, (index % columns) * size, (index / columns) * size + y, size, 1)
+            }
+        }
+        return bitmap
+    }
+
+    /** Vertical stripes 1:1:3:1:1 (2 px modules): every row looks like a finder pattern, no column does. */
+    private fun tallStripes(width: Int, height: Int): Bitmap {
+        val runs = intArrayOf(1, 1, 3, 1, 1, 4)
+        val row = IntArray(width) { 0xFFFFFFFF.toInt() }
+        var x = 0
+        var index = 0
+        while (x < width) {
+            val run = runs[index % runs.size] * 2
+            if (index % 2 == 0) for (i in 0 until run) if (x + i < width) row[x + i] = 0xFF000000.toInt()
+            x += run
+            index++
+        }
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        for (y in 0 until height) bitmap.setPixels(row, 0, width, 0, y, width, 1)
         return bitmap
     }
 

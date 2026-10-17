@@ -6,6 +6,7 @@ import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.ReaderException
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
+import com.lookfirst.data.scan.FinderGridGuard
 import com.lookfirst.domain.scan.BarcodeDecoder
 import com.lookfirst.domain.scan.LuminanceFrame
 import javax.inject.Inject
@@ -16,7 +17,10 @@ import javax.inject.Inject
  * A reader is created per call: this class holds no state and is safe to call from any thread.
  */
 class ZxingBarcodeDecoder @Inject constructor() : BarcodeDecoder {
-    override fun decode(frame: LuminanceFrame): String? {
+    override fun decode(frame: LuminanceFrame): String? = decode(frame, ::readQr)
+
+    /** [read] is only called on a frame the guard let through; a test injects a spy. */
+    internal fun decode(frame: LuminanceFrame, read: (BinaryBitmap) -> String?): String? {
         if (frame.width.toLong() * frame.height > MAX_PIXELS) return null
         val source = PlanarYUVLuminanceSource(
             frame.luminance,
@@ -29,7 +33,13 @@ class ZxingBarcodeDecoder @Inject constructor() : BarcodeDecoder {
             false,
         )
         return try {
-            QRCodeReader().decode(BinaryBitmap(HybridBinarizer(source)), HINTS).text?.takeIf { it.isNotEmpty() }
+            val bitmap = BinaryBitmap(HybridBinarizer(source))
+            // A grid of finder patterns freezes the reader (LF-35): such a frame is ignored before ZXing reads it.
+            if (FinderGridGuard.assess(bitmap.blackMatrix) == FinderGridGuard.Load.REFUSED) {
+                null
+            } else {
+                read(bitmap)
+            }
         } catch (ignored: ReaderException) {
             null
         } catch (ignored: RuntimeException) {
@@ -37,6 +47,9 @@ class ZxingBarcodeDecoder @Inject constructor() : BarcodeDecoder {
             null
         }
     }
+
+    private fun readQr(bitmap: BinaryBitmap): String? =
+        QRCodeReader().decode(bitmap, HINTS).text?.takeIf { it.isNotEmpty() }
 
     private companion object {
         const val MAX_PIXELS = 12_000_000L

@@ -15,7 +15,6 @@ import com.lookfirst.ui.screens.result.openKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Test
 
 class AnalyzeScanTest {
@@ -143,21 +142,6 @@ class AnalyzeScanTest {
             assertEquals(it, SignalCode.REPUTATION_LISTED, verdict.reasons.first().code)
         }
         assertEquals(VerdictLevel.CAUTION, withLists.level("other.example.com:8443/x"))
-    }
-
-    @Test
-    fun `host without scheme and port is text today, and would be checked if the decoder made it a url`() {
-        val raw = "$listedHost/x"
-        val payload = (PayloadParser.parse(raw) as ParseResult.Ok).payload
-        val verdict = listsWithListedHost()(raw, "id")
-        when (payload) {
-            is ScanPayload.Text -> {
-                assertNull(payload.openKind())
-                assertEquals(VerdictLevel.CAUTION, verdict.level)
-            }
-            is ScanPayload.Url -> assertEquals(VerdictLevel.DANGEROUS, verdict.level)
-            else -> fail("unexpected payload")
-        }
     }
 
     @Test

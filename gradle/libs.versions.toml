@@ -11,6 +11,8 @@ composeBom = "2025.09.01"
 
 junit = "4.13.2"
 robolectric = "4.15.1"
+# android-all jar Robolectric 4.15.1 loads for sdk 34 (DefaultSdkProvider): bump it WITH robolectric, never alone.
+robolectricAndroidAll = "14-robolectric-10818077-i7"
 
 ktlintPlugin = "14.2.0"
 detekt = "1.23.8"
@@ -36,6 +38,7 @@ hilt-android-compiler = { module = "com.google.dagger:hilt-android-compiler", ve
 
 junit = { module = "junit:junit", version.ref = "junit" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+robolectric-android-all = { module = "org.robolectric:android-all-instrumented", version.ref = "robolectricAndroidAll" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

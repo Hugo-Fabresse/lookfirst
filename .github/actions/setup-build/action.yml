@@ -1,5 +1,5 @@
 name: Set up build
-description: JDK 17 + Android SDK + Gradle (GitHub cache) + Robolectric android-all cache on a GitHub-hosted runner
+description: JDK 17 + Android SDK + Gradle (GitHub cache) on a GitHub-hosted runner
 runs:
   using: composite
   steps:
@@ -18,12 +18,3 @@ runs:
     # writes it; PRs read it (the action default), so a PR cannot poison the cache of main.
     - name: Set up Gradle
       uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
-
-    # Robolectric downloads android-all-<sdk> (sdk 34, app/src/test/resources/robolectric.properties) from
-    # Maven Central into ~/.m2 on first use. Keyed on the version catalog (Robolectric version) and the
-    # sdk setting, so a bump of either refreshes it.
-    - name: Cache Robolectric android-all
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-      with:
-        path: ~/.m2/repository/org/robolectric
-        key: robolectric-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'app/src/test/resources/robolectric.properties') }}

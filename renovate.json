@@ -52,6 +52,22 @@
   ],
   "packageRules": [
     {
+      "description": "Robolectric bump: android-all must follow",
+      "matchPackageNames": [
+        "org.robolectric:robolectric"
+      ],
+      "prBodyNotes": [
+        "Update `robolectricAndroidAll` in gradle/libs.versions.toml to the android-all-instrumented version this Robolectric uses for sdk 34, then regenerate gradle/verification-metadata.xml with a cold cache (CLAUDE.md, Gradle). A red PR is expected otherwise."
+      ]
+    },
+    {
+      "description": "android-all-instrumented is the jar Robolectric itself picks for its sdk: bumped by hand with robolectric (see libs.versions.toml), never alone",
+      "matchPackageNames": [
+        "org.robolectric:android-all-instrumented"
+      ],
+      "enabled": false
+    },
+    {
       "description": "GitHub Actions: one PR per action, never grouped with libraries (each pin is reviewed on its own)",
       "matchManagers": [
         "github-actions"

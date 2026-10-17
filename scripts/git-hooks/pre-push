@@ -19,6 +19,11 @@ if [ -n "$remote_ref_base" ] && ! git diff --name-only "$remote_ref_base"...HEAD
     exit 0
 fi
 
+if [ -z "${ANDROID_HOME:-}" ] && [ -z "${ANDROID_SDK_ROOT:-}" ] && ! grep -qs '^sdk\.dir=' local.properties; then
+    echo "! no Android SDK (local.properties sdk.dir, ANDROID_HOME, ANDROID_SDK_ROOT): Gradle checks skipped, CI decides"
+    exit 0
+fi
+
 echo "› compile + ktlint + detekt…"
 flock /tmp/memlearn-gradle-test.lock ./gradlew --quiet compileDebugUnitTestKotlin ktlintCheck detekt --max-workers=4 || {
     echo

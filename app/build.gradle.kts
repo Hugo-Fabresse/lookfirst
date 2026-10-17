@@ -53,6 +53,21 @@ configurations.matching { it.name == "releaseRuntimeClasspath" }.configureEach {
     resolutionStrategy.activateDependencyLocking()
 }
 
+/**
+ * Robolectric's android-all jar (sdk 34, see src/test/resources/robolectric.properties), resolved by Gradle so
+ * that gradle/verification-metadata.xml checks it. Robolectric then runs offline (robolectric.offline) and reads
+ * it from a plain directory (robolectric.dependency.dir) instead of downloading it into ~/.m2 on its own.
+ */
+val robolectricAndroidAll by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+val prepareRobolectricAndroidAll by tasks.registering(Sync::class) {
+    from(robolectricAndroidAll)
+    into(layout.buildDirectory.dir("robolectric-android-all"))
+}
+
 android {
     namespace = "com.lookfirst"
     compileSdk = 36
@@ -91,6 +106,15 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true // Robolectric needs the merged resources
+            all {
+                it.dependsOn(prepareRobolectricAndroidAll)
+                it.inputs.files(prepareRobolectricAndroidAll)
+                    .withPropertyName("robolectricAndroidAll")
+                    .withPathSensitivity(PathSensitivity.RELATIVE)
+                // Relative to the test working directory (the app module): no absolute path.
+                it.systemProperty("robolectric.offline", "true")
+                it.systemProperty("robolectric.dependency.dir", "build/robolectric-android-all")
+            }
         }
     }
 
@@ -121,6 +145,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(composeBom)
     testImplementation(libs.robolectric)
+    robolectricAndroidAll(libs.robolectric.android.all)
     testImplementation(libs.androidx.compose.ui.test.junit4)
 
     debugImplementation(libs.androidx.compose.ui.tooling)

@@ -28,3 +28,4 @@ The size of the chosen option is measured on the release APK by the full gate (`
 - About 7,500 mapping ranges, 3,300 confusables and 10,000 PSL rules are parsed on first use (a few tens of milliseconds, once); the analysis must run off the main thread (already required by T-CNT-9).
 - The confusables table keeps only sources that IDNA allows, so it stays small; it is a skeleton for comparing with brand names, never a proof on its own (T-CNT-6).
 - The brand list is a local, hand-maintained list of about 270 entries (`BrandList`); it is refreshed with the reputation bundle later.
+- Displaying the normalized form (Unicode and punycode) to the user is done by the verdict screen (LF-18); the Result screen (LF-11) does not show it yet and only warns about non-Latin characters.

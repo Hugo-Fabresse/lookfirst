@@ -14,4 +14,4 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-15 — signaux de risque par type de contenu (analyseurs purs, fusionné, PR #16) — tests: 58 ajoutés
 - [✅ DONE] LF-9 — scan caméra (CameraX + ZXing, permission, écran Scan) — fusionné, PR #15
 - [🔄 WIP] LF-11 — écran Résultat : contenu exact + Copier / Annuler, navigation Scan → Résultat
-- [🔄 WIP] LF-16 — normalisation des hôtes (UTS #46 embarqué, PSL), homographes, imitations de marques — PR ouverte (#18), CI à confirmer
+- [✅ DONE] LF-16 — normalisation des hôtes (UTS #46 embarqué, PSL), homographes, imitations de marques — PR #18 — tests: 252 de domaine

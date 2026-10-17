@@ -6,8 +6,6 @@ import com.lookfirst.domain.model.HostKind
 import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.UrlIssue
 
-private const val HTTP_SCHEME = "http"
-private const val HTTPS_SCHEME = "https"
 private const val HEX_DIGITS = "0123456789ABCDEF"
 private const val ASCII_MAX = 0x7F
 private const val NIBBLE_BITS = 4
@@ -40,9 +38,8 @@ data class CanonicalUrl(val value: String, val scheme: String, val host: String,
          * text before `@`) is dropped: it names nobody and only helps to disguise the host.
          */
         fun of(url: ScanPayload.Url): CanonicalUrl? {
-            val scheme = url.scheme.ifEmpty { HTTPS_SCHEME }
-            val host = asciiHost(url)
-            if ((scheme != HTTP_SCHEME && scheme != HTTPS_SCHEME) || host == null) return null
+            val scheme = url.effectiveWebScheme() ?: return null
+            val host = asciiHost(url) ?: return null
             if (url.issues.any { it in BLOCKING_ISSUES }) return null
             val text = StringBuilder(scheme).append("://").append(host)
             url.port?.let { text.append(':').append(it) }

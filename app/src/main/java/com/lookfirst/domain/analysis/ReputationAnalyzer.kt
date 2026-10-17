@@ -7,15 +7,19 @@ import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.Signal
 import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
+import com.lookfirst.domain.open.effectiveWebScheme
 
 /** Lists older than this are a CAUTION reason (D16). */
 const val LISTS_STALE_AFTER_DAYS = 14
 
-/** Reputation signals for http(s) URLs with a normalized host. Other content has no host to look up. */
+/**
+ * Reputation signals for every URL that Open sends to a browser (a scheme-less one is opened as https), looked up on
+ * the host that is opened. Other content has no host to look up.
+ */
 class ReputationAnalyzer(private val lookup: ReputationLookup) : SignalAnalyzer {
     override fun analyze(result: ParseResult.Ok, context: AnalysisContext): List<Signal> {
         val payload = result.payload as? ScanPayload.Url ?: return emptyList()
-        if (payload.scheme != "http" && payload.scheme != "https") return emptyList()
+        if (payload.effectiveWebScheme() == null) return emptyList()
         val host = (payload.normalizedHost() as? HostResult.Normalized)?.host ?: return emptyList()
         return signalsFor(safeLookup(host))
     }

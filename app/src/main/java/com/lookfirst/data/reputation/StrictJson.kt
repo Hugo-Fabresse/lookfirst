@@ -5,9 +5,6 @@ import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 
-private const val MAX_DEPTH = 6
-private const val MAX_NODES = 2_000
-private const val MAX_STRING_LENGTH = 1_024
 private const val MAX_INTEGER_DIGITS = 15
 private const val UNICODE_ESCAPE_LENGTH = 4
 private const val HEX_RADIX = 16
@@ -30,14 +27,37 @@ internal sealed interface Json {
 }
 
 /**
- * Strict, bounded JSON reader for the manifest (only ever called after the signature is verified). Rejects, by
- * returning null: invalid UTF-8, duplicate keys, floats, leading zeros, control characters in strings, trailing
- * bytes, depth above [MAX_DEPTH], more than [MAX_NODES] values. Linear, no regex, no reflection.
+ * Bounds of one parse. [allowFractions]: a number with a fraction or an exponent is read as its integer part (a
+ * server's answer may carry one in a field nobody reads); otherwise it is refused.
+ */
+internal data class JsonLimits(
+    val maxDepth: Int,
+    val maxNodes: Int,
+    val maxStringLength: Int,
+    val allowFractions: Boolean = false,
+) {
+    companion object {
+        /** The signed manifest. */
+        val MANIFEST = JsonLimits(maxDepth = 6, maxNodes = 2_000, maxStringLength = 1_024)
+
+        /** The RDAP bootstrap file of the bundle (a few thousand values, shape checked after). */
+        val BOOTSTRAP = JsonLimits(maxDepth = 6, maxNodes = 20_000, maxStringLength = 1_024)
+
+        /** A registry's answer (at most 256 KiB, untrusted): nested vCards, long notices. */
+        val RDAP = JsonLimits(maxDepth = 24, maxNodes = 20_000, maxStringLength = 16 * 1_024, allowFractions = true)
+    }
+}
+
+/**
+ * Strict, bounded JSON reader (the manifest only after its signature is verified; the bootstrap and RDAP answers
+ * under their own [JsonLimits]). Rejects, by returning null: invalid UTF-8, duplicate keys, floats (unless the limits
+ * allow them), leading zeros, control characters in strings, trailing bytes, depth or value count above the limits.
+ * Linear, no regex, no reflection.
  */
 internal object StrictJson {
-    fun parse(bytes: ByteArray): Json? {
+    fun parse(bytes: ByteArray, limits: JsonLimits = JsonLimits.MANIFEST): Json? {
         val text = decodeUtf8(bytes) ?: return null
-        val reader = Reader(text)
+        val reader = Reader(text, limits)
         reader.skipWhitespace()
         val value = reader.readValue(0) ?: return null
         reader.skipWhitespace()
@@ -54,7 +74,7 @@ internal object StrictJson {
         null
     }
 
-    private class Reader(private val text: String) {
+    private class Reader(private val text: String, private val limits: JsonLimits) {
         private var pos = 0
         private var nodes = 0
 
@@ -65,7 +85,7 @@ internal object StrictJson {
         }
 
         fun readValue(depth: Int): Json? {
-            if (depth > MAX_DEPTH || ++nodes > MAX_NODES || atEnd()) return null
+            if (depth > limits.maxDepth || ++nodes > limits.maxNodes || atEnd()) return null
             return when (text[pos]) {
                 '{' -> readObject(depth)
                 '[' -> readArray(depth)
@@ -121,7 +141,7 @@ internal object StrictJson {
                 val c = text[pos++]
                 when {
                     c == '"' -> return out.toString()
-                    c.code < FIRST_PRINTABLE || out.length >= MAX_STRING_LENGTH -> return null
+                    c.code < FIRST_PRINTABLE || out.length >= limits.maxStringLength -> return null
                     c == '\\' -> out.append(readEscape() ?: return null)
                     else -> out.append(c)
                 }
@@ -187,8 +207,32 @@ internal object StrictJson {
             val digits = pos - digitsStart
             val leadingZero = digits > 1 && text[digitsStart] == '0'
             if (digits == 0 || digits > MAX_INTEGER_DIGITS || leadingZero) return null
-            if (pos < text.length && text[pos] in ".eE") return null
-            return Json.Num(text.substring(start, pos).toLong())
+            val integerEnd = pos
+            if (!fractionAccepted()) return null
+            return Json.Num(text.substring(start, integerEnd).toLong())
+        }
+
+        /** True when no fraction or exponent follows, or one follows and the limits allow it and it is well formed. */
+        private fun fractionAccepted(): Boolean {
+            val follows = pos < text.length && text[pos] in ".eE"
+            return !follows || (limits.allowFractions && skipFraction())
+        }
+
+        /** `.digits`, then `e|E [+|-] digits`, at least one digit each. False if malformed. */
+        private fun skipFraction(): Boolean {
+            if (consume('.') && !skipDigits()) return false
+            if (peek() == 'e' || peek() == 'E') {
+                pos++
+                if (peek() == '+' || peek() == '-') pos++
+                if (!skipDigits()) return false
+            }
+            return true
+        }
+
+        private fun skipDigits(): Boolean {
+            val from = pos
+            while (pos < text.length && text[pos] in '0'..'9') pos++
+            return pos > from
         }
 
         private fun peek(): Char? = if (pos < text.length) text[pos] else null

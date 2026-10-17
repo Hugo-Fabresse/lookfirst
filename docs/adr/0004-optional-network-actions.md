@@ -12,3 +12,6 @@ Both are separate buttons on the verdict screen, off by default, with a warning 
 - The attacker may learn the QR was scanned when the user opts in; the warning states it.
 - Extra code surface (SSRF-style protections) to test.
 - Users who never press the buttons never make a request about their scans.
+
+## Update (LF-26)
+The redirect tracer does not use OkHttp: it resolves and checks the addresses itself and speaks a hand-written HTTP/1.1 `HEAD` over a TLS socket to a checked IP (no new dependency, the connected IP is the checked IP by construction). The limits and blocked ranges above are unchanged. RDAP (LF-27) may use the same building blocks.

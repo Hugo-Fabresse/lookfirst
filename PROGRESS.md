@@ -23,3 +23,4 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-22 — format du bundle de listes conçu (manifeste signé ECDSA P-256, index de hachages triés) — PR #26, docs/design/reputation-bundle.md, ADR-0007
 - [✅ DONE] LF-23 — listes de réputation locales : vérification ECDSA, installation atomique (fsync des dossiers), consultation, garde-fous des clés de test — PR #28 — tests: 110 ajoutés ; reste : keyset en usage réel, RDAP/brands (formats), job de mise à jour (LF-24), clés réelles (LF-25)
 - [✅ DONE] LF-19 — ouvrir en sûreté : ActionExecutor (navigateur par défaut, composeur, SMS, e-mail, cartes, Wi-Fi), confirmation Suspect/Danger, test d'architecture
+- [🔄 WIP] LF-26 — suivre les redirections sur demande : traceur (IP vérifiée, 5 sauts, 5 s), nouveau verdict sans baisse de niveau, section « Vérifications facultatives » + feuille d'avertissement — PR en cours

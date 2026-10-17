@@ -23,7 +23,7 @@ Code: `app/src/main/java/com/lookfirst/data/reputation/`.
 
 - One fixed `https` URL per source, compiled in. The only address taken from the network is a redirect `Location`, followed by hand (3 hops at most) and only if it is `https`, on the same host, default port, no user information. Anything else ends the attempt.
 - The size is counted while streaming. `Content-Length` is never trusted. No archive and no compression (`Accept-Encoding: identity`). Per-source cap: 8 MiB for CERT Polska (real size about 2.5 MB), 5-minute deadline per file.
-- Request headers: `User-Agent: LookFirst` (no version), `Accept-Encoding: identity`, and `If-Modified-Since` when an index is installed. The value is the publisher's own `Last-Modified` text, kept only if it is short and made of letters, digits, space, comma and colon (a date, not free text). `304` means "current": the list is kept and its age is reset. No `ETag`, no cookie, no other validator, no identifier. The request is the same for every user and carries nothing about a scan; a test checks that every request is exactly the compiled URL.
+- Request headers: `User-Agent: LookFirst` (no version), `Accept-Encoding: identity`, and `If-Modified-Since` when an index is installed. The publisher's `Last-Modified` is parsed strictly as an IMF-fixdate (RFC 9110, weekday and calendar checked), stored as an instant, refused if it is later than the clock, and the date sent back is formatted by the app from that instant: nothing the server sent is ever echoed. An invalid value drops the conditional request. `304` means "current": the list is kept and its age is reset. A `304` never refreshes the time of the last full download: 7 days after it, the next request is unconditional, so a server that answers `304` forever cannot freeze the list. No `ETag`, no cookie, no other validator, no identifier. The request is the same for every user and carries nothing about a scan; a test checks that every request is exactly the compiled URL.
 - System TLS validation, no pinning. Timeouts on connect (15 s) and on every read (30 s).
 - Sources are independent: one failing or refused source never blocks another. Order of `ListSources.ALL`.
 - Work: WorkManager daily (unmetered, battery not low), backoff 1 h, 4 attempts per period; "Update now" and the first-launch choice run the same `ListUpdateRunner` (a mutex allows one download at a time). No list ships in the APK: with automatic update on, the first launch downloads at once.
@@ -38,10 +38,10 @@ Format: text, one host per line, UTF-8, LF or CRLF; blank lines ignored; `#` sta
 2. a control character (below U+0020 except tab, or DEL) makes the line invalid;
 3. `HostNormalizer.normalize` (UTS #46, punycode, the same code as for a scanned host). Any error makes the line invalid. URLs, `user@host`, paths and IPv6 are invalid by construction;
 4. a host whose registrable domain cannot be found (a bare public suffix such as `com` or `co.uk`) is invalid: a list must not flag a whole registry;
-5. if the host is exactly an official registrable domain (the embedded `BrandList.officialDomains`), it is dropped and counted;
+5. if the registrable domain is official (the embedded `BrandList.officialDomains`), the entry is dropped and counted, whether it is the domain itself or a host under it (`accounts.google.com`);
 6. the key: `d:` + name if the host is a registrable domain, otherwise `h:` + name (also for IPv4).
 
-Refusals of the whole file: no valid line (`TOO_FEW`); more than 2 % invalid lines, which covers binary files, HTML error pages and wrong formats (`BAD_FORMAT`); more entries than the source's maximum (`TOO_MANY`, checked while reading); more than 100 official domains in the list (`POISONED`).
+Without the Public Suffix List nothing is classified: the file is refused (`BAD_FORMAT`). Refusals of the whole file: no valid line (`TOO_FEW`); more than 2 % invalid lines, which covers binary files, HTML error pages and wrong formats (`BAD_FORMAT`); more entries than the source's maximum (`TOO_MANY`, checked while reading); more than 100 entries on or under official domains (`POISONED`; the CERT Polska file of 2026-10-17 has 2).
 
 ## 4. Checks before an index replaces another
 
@@ -50,12 +50,12 @@ Applied in `ListStore.install`; any refusal keeps the installed index byte for b
 | Check | Value | Why |
 |---|---|---|
 | Download size | 8 MiB per source (total of the compiled sources stays under 10 MiB) | T-LST-3 |
-| Entries (CERT Polska) | at least 10 000 and at most 600 000 (today about 125 000) | an emptied or exploded list is refused even on the first install |
+| Entries (CERT Polska) | at least 40 000 (about a third of today's size; revise if the list grows) and at most 600 000 (today about 125 000) | an emptied or exploded list is refused even on the first install |
 | Variation against the installed index | at most 10 % + 2 points per day of age of the installed index; no limit from 45 days | a poisoned or truncated update cannot swap most of the list in one step; a phone that was off for weeks must be able to catch up |
 | Format | 2 % invalid lines at most; index written and validated (`Lfix.validate`: magic, size, strictly increasing keys) before the swap | |
-| Official domains | more than 100 official domains in the list: refused | an attempt to make the app cry wolf on popular sites (T-LST-4) |
+| Official domains | more than 100 entries on or under official domains: refused; fewer are dropped | an attempt to make the app cry wolf on popular sites (T-LST-4) |
 
-Age of the installed index: time since the last successful download or `304`, against `max(clock, latest time ever seen)`, so a clock set back does not make a list look younger.
+Age of the installed index: time since the last successful download or `304`, against `max(clock, latest time ever seen)`. A download or `304` is recorded at that same reference time (never at a clock that is behind it), so a clock that was set ahead and then corrected neither makes a list look old nor lifts the variation limit. Network, HTTP, size and format failures are remembered per source like refusals.
 
 ## 5. Storage and installation
 
@@ -69,7 +69,7 @@ Install: write `tmp/index-N`, `fsync` the file, validate it, `rename` over `inde
 
 ## 6. Index format (LFIX)
 
-Unchanged from LF-22/LF-23, except that the Public Suffix List hash field is zero (the PSL is embedded in the APK, and the lookup does not depend on a hash match).
+Unchanged from LF-22/LF-23, except that bytes 32 to 63 (once a Public Suffix List hash) are written as zero and not read: the PSL is embedded in the APK. They stay in the layout so that `size == 64 + 8n` holds.
 
 Matching is exact on the normalized host (`NormalizedHost.ascii`). Two kinds, hashed separately:
 
@@ -87,7 +87,7 @@ Key: the first 8 bytes of `SHA-256(kind byte || ASCII name)`, kind byte `h` or `
 | 6 | 2 | source id (the app's table: CERT Polska = 2; 0 and 1 belonged to the removed bundle) |
 | 8 | 4 | entry count n |
 | 12 | 20 | reserved, zero |
-| 32 | 32 | zero (was the PSL hash) |
+| 32 | 32 | reserved, zero (was the PSL hash) |
 | 64 | 8n | entries, strictly increasing, unsigned |
 
 `size == 64 + 8n` exactly. Truncated hashes: a name that is not listed collides with some entry with probability n / 2^64 per probe (5e-14 for a million entries, at most 16 probes). That is the accidental rate, not a security bound: an attacker who can put names of his choice in a source could search for a collision with a chosen victim host (about 2^64 / T work for T targets). The result is a false "reported by public lists", never a bypass; popular domains are out of reach because the embedded official-domain list is consulted first. Accepted for format 1; a 12-byte entry (new format version) is the lever if it ever matters.
@@ -97,7 +97,7 @@ Key: the first 8 bytes of `SHA-256(kind byte || ASCII name)`, kind byte `h` or `
 `LocalReputationLookup`, synchronous and offline, never waits for an installation (while one holds the lock the answer is "lists missing"):
 
 1. registrable domain R from the embedded PSL (private section included: `tenant.blogspot.com` is registrable);
-2. **embedded official domains first**: if R is official, a `d:` entry never applies, and an `h:` entry never applies to R itself or `www.R` (an `h:` entry for another subdomain, such as a phishing page on a popular host, still does);
+2. **embedded official domains first**: if R is official, no entry applies to R or to anything under it (the parser does not index such entries either). A phishing page on a subdomain of a popular official domain is therefore never flagged by a list; the other analyses still apply. Without the Public Suffix List the answer is `ListsMissing`, never a hit or a clean result;
 3. otherwise, for each source: `h:` for the host, then `d:` for the host and each parent down to R included, never the public suffix; at most 16 probes per source;
 4. a hit gives `Listed(<publisher name from the compiled table>)`; no hit gives `NotListed`, or `ListsStale(age)` when the oldest installed index is older than 14 days (D16); no index gives `ListsMissing`. A hit is never lowered by staleness.
 

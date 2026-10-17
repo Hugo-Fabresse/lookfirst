@@ -34,7 +34,7 @@ One source at the start: **CERT Polska Warning List**. It is the only candidate 
 
 Points to know:
 - **Automation is implicit, not explicit.** CERT Polska's text allows use "for any purpose" and instructs operators to feed the list into their systems automatically (5-minute refresh). It does not name mobile apps. The app fetches once a day at most (`If-Modified-Since`), far below that. If Hugo wants a written confirmation, it must come from CERT Polska (contact on cert.pl). Flagged as the one open point of LF-28.
-- **Coverage.** The list is run by a national CSIRT: it is strong on phishing and fraud aimed at Poland and Europe and on large campaigns; a fresh site aimed at another country can be missing. The About screen says so ("a new or unreported site can be malicious").
+- **Coverage is mostly Polish.** The list is run by a national CSIRT and is built from what is reported to it: it is strongest on phishing and fraud aimed at Poland and on large campaigns; sites aimed at other countries, notably France, can be missing, and a fresh site is often missing. The About screen says so ("a new or unreported site can be malicious").
 - **Candidate second source, if coverage proves too thin: Phishing.Database ACTIVE domains** (MIT, 11 MB). With CERT Polska (2.5 MB) a full update would be about 13.6 MB, above the 10 MiB target: Hugo would have to relax the budget or accept a reduced file. Its provenance is undocumented and GitHub is a US host. Not added by LF-28.
 
 ## Data that is not a reputation list

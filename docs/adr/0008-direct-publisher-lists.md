@@ -15,11 +15,11 @@ LF-22 to LF-24 designed a signed bundle: a separate repository and workflow fetc
 ## Replacing the signature: what protects the user
 We lose authenticity (anyone who controls the publisher or the connection after TLS can serve a list). The compensations, all on the phone (`reputation-lists.md`):
 1. **A list can only add a warning.** It never lowers a verdict, never removes a built-in rule, never changes the PSL, the brand list or the RDAP server.
-2. **The embedded official-domain list is consulted first**: a hit on an official registrable domain (or its `www`) is ignored, and a list containing more than 100 of them is refused as poisoned.
+2. **The embedded official-domain list is consulted first**: a hit on an official registrable domain or on any host under it (`accounts.google.com`) is ignored and not indexed; more than 100 such entries make the list refused as poisoned.
 3. Size cap (streamed), entry minimum and maximum, 2 % invalid-line limit, strict parser, index validated before the swap.
 4. **Variation limit** against the installed index: 10 % plus 2 points per day of age, none from 45 days.
 5. A refusal keeps the previous index and is remembered; sources are independent.
-6. `https` only, same-host redirects, no cookies, no identifier, `If-Modified-Since` with the publisher's own date only.
+6. `https` only, same-host redirects, no cookies, no identifier. `If-Modified-Since` carries only a date the app formats itself from the publisher's strictly parsed `Last-Modified` (never echoed), and only while the last full download is under 7 days old.
 
 ## Consequences
 - Much less to run and to lose: no key theft scenario, no pipeline compromise (T-CI-3 disappears), no rollback logic. A compromised publisher can inject false warnings within the variation limit; accepted and documented (T-LST-2, T-LST-4).

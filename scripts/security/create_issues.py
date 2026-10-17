@@ -4,14 +4,13 @@
 usage: create_issues.py <dir with *.json findings files>
 env: GH_TOKEN, SECURITY_ASSIGNEE (default Hugo-Fabresse), MAX_NEW_ISSUES (default 50)
 
-Dedup: the fingerprint is stored on the LAST line of the issue body as
-`<!-- fingerprint: X -->`; open AND closed issues with the label are searched, and a closed one
+Dedup: the fingerprint is stored in the issue body as `<!-- fingerprint: X -->`; open AND closed
+issues with the label are searched (only those authored by app/github-actions), and a closed one
 is never reopened (closed on purpose).
 
 Known limit: the fingerprint is rule + file + text of the line (no line number), so a NEW
 finding with the same rule on an identical line of the same file collides with an existing
-(possibly closed) issue and is not reported. Only the last body line counts, so text injected
-elsewhere (file names, messages) cannot forge or mask a fingerprint.
+(possibly closed) issue and is not reported. Issues by other authors are ignored.
 """
 import glob
 import json
@@ -43,12 +42,13 @@ labels = json.loads(gh("label", "list", "--limit", "200", "--json", "name"))
 if LABEL not in [x["name"] for x in labels]:
     gh("label", "create", LABEL, "--color", "B60205", "--description", "Alerte du scan de securite automatique")
 
-existing = json.loads(gh("issue", "list", "--label", LABEL, "--state", "all", "--limit", "5000", "--json", "body"))
+existing = json.loads(gh("issue", "list", "--label", LABEL, "--state", "all", "--limit", "5000", "--json", "body,author"))
 known = set()
 for i in existing:
-    m = re.search(r"\r?\n<!-- fingerprint: ([\w-]+) -->\r?\n?\Z", i.get("body") or "")
-    if m:
-        known.add(m.group(1))
+    # Only issues created by the workflow itself count: a user cannot mask a finding by forging a marker.
+    if (i.get("author") or {}).get("login") != "app/github-actions":
+        continue
+    known.update(re.findall(r"<!-- fingerprint: ([\w-]+) -->", i.get("body") or ""))
 
 created = skipped = 0
 for f in findings:

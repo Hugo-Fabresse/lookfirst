@@ -482,7 +482,7 @@ otpauth variant: reason "Ce code ajoute un compte de double authentification (se
 +--------------------------------------+
 ```
 
-Domain age sheet: "LookFirst demande à un registre public (RDAP, rdap.verisign.com) depuis quand ce nom de domaine existe. Seul le nom de domaine (example.com) est envoyé, pas l'adresse complète. Le registre voit votre adresse IP. Le site lui-même n'est pas contacté." It names the registry server and the domain exactly as they will be sent (punycode for an IDN). Cancel is the initial focus in both sheets. The result stays under "Vérifications facultatives" as a line ("Domaine enregistré le 10 oct. 2026 (il y a 12 jours)."); the date is the registry's, shown in UTC. The button is disabled with a note when there is no registry to ask (no bootstrap installed, an IP address, a TLD the bootstrap does not list) and offline.
+Domain age sheet: "LookFirst demande à un registre public (RDAP, rdap.verisign.com) depuis quand ce nom de domaine existe. Seul le nom de domaine (example.com) est envoyé, pas l'adresse complète. Le registre voit votre adresse IP. Le site lui-même n'est pas contacté." It names the registry server and the domain exactly as they will be sent (punycode for an IDN). Cancel is the initial focus in both sheets. The result stays under "Vérifications facultatives" as a line ("Domaine enregistré le 10 oct. 2026 (il y a 12 jours)."); the date is the registry's, shown in UTC. The button needs no reputation list. It is disabled with a note when there is no registry to ask (an IP address, a TLD the embedded bootstrap does not list) and offline.
 
 ### 5.13 Settings
 
@@ -542,7 +542,7 @@ States: updating (spinner, "Mise à jour en cours"), failed ("Échec de la mise 
 | Redirect tracing | only on your tap | requests to the scanned address | the scanned site: your IP, the time, that its QR was scanned |
 | Domain age | only on your tap | the registrable domain only | the RDAP registry: your IP and the domain |
 
-The IANA RDAP bootstrap file (which tells which registry to ask) and the Public Suffix List (which computes the registrable domain) are shipped inside the signed reputation bundle (`architecture.md`, Reputation bundle pipeline). Neither is fetched on demand, so no third party besides the list host and the two optional targets above ever sees a request.
+The IANA RDAP bootstrap file (which tells which registry to ask) and the Public Suffix List (which computes the registrable domain) are embedded in the app (`scripts/gen-host-data.py`) and refreshed with each app version. Neither is fetched on demand, so no third party besides the list host and the two optional targets above ever sees a request.
 
 ## 7. Texts (FR / EN)
 
@@ -668,7 +668,7 @@ Phrasing rules: one sentence, says what was seen, then what it means; no "malwar
 | warn_rdap_title | Vérifier l'âge du domaine ? | Check domain age? |
 | warn_rdap_body | LookFirst demande à un registre public (RDAP, %2$s) depuis quand ce nom de domaine existe. Seul le nom de domaine (%1$s) est envoyé, pas l'adresse complète. Le registre voit votre adresse IP. Le site lui-même n'est pas contacté. | LookFirst asks a public registry (RDAP, %2$s) how long this domain name has existed. Only the domain name (%1$s) is sent, not the full address. The registry sees your IP address. The site itself is not contacted. |
 | age_check | Vérifier l'âge du domaine | Check domain age |
-| age_note_no_registry_list | Indisponible : la liste des registres n'est pas installée. | Unavailable: the list of registries is not installed. |
+| age_note_no_registry_list | Indisponible : la liste des registres est illisible. | Unavailable: the list of registries could not be read. |
 | age_note_no_domain | Disponible pour les liens avec un nom de domaine uniquement. | Only available for links with a domain name. |
 | age_note_no_server | Aucun registre connu pour ce type de domaine. | No known registry for this kind of domain. |
 | age_result_unknown | Ce domaine est inconnu du registre. | The registry does not know this domain. |

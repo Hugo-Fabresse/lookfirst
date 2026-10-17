@@ -5,7 +5,7 @@ import com.lookfirst.domain.analysis.ReputationResult
 import com.lookfirst.domain.host.NormalizedHost
 import javax.inject.Inject
 
-/** Placeholder until the Lists epic: no list installed, so every lookup says so (and a URL is at least CAUTION). */
+/** A lookup with no list: every host gets `ListsMissing`. Not bound in Hilt since LF-23; kept as a test stand-in. */
 class NoReputationLists @Inject constructor() : ReputationLookup {
     override fun lookup(host: NormalizedHost): ReputationResult = ReputationResult.ListsMissing
 }

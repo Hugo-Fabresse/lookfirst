@@ -1,10 +1,12 @@
 package com.lookfirst.data.reputation
 
+import com.lookfirst.data.network.SystemTrust
 import java.io.Closeable
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URI
+import javax.net.ssl.HttpsURLConnection
 
 private const val CONNECT_TIMEOUT_MILLIS = 15_000
 private const val READ_TIMEOUT_MILLIS = 30_000
@@ -42,13 +44,18 @@ internal fun interface ListTransport {
 
 /**
  * `HttpURLConnection` transport: https only, no automatic redirect, no cache, no cookie jar, system TLS validation
- * (no pinning), timeouts on connect and on every read.
+ * (no pinning; system authorities only on API 23 through [SystemTrust]), timeouts on connect and on every read.
  */
-internal class UrlConnectionTransport : ListTransport {
+internal class UrlConnectionTransport(private val trust: SystemTrust) : ListTransport {
     override fun get(url: URI, headers: Map<String, String>): TransportResponse {
         if (!url.scheme.equals("https", ignoreCase = true)) throw IOException("https only")
+        val factory = trust.socketFactory()
         val connection = url.toURL().openConnection() as HttpURLConnection
         try {
+            // On this connection only, never as a process-wide default; null = platform default (API 24+, NSC).
+            if (factory != null) {
+                (connection as? HttpsURLConnection ?: throw IOException("https only")).sslSocketFactory = factory
+            }
             connection.instanceFollowRedirects = false
             connection.useCaches = false
             connection.connectTimeout = CONNECT_TIMEOUT_MILLIS

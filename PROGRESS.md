@@ -35,4 +35,5 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [🔄 WIP]  LF-34 — signal LOCAL_HOST : hôtes locaux, réservés et TLD inexistants (audit S-6) — branche fix/LF-34-local-host-signal
 - [✅ DONE] LF-42 — hôte probable d'un Text en forme d'adresse analysé (listes, marque, homographe, IP, local), sans Ouvrir (audit I-2) — branche fix/LF-42-address-like-text
 - [✅ DONE] LF-37 — label du clip sensible persisté (effacement après mort du processus) + toString des ScanPayload sans contenu — tests: ClipboardProcessDeathTest, ScanPayloadToStringTest
+- [✅ DONE] LF-36 — API 23 : confiance limitée aux autorités système pour les listes, le traceur et le RDAP (audit S-8) — tests: SystemTrustTest ; androidTest TlsHostCheckTest à lancer sur API 23
 - [✅ DONE] LF-45 — icône finale (adaptative + thématique, PNG de repli API 23-25) — branche feat/LF-45-app-icon

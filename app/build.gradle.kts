@@ -156,6 +156,7 @@ dependencies {
     ksp(libs.hilt.android.compiler)
 
     testImplementation(libs.junit)
+    androidTestImplementation(libs.junit)
     testImplementation(composeBom)
     testImplementation(libs.robolectric)
     testImplementation(libs.turbine)

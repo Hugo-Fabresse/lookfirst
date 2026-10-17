@@ -23,3 +23,4 @@ BUG [brand] : ❌ résiduels assumés (LF-44) — mon-amelli.fr, amelli-info.fr 
 BUG [url-analysis] : ✅ I-2 : `listed.com/x`, `listé.fr/x`, `1.2.3.4:80/x` (Text, copiables) n'étaient pas cherchés dans les listes ni contrôlés (marque, homographe) — corrigé (LF-42) ; résiduel : `user@listed.com/x`, IPv4 obfusquée en texte, `.example` hors PSL sans chemin
 BUG [clipboard] : ✅ S-10 le label du clip sensible n'était qu'en mémoire : processus tué en arrière-plan, graine OTP / mot de passe Wi-Fi jamais effacés — corrigé (LF-37)
 BUG [payload] : ✅ S-12 toString des ScanPayload imprimait scheme, type, coin, lat/lon, version, devise — corrigé (LF-37)
+BUG [network] : ✅ S-8 en API 23 (pas de Network Security Config) les CA installées par l'utilisateur ou un MDM étaient de confiance pour les listes, le traceur et le RDAP — corrigé (LF-36) ; SNI et vérification d'hôte à valider sur API 23 (androidTest TlsHostCheckTest, jalon téléphone)

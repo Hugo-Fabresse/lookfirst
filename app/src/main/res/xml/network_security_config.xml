@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
+    <!-- System authorities only: no user-installed or MDM authority (API 24+). API 23 has no Network Security Config:
+         SystemTrust (data/network) applies the same rule there. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>

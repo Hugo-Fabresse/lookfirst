@@ -8,4 +8,4 @@ BUG [domaine] : ❌ description courte — statut: OPEN
 BUG [domaine] : ✅ description courte — corrigé (LF-n)
 ```
 
-(aucun bug pour l'instant)
+BUG [url-analysis] : ✅ `hôte:port/chemin` sans schéma échappait aux listes de réputation alors qu'il s'ouvrait en https — corrigé (LF-30)

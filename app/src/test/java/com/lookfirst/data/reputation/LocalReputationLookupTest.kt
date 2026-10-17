@@ -2,6 +2,7 @@ package com.lookfirst.data.reputation
 
 import com.lookfirst.domain.analysis.BrandList
 import com.lookfirst.domain.analysis.ReputationResult
+import com.lookfirst.domain.analysis.UserContentPlatforms
 import com.lookfirst.domain.host.HostNormalizer
 import com.lookfirst.domain.host.HostResult
 import com.lookfirst.domain.host.NormalizedHost
@@ -110,6 +111,35 @@ class LocalReputationLookupTest {
         assertEquals(ReputationResult.NotListed, lookup.result("wordpress.com"))
         assertEquals(ReputationResult.NotListed, lookup.result("www.wordpress.com"))
         assertEquals(ReputationResult.NotListed, lookup.result("accounts.google.com"))
+    }
+
+    @Test
+    fun reservedServiceLabelsOfAPlatformGoThroughTheParserAndTheLookupAsOfficial() {
+        for (platform in UserContentPlatforms.all) {
+            for (label in platform.reserved) {
+                val host = "$label.${platform.domain}"
+                val deep = "x.$host"
+                val out = parsed(host, deep, "ok.com", officials = BrandList.officialDomains)
+                assertEquals(host, 2, out.droppedOfficial)
+                assertEquals(host, 1, out.keys.size)
+                val lookup = lookupWith(
+                    keyed("d:$host", "h:$deep", "d:${platform.domain}"),
+                    officials = BrandList.officialDomains,
+                )
+                assertEquals(host, ReputationResult.NotListed, lookup.result(host))
+                assertEquals(deep, ReputationResult.NotListed, lookup.result(deep))
+            }
+        }
+    }
+
+    @Test
+    fun anOvhVpsEntryDoesNotCoverOtherVps() {
+        val out = parsed("vps-1a.vps.ovh.net", "vps.ovh.net", officials = BrandList.officialDomains)
+        assertEquals(1, out.droppedOfficial) // vps.ovh.net is the owner's sub-suffix, never indexed
+        val lookup = lookupWith(keyed("d:vps-1a.vps.ovh.net"), officials = BrandList.officialDomains)
+        assertEquals(listed, lookup.result("vps-1a.vps.ovh.net"))
+        assertEquals(ReputationResult.NotListed, lookup.result("vps-2b.vps.ovh.net"))
+        assertEquals(ReputationResult.NotListed, lookup.result("vps.ovh.net"))
     }
 
     @Test

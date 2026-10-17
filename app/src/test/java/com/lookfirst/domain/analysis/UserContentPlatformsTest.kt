@@ -36,7 +36,44 @@ class UserContentPlatformsTest {
             assertTrue(platform, brandCodes("www.$platform").isEmpty())
         }
         assertTrue(brandCodes("support.wordpress.com").isEmpty())
-        assertTrue(brandCodes("adsl.free.fr").isEmpty())
+        assertTrue(brandCodes("mobile.free.fr").isEmpty())
+    }
+
+    @Test
+    fun reservedServiceLabelsAndEverythingUnderThemAreTheOwners() {
+        for (platform in UserContentPlatforms.all) {
+            for (label in platform.reserved) {
+                val host = "$label.${platform.domain}"
+                assertTrue(host, UserContentPlatforms.isOwnerHost(host, platform.domain))
+                assertTrue("a.b.$host", UserContentPlatforms.isOwnerHost("a.b.$host", platform.domain))
+                assertEquals(host, platform.domain, UserContentPlatforms.registrableFor(host, platform.domain))
+                assertTrue(host, brandCodes(host).isEmpty())
+                assertTrue("paypal-login.$host", brandCodes("paypal-login.$host").isEmpty())
+            }
+        }
+    }
+
+    @Test
+    fun ovhVpsIsASubSuffixAndNeverOneEntryForAllVps() {
+        assertEquals("vps-1a.vps.ovh.net", UserContentPlatforms.registrableFor("vps-1a.vps.ovh.net", "ovh.net"))
+        assertEquals("vps-1a.vps.ovh.net", UserContentPlatforms.registrableFor("x.vps-1a.vps.ovh.net", "ovh.net"))
+        assertEquals("ovh.net", UserContentPlatforms.registrableFor("vps.ovh.net", "ovh.net"))
+        assertEquals("x.ovh.net", UserContentPlatforms.registrableFor("x.ovh.net", "ovh.net"))
+        assertTrue(brandCodes("vps.ovh.net").isEmpty())
+        assertTrue(SignalCode.BRAND_LOOKALIKE in brandCodes("paypal-login.vps.ovh.net"))
+    }
+
+    @Test
+    fun knownOpenPlatformsAreEitherNotOfficialDomainsOrListedHere() {
+        // wetransfer.com is an official domain left out on purpose (paid plans only, see UserContentPlatforms).
+        val known = listOf(
+            "sharepoint.com", "onmicrosoft.com", "force.com", "my.salesforce.com", "zendesk.com", "atlassian.net",
+            "weebly.com", "glitch.me", "typeform.com", "wordpress.com", "free.fr", "ovh.net",
+            "slack.com", "myshopify.com", "squarespace.com", "wixsite.com", "webflow.io", "herokuapp.com",
+        )
+        for (d in known) {
+            assertTrue(d, d !in BrandList.officialDomains || d in UserContentPlatforms.domains)
+        }
     }
 
     @Test

@@ -50,8 +50,9 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
     private val pslRegistrable = ascii.takeLast(pslCount + 1).joinToString(".")
 
     /** A tenant of an open platform (`x.wordpress.com`) counts the platform as a suffix, like `x.blogspot.com`. */
-    private val isTenant = UserContentPlatforms.registrableFor(host.ascii, pslRegistrable) != pslRegistrable
-    private val suffixCount = if (isTenant) pslCount + 1 else pslCount
+    private val tenantName = UserContentPlatforms.registrableFor(host.ascii, pslRegistrable)
+    private val isTenant = tenantName != pslRegistrable
+    private val suffixCount = if (isTenant) tenantName.count { it == '.' } else pslCount
 
     /** Index of the label just left of the public suffix; negative when the host is a public suffix itself. */
     private val nameIndex = ascii.size - suffixCount - 1

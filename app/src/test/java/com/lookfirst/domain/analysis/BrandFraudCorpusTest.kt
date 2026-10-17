@@ -107,7 +107,7 @@ class BrandFraudCorpusTest {
         deutsche-bank.de sparkasse.de barclays.co.uk hsbc.co.uk lloydsbank.com monzo.com revolut.com wise.com
         stripe.com shopify.com godaddy.com ovhcloud.com gandi.net ionos.fr proton.me doctolib.fr
         ameli-sante.example.org cafe-de-paris.fr applepie.example pommes-apple.example orangerie.fr
-        support.wordpress.com developer.wordpress.com www.wordpress.com adsl.free.fr assistance.free.fr www.free.fr
+        support.wordpress.com developer.wordpress.com www.wordpress.com mobile.free.fr adsl.free.fr assistance.free.fr www.free.fr
         www.slack.com status.slack.com api.slack.com www.ovh.net
         """.trimIndent().split(Regex("\\s+")).filter {
             it.isNotEmpty()

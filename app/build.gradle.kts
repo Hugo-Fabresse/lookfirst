@@ -68,6 +68,31 @@ val prepareRobolectricAndroidAll by tasks.registering(Sync::class) {
     into(layout.buildDirectory.dir("robolectric-android-all"))
 }
 
+/**
+ * Release guard (LF-23): the public keys pinned in PinnedKeys.kt are test keys (their private halves are in the
+ * test sources) until LF-25 replaces them and flips KEYS_ARE_PRODUCTION. Any release build fails before then, so
+ * an APK that trusts keys anybody can sign with cannot be produced. See docs/design/reputation-bundle.md,
+ * "Production keys".
+ */
+val verifyPinnedKeysAreProduction by tasks.registering {
+    val pinnedKeys = layout.projectDirectory.file("src/main/java/com/lookfirst/data/reputation/PinnedKeys.kt")
+    inputs.file(pinnedKeys)
+    doLast {
+        val text = pinnedKeys.asFile.readText()
+        val flagged = Regex("""const\s+val\s+KEYS_ARE_PRODUCTION\s*=\s*true\b""").containsMatchIn(text)
+        if (!flagged) {
+            throw GradleException(
+                "PinnedKeys.kt still pins TEST keys (KEYS_ARE_PRODUCTION is not true): refusing a release build. " +
+                    "Replace the keys and set the flag in LF-25 (docs/design/reputation-bundle.md).",
+            )
+        }
+    }
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(verifyPinnedKeysAreProduction)
+}
+
 android {
     namespace = "com.lookfirst"
     compileSdk = 36

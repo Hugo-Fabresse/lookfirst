@@ -13,9 +13,16 @@ import com.lookfirst.data.reputation.NoReputationLists
 import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
+import com.lookfirst.domain.rdap.RdapClient
+import com.lookfirst.domain.rdap.RdapFailure
+import com.lookfirst.domain.rdap.RdapOutcome
+import com.lookfirst.domain.rdap.RdapPlan
+import com.lookfirst.domain.rdap.RdapPlanner
+import com.lookfirst.domain.rdap.RdapUnavailable
 import com.lookfirst.domain.redirect.TraceFailure
 import com.lookfirst.domain.redirect.TraceOutcome
 import com.lookfirst.domain.usecase.AnalyzeScan
+import com.lookfirst.domain.usecase.ApplyDomainAge
 import com.lookfirst.domain.usecase.ApplyRedirectTrace
 import com.lookfirst.domain.verdict.Verdict
 import com.lookfirst.domain.verdict.VerdictLevel
@@ -73,6 +80,9 @@ class ResultViewModelTest {
         payloadIds = PayloadIdGenerator { "id-${++nextId}" },
         redirectTracer = { TraceOutcome.Failed(TraceFailure.NETWORK) },
         applyRedirectTrace = ApplyRedirectTrace(AnalyzeScan(NoReputationLists())),
+        rdapPlanner = RdapPlanner { RdapPlan.Unavailable(RdapUnavailable.NO_BOOTSTRAP) },
+        rdapClient = RdapClient { RdapOutcome.Failed(RdapFailure.NETWORK) },
+        applyDomainAge = ApplyDomainAge(),
         networkStatus = { true },
         workDispatcher = Dispatchers.Unconfined,
     )
@@ -316,6 +326,9 @@ class ResultViewModelTest {
             payloadIds = PayloadIdGenerator { "id-x" },
             redirectTracer = { TraceOutcome.Failed(TraceFailure.NETWORK) },
             applyRedirectTrace = ApplyRedirectTrace(AnalyzeScan(NoReputationLists())),
+            rdapPlanner = RdapPlanner { RdapPlan.Unavailable(RdapUnavailable.NO_BOOTSTRAP) },
+            rdapClient = RdapClient { RdapOutcome.Failed(RdapFailure.NETWORK) },
+            applyDomainAge = ApplyDomainAge(),
             networkStatus = { true },
             workDispatcher = Dispatchers.Unconfined,
         )
@@ -337,6 +350,9 @@ class ResultViewModelTest {
             payloadIds = PayloadIdGenerator { "id-${++nextId}" },
             redirectTracer = { TraceOutcome.Failed(TraceFailure.NETWORK) },
             applyRedirectTrace = ApplyRedirectTrace(AnalyzeScan(NoReputationLists())),
+            rdapPlanner = RdapPlanner { RdapPlan.Unavailable(RdapUnavailable.NO_BOOTSTRAP) },
+            rdapClient = RdapClient { RdapOutcome.Failed(RdapFailure.NETWORK) },
+            applyDomainAge = ApplyDomainAge(),
             networkStatus = { true },
             workDispatcher = queue,
         )

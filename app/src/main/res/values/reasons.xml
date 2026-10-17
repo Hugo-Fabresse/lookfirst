@@ -89,6 +89,8 @@
     <string name="reason_redirect_excessive_short">Too many redirects</string>
     <string name="reason_redirect_excessive">This link chains too many redirects or loops: LookFirst stopped following it.</string>
     <string name="reason_domain_recent_short">Recent domain</string>
+    <string name="reason_domain_unknown_short">Unknown domain</string>
+    <string name="reason_domain_unknown">The registry does not know this domain name: nothing can be said about its age.</string>
     <plurals name="reason_lists_stale">
         <item quantity="one">The reputation lists are %1$d day old: recent threats may be missing.</item>
         <item quantity="other">The reputation lists are %1$d days old: recent threats may be missing.</item>

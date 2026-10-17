@@ -107,4 +107,34 @@ class StrictJsonTest {
         }
         assertEquals(Json.Str("\uD83D\uDE00"), (parse("""{"k":"\ud83d\ude00"}""") as Json.Obj).fields["k"])
     }
+
+    private fun parseWith(text: String, limits: JsonLimits) = StrictJson.parse(text.toByteArray(Charsets.UTF_8), limits)
+
+    @Test
+    fun limitsAreTheCallers() {
+        val deep = "[".repeat(10) + "]".repeat(10)
+        assertNull(parse(deep))
+        assertNotNull(parseWith(deep, JsonLimits.RDAP))
+        assertNull(parseWith("[".repeat(30) + "]".repeat(30), JsonLimits.RDAP))
+        val many = "[" + "1,".repeat(5_000) + "1]"
+        assertNull(parse(many))
+        assertNotNull(parseWith(many, JsonLimits.BOOTSTRAP))
+        val longString = "\"" + "a".repeat(5_000) + "\""
+        assertNull(parse(longString))
+        assertNotNull(parseWith(longString, JsonLimits.RDAP))
+        assertNull(parseWith("\"" + "a".repeat(20_000) + "\"", JsonLimits.RDAP))
+    }
+
+    @Test
+    fun fractionsAreReadOnlyWhenAllowed() {
+        listOf("1.5", "-2.25", "3e10", "4.5E-3", "0.0").forEach {
+            assertNull("accepted: $it", parse("""{"a":$it}"""))
+            assertNotNull("refused: $it", parseWith("""{"a":$it}""", JsonLimits.RDAP))
+        }
+        val obj = parseWith("""{"a":12.75}""", JsonLimits.RDAP) as Json.Obj
+        assertEquals(Json.Num(12), obj.fields["a"])
+        listOf("1.", "1e", "1e+", "1.e3", "-", ".5", "1.5.5", "1e5e5").forEach {
+            assertNull("accepted: $it", parseWith("""{"a":$it}""", JsonLimits.RDAP))
+        }
+    }
 }

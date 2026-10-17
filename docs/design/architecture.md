@@ -23,7 +23,7 @@ Gradle modules are suggested; they can start as packages and be split later. Dep
 | Data | `data.scan.camera` | CameraX + `BarcodeDecoder`, frame analysis, torch |
 | Data | `data.scan.image` | Photo Picker / `ACTION_OPEN_DOCUMENT`, bounded bitmap decoding, same decoder |
 | Data | `data.reputation` | Compact on-disk index, `ReputationStore`, `ListUpdater` (WorkManager) |
-| Data | `data.network` | The only package that talks to the network: `ListDownloader`, `RedirectTracer`, `RdapClient` (no cookies, no auth, fixed generic UA, `Proxy.NO_PROXY`, checked IP only, see Network rules; `RedirectTracer` is hand-written HTTP/1.1 over a TLS socket, LF-26) |
+| Data | `data.network` | The only package that talks to the network: `ListDownloader`, `SocketRedirectTracer`, `SocketRdapClient` (no cookies, no auth, fixed generic UA, `Proxy.NO_PROXY`, checked IP only, see Network rules). Both optional clients are hand-written HTTP/1.1 over a TLS socket (LF-26, LF-27) and share `BoundedWork` (budget, abandon), `CheckedConnector` (one DNS resolution, every address checked) and `TlsHopTransport`; ports `RdapClient` and `RdapPlanner` live in `domain.rdap`, `EmbeddedRdapPlanner` (embedded bootstrap + embedded PSL) in `data.reputation` |
 | Data | `data.history` | Optional local history (Room, off by default) |
 | Data | `data.launcher` | `ActionExecutor`: builds and fires Intents, clipboard, Wi-Fi suggestion. Only reachable from a UI tap |
 | DI | Hilt modules | Bind interfaces; test fakes swap in |
@@ -86,7 +86,7 @@ Rules:
 |---|---|---|---|---|
 | Reputation list update | WorkManager periodic (unmetered, daily) + manual "update now" | Nothing about scans: a plain GET (IP, generic UA) | Codeberg (hosts the bundle; sees the phone's IP, to mention in the privacy notice) | On, explained at first run; can be disabled |
 | Redirect tracing | User taps "Trace redirects" after a warning | Requests to the scanned URL and each hop | **The attacker's server** (IP, timing, proof the QR was scanned) | Off, per use |
-| Domain age (RDAP) | User taps "Check domain age" after a warning | Registrable domain only (computed with the Public Suffix List), to the `https` RDAP server given by the IANA bootstrap | RDAP registry | Off, per use |
+| Domain age (RDAP) | User taps "Check domain age" after a warning | Registrable domain only (computed with the Public Suffix List), to the `https` RDAP server given by the IANA bootstrap embedded in the APK | RDAP registry | Off, per use |
 
 Everything else works in airplane mode. An instrumented test should assert that a scan with the network blocked still yields a verdict.
 
@@ -96,7 +96,7 @@ Everything else works in airplane mode. An instrumented test should assert that 
 - Redirects are followed manually (max 5, 5 s total), `https` only. LF-26 implements this without OkHttp: a hand-written HEAD on a TLS socket (SNI = host, certificate checked by subject alternative names), read limited to the 16 KiB response head.
 - `Proxy.NO_PROXY`, no cookies, generic User-Agent, no body read (HEAD, fallback `GET` with `Range: bytes=0-0`).
 - The tracer resolves the host once per trace, checks every returned address (one blocked address refuses the host) and connects to a checked IP, so the checked IP is the connected IP (no DNS rebinding gap). Blocked ranges: IPv4 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.0.0/24, 192.0.2/24, 192.168/16, 198.18/15, 198.51.100/24, 203.0.113/24, 224/4 and 240/4 (multicast, reserved, broadcast); IPv6 ::/96 (unspecified, loopback, IPv4-compatible), fc00::/7, fe80::/10, fec0::/10, ff00::/8, 100::/64, 2001::/32 (Teredo), 2001:db8::/32, 64:ff9b:1::/48; IPv4-mapped (`::ffff:a.b.c.d`), NAT64 (64:ff9b::/96) and 6to4 (2002::/16) are judged as their embedded IPv4. Only port 443 is contacted (a link or hop on another port is not followed and is shown as an unusual port).
-- The same client rules apply to RDAP. RDAP URLs must be `https`.
+- The same client rules apply to RDAP (LF-27): `GET {base}domain/{ldh}` with `Accept: application/rdap+json`, same transport, same blocked ranges, port 443 only. The body is read (the one place where it is), capped at 256 KiB. The server comes from the IANA bootstrap embedded in the APK (`rdap-dns.json`, pinned by SHA-256 in `scripts/gen-host-data.py`, update procedure in reputation-sources.md, refreshed with each app version, like the Public Suffix List and the Unicode data) and must be `https` with a host name, no port and no userinfo (checked when the file is read; the build tests the real file). The button needs no reputation list. A redirect is followed only to the same host over https, at most 3 times. The 5 s budget covers everything.
 
 ## Opening content (Android specifics)
 

@@ -64,6 +64,9 @@ fun ResultRoute(viewModel: ResultViewModel, onClose: () -> Unit) {
                 onTrace = viewModel::onTraceRequested,
                 onConfirmTrace = viewModel::onTraceConfirmed,
                 onCancelTrace = viewModel::onTraceCancelled,
+                onAge = viewModel::onAgeRequested,
+                onConfirmAge = viewModel::onAgeConfirmed,
+                onCancelAge = viewModel::onAgeCancelled,
             )
         },
     )

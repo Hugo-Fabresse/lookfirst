@@ -482,7 +482,7 @@ otpauth variant: reason "Ce code ajoute un compte de double authentification (se
 +--------------------------------------+
 ```
 
-Domain age sheet: "LookFirst demande à un registre public (RDAP) depuis quand ce nom de domaine existe. Seul le nom de domaine (example.com) est envoyé, pas l'adresse complète. Le registre voit votre adresse IP. Le site lui-même n'est pas contacté." Cancel is the initial focus in both sheets.
+Domain age sheet: "LookFirst demande à un registre public (RDAP, rdap.verisign.com) depuis quand ce nom de domaine existe. Seul le nom de domaine (example.com) est envoyé, pas l'adresse complète. Le registre voit votre adresse IP. Le site lui-même n'est pas contacté." It names the registry server and the domain exactly as they will be sent (punycode for an IDN). Cancel is the initial focus in both sheets. The result stays under "Vérifications facultatives" as a line ("Domaine enregistré le 10 oct. 2026 (il y a 12 jours)."); the date is the registry's, shown in UTC. The button needs no reputation list. It is disabled with a note when there is no registry to ask (an IP address, a TLD the embedded bootstrap does not list) and offline.
 
 ### 5.13 Settings
 
@@ -542,7 +542,7 @@ States: updating (spinner, "Mise à jour en cours"), failed ("Échec de la mise 
 | Redirect tracing | only on your tap | requests to the scanned address | the scanned site: your IP, the time, that its QR was scanned |
 | Domain age | only on your tap | the registrable domain only | the RDAP registry: your IP and the domain |
 
-The IANA RDAP bootstrap file (which tells which registry to ask) and the Public Suffix List (which computes the registrable domain) are shipped inside the signed reputation bundle (`architecture.md`, Reputation bundle pipeline). Neither is fetched on demand, so no third party besides the list host and the two optional targets above ever sees a request.
+The IANA RDAP bootstrap file (which tells which registry to ask) and the Public Suffix List (which computes the registrable domain) are embedded in the app (`scripts/gen-host-data.py`) and refreshed with each app version. Neither is fetched on demand, so no third party besides the list host and the two optional targets above ever sees a request.
 
 ## 7. Texts (FR / EN)
 
@@ -630,7 +630,7 @@ Severity: D = DANGEROUS, S = SUSPICIOUS, C = CAUTION, I = info. The level is the
 | 20 | UNPARSABLE | C | Contenu incompris | Content not understood | Ce contenu n'a pas pu être compris. Il est affiché tel quel. | This content could not be understood. It is shown as is. |
 | 21 | REDIRECT_HTTP (after tracing) | S | Redirection non chiffrée | Unencrypted redirect | Ce lien redirige vers une adresse non chiffrée (%1$s). | This link redirects to an unencrypted address (%1$s). |
 | 22 | REDIRECT_FINAL (after tracing, P) | I | Destination finale | Final destination | Plurals, 7.10 | Plurals, 7.10 |
-| 23 | DOMAIN_RECENT (after RDAP, P) | S | Domaine récent | Recent domain | Plurals, 7.10 | Plurals, 7.10 |
+| 23 | DOMAIN_RECENT (after RDAP, P) | S under 30 days, C from 30 to 89 days | Domaine récent | Recent domain | Plurals, 7.10 | Plurals, 7.10 |
 | 24 | BIDI_IN_URL | D | Sens de lecture inversé | Reversed reading direction | Le lien contient un caractère invisible qui inverse le sens de lecture : une partie peut s'afficher autrement qu'elle n'est réellement. | The link contains an invisible character that reverses reading direction, so part of it may display differently from what it really is. |
 | 25 | WHOLE_SCRIPT_CONFUSABLE | S | Alphabet trompeur | Look-alike alphabet | Le nom %2$s est écrit entièrement dans l'alphabet %1$s mais se lit comme des lettres latines ordinaires. C'est une technique courante pour imiter un autre site. | The name %2$s is written entirely in the %1$s alphabet but reads as ordinary Latin letters. This is a common way to imitate another site. |
 | 26 | CRYPTO_BAD_CHECKSUM | S | Adresse invalide | Invalid address | Cette adresse crypto échoue à son contrôle intégré : elle est mal saisie ou falsifiée. Les fonds envoyés pourraient être perdus. | This crypto address fails its built-in check: it is mistyped or forged. Funds sent to it may be lost. |
@@ -653,6 +653,7 @@ Severity: D = DANGEROUS, S = SUSPICIOUS, C = CAUTION, I = info. The level is the
 | 43 | REDIRECT_PRIVATE (after tracing) | S | Redirection vers réseau local | Redirect to local network | Ce lien redirige vers une adresse d'un réseau local ou réservé (%1$s). LookFirst ne l'a pas contactée. | This link redirects to an address on a local or reserved network (%1$s). LookFirst did not contact it. |
 | 43b | REDIRECT_PRIVATE, scanned address itself (no hop) | S | Redirection vers réseau local | Redirect to local network | Ce lien pointe vers une adresse d'un réseau local ou réservé (%1$s). LookFirst ne l'a pas contactée. | This link points to an address on a local or reserved network (%1$s). LookFirst did not contact it. |
 | 44 | REDIRECT_EXCESSIVE (after tracing) | C | Trop de redirections | Too many redirects | Ce lien enchaîne trop de redirections ou tourne en boucle : LookFirst a cessé de le suivre. | This link chains too many redirects or loops: LookFirst stopped following it. |
+| 45 | DOMAIN_UNKNOWN (after RDAP, 404) | I | Domaine inconnu | Unknown domain | Le registre ne connaît pas ce nom de domaine : rien ne peut être dit de son âge. | The registry does not know this domain name: nothing can be said about its age. |
 
 Added by LF-18 (codes created after this table, rows 24 to 42): severities are those of `SignalCode`. Typed details are turned into words by the UI (`payment_problem_*`, `otp_param_*`, `script_*`), never printed as code names. BRAND_LOOKALIKE has one sentence per kind (`reason_brand_lookalike_homoglyph`, `_typo`, `_combined`; the character is not known to the UI, so the sentence names the brand only) and MIXED_SCRIPT / WHOLE_SCRIPT_CONFUSABLE name the label (evidence, `%2$s`) besides the alphabets (`%1$s`). The evidence of a sentence is bold and underlined, cut at 80 characters, its invisible characters shown as tokens. Strings: `res/values/reasons.xml` and `res/values-fr/reasons.xml`; a test checks that every `SignalCode` has its texts in both languages.
 
@@ -665,10 +666,17 @@ Phrasing rules: one sentence, says what was seen, then what it means; no "malwar
 | warn_trace_title | Suivre les redirections ? | Trace redirects? |
 | warn_trace_body | LookFirst va contacter ce lien pour voir où il mène. Le site verra votre adresse IP et saura que son QR code a été scanné. Rien n'est ouvert ni installé. | LookFirst will contact this link to see where it leads. The site will see your IP address and learn that its QR code was scanned. Nothing is opened or installed. |
 | warn_rdap_title | Vérifier l'âge du domaine ? | Check domain age? |
-| warn_rdap_body | LookFirst demande à un registre public (RDAP) depuis quand ce nom de domaine existe. Seul le nom de domaine (%1$s) est envoyé, pas l'adresse complète. Le registre voit votre adresse IP. Le site lui-même n'est pas contacté. | LookFirst asks a public registry (RDAP) how long this domain name has existed. Only the domain name (%1$s) is sent, not the full address. The registry sees your IP address. The site itself is not contacted. |
+| warn_rdap_body | LookFirst demande à un registre public (RDAP, %2$s) depuis quand ce nom de domaine existe. Seul le nom de domaine (%1$s) est envoyé, pas l'adresse complète. Le registre voit votre adresse IP. Le site lui-même n'est pas contacté. | LookFirst asks a public registry (RDAP, %2$s) how long this domain name has existed. Only the domain name (%1$s) is sent, not the full address. The registry sees your IP address. The site itself is not contacted. |
+| age_check | Vérifier l'âge du domaine | Check domain age |
+| age_note_no_registry_list | Indisponible : la liste des registres est illisible. | Unavailable: the list of registries could not be read. |
+| age_note_no_domain | Disponible pour les liens avec un nom de domaine uniquement. | Only available for links with a domain name. |
+| age_note_no_server | Aucun registre connu pour ce type de domaine. | No known registry for this kind of domain. |
+| age_result_unknown | Ce domaine est inconnu du registre. | The registry does not know this domain. |
+| age_result_registered (plurals) | Domaine enregistré le %1$s (il y a %2$d jour(s)). | Domain registered on %1$s (%2$d day(s) ago). |
 | warn_continue | Continuer | Continue |
 | check_loading | Vérification en cours… | Checking… |
-| check_failed | Vérification impossible (délai dépassé ou réseau indisponible). Le verdict reste celui de l'analyse locale. | Check not possible (timed out or network unavailable). The verdict remains the local analysis. |
+| check_failed | Vérification impossible (délai dépassé ou réseau indisponible). Le verdict n'a pas changé. | Check not possible (timed out or network unavailable). The verdict has not changed. |
+| check_busy | Réessayez dans un instant. | Try again in a moment. |
 | trace_https_only | Disponible pour les liens https uniquement. | Only available for https links. |
 | trace_port_only | Disponible pour les liens sur le port https standard uniquement. | Only available for links on the standard https port. |
 | check_offline_note | Hors connexion | Offline |

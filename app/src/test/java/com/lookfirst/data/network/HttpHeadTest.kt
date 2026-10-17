@@ -179,4 +179,143 @@ class HttpHeadTest {
         val raw = "HTTP/1.1 302 Found\r\nLocation: /é\r\n\r\n".toByteArray(Charsets.UTF_8)
         assertEquals(listOf("/é"), HttpHead.read(ByteArrayInputStream(raw)) {}.locations)
     }
+
+    private fun body(text: String, max: Int = 1024, beforeRead: () -> Unit = {}): ResponseHead =
+        HttpHead.readResponse(ByteArrayInputStream(text.toByteArray(Charsets.ISO_8859_1)), max, beforeRead)
+
+    private fun ResponseHead.text() = String(this.body, Charsets.ISO_8859_1)
+
+    @Test
+    fun `a get request asks for json, without cookie, credential or referrer`() {
+        val text =
+            String(HttpHead.get("/domain/example.com", "rdap.example", "application/rdap+json"), Charsets.US_ASCII)
+        assertTrue(text.startsWith("GET /domain/example.com HTTP/1.1\r\nHost: rdap.example\r\n"))
+        assertTrue(text.contains("Accept: application/rdap+json\r\n"))
+        assertTrue(text.contains("Accept-Encoding: identity\r\n"))
+        assertTrue(text.endsWith("Connection: close\r\n\r\n"))
+        val names = text.split("\r\n").map { it.substringBefore(':', "").lowercase() }.filter { it.isNotEmpty() }
+        assertFalse(names.any { it in setOf("cookie", "authorization", "referer", "origin", "range") })
+        assertThrows(IllegalArgumentException::class.java) { HttpHead.get("/a\r\nX: y", "h.example", "a/b") }
+        assertThrows(IllegalArgumentException::class.java) { HttpHead.get("/", "h.example", "a/b\r\nX: y") }
+    }
+
+    @Test
+    fun `the user agent of a get is the one of the other requests`() {
+        fun ua(bytes: ByteArray) = String(bytes).lineSequence().first { it.startsWith("User-Agent:") }
+        assertEquals(ua(HttpHead.request("/a", "a.example", false)), ua(HttpHead.get("/b", "b.example", "a/b")))
+    }
+
+    @Test
+    fun `a body framed by Content-Length is read`() {
+        val head = body("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello")
+        assertEquals("hello", head.text())
+    }
+
+    @Test
+    fun `a body is read to the end of the connection without framing`() {
+        assertEquals("hello world", body("HTTP/1.1 200 OK\r\n\r\nhello world").text())
+    }
+
+    @Test
+    fun `a chunked body is decoded, extensions and trailers ignored`() {
+        val raw = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" +
+            "5;ext=1\r\nhello\r\n6\r\n world\r\nA\r\n0123456789\r\n0\r\nX-Trailer: y\r\n\r\n"
+        assertEquals("hello world0123456789", body(raw).text())
+    }
+
+    @Test
+    fun `a body is only read for a 200 answer`() {
+        assertEquals(0, body("HTTP/1.1 404 Not Found\r\nContent-Length: 5\r\n\r\nhello").body.size)
+        assertEquals(0, body("HTTP/1.1 301 Moved\r\nLocation: /x\r\n\r\nhello").body.size)
+        assertEquals(0, body("HTTP/1.1 200 OK\r\n\r\nhello", max = 0).body.size)
+    }
+
+    @Test
+    fun `a body above the cap is refused whatever the framing`() {
+        listOf(
+            "HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\nhello world",
+            "HTTP/1.1 200 OK\r\n\r\nhello world",
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nb\r\nhello world\r\n0\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nContent-Length: 99999999\r\n\r\nx",
+        ).forEach { assertThrows(it, ProtocolException::class.java) { body(it, max = 10) } }
+    }
+
+    @Test
+    fun `an endless body is cut at the cap`() {
+        val endless = object : InputStream() {
+            var served = 0L
+            var head = "HTTP/1.1 200 OK\r\n\r\n".toByteArray()
+
+            override fun read(): Int = 'a'.code
+
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                if (head.isNotEmpty()) {
+                    val n = minOf(len, head.size)
+                    System.arraycopy(head, 0, b, off, n)
+                    head = head.copyOfRange(n, head.size)
+                    return n
+                }
+                for (i in 0 until len) b[off + i] = 'a'.code.toByte()
+                served += len
+                return len
+            }
+        }
+        assertThrows(ProtocolException::class.java) { HttpHead.readResponse(endless, 1000) {} }
+        assertTrue(endless.served < 1000 + 4096 + 16)
+    }
+
+    @Test
+    fun `a truncated body is refused`() {
+        assertThrows(ProtocolException::class.java) { body("HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nhello") }
+        assertThrows(ProtocolException::class.java) {
+            body("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhel")
+        }
+    }
+
+    @Test
+    fun `ambiguous or unsupported framing is refused`() {
+        listOf(
+            "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nContent-Length: 6\r\n\r\nhello!",
+            "HTTP/1.1 200 OK\r\nContent-Length: +5\r\n\r\nhello",
+            "HTTP/1.1 200 OK\r\nContent-Length: -1\r\n\r\nhello",
+            "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip, chunked\r\n\r\n0\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: 2\r\n\r\nab",
+        ).forEach { assertThrows(it, ProtocolException::class.java) { body(it) } }
+    }
+
+    @Test
+    fun `identical Content-Length repeats and identity coding are accepted`() {
+        val raw = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Length: 2\r\nContent-Encoding: identity\r\n\r\nab"
+        assertEquals("ab", body(raw).text())
+    }
+
+    @Test
+    fun `a malformed chunk is refused`() {
+        listOf(
+            "zz\r\nab\r\n0\r\n\r\n",
+            "\r\nab\r\n0\r\n\r\n",
+            "123456789\r\n",
+            "2\r\nabXX0\r\n\r\n",
+            "2;" + "x".repeat(300) + "\r\nab\r\n0\r\n\r\n",
+            "2\nab\r\n0\r\n\r\n",
+        ).forEach { chunks ->
+            val raw = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n$chunks"
+            assertThrows(chunks, ProtocolException::class.java) { body(raw) }
+        }
+    }
+
+    @Test
+    fun `the body read stops at the time budget`() {
+        var calls = 0
+        assertThrows(IOException::class.java) {
+            body("HTTP/1.1 200 OK\r\n\r\nhello") { if (++calls > 1) throw IOException("budget spent") }
+        }
+    }
+
+    @Test
+    fun `a body that arrived with the head is not lost`() {
+        // The whole answer comes in one read: the head reader has already taken the start of the body.
+        assertEquals("hello", body("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello").text())
+    }
 }

@@ -39,7 +39,12 @@ enum class SignalCode(val severity: Severity) {
 
     /** New. A redirect loop or more than five redirects: the chain was not followed to the end. */
     REDIRECT_EXCESSIVE(Severity.CAUTION),
+
+    /** SUSPICIOUS under 30 days of registration, CAUTION from 30 to 90 days (decision D-rdap). `count` is the age in days. */
     DOMAIN_RECENT(Severity.SUSPICIOUS),
+
+    /** New. The registry answered that it does not know the domain (RDAP 404). Information only, never a level. */
+    DOMAIN_UNKNOWN(Severity.INFO),
 
     /** New. Scheme missing, odd slashes or backslashes: the URL is not written the way a browser form expects. */
     URL_ODD_FORMAT(Severity.CAUTION),

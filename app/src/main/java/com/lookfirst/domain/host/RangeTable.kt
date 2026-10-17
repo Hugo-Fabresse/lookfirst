@@ -62,6 +62,13 @@ internal object HostResources {
         null
     }
 
+    /** The raw bytes of an embedded data file (at most 1 MB), or null if it is missing or larger. */
+    fun bytes(name: String): ByteArray? = try {
+        HostResources::class.java.getResourceAsStream("/lookfirst/host/$name")?.use { readBounded(it) }
+    } catch (ignored: IOException) {
+        null
+    }
+
     private fun readBounded(stream: InputStream): ByteArray? {
         val out = ByteArrayOutputStream()
         val buffer = ByteArray(BUFFER_SIZE)

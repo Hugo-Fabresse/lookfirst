@@ -28,6 +28,8 @@ class QrImageAnalyzer(private val decoder: BarcodeDecoder, private val onCodeRea
             )
             val text = decoder.decode(frame) ?: return
             if (finished.compareAndSet(false, true)) onCodeRead(text)
+        } catch (ignored: RuntimeException) {
+            // A hostile frame must never crash the process: no read, the next frame is tried.
         } finally {
             image.close()
         }

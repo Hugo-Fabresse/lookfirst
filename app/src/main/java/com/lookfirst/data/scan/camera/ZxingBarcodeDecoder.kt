@@ -32,6 +32,9 @@ class ZxingBarcodeDecoder @Inject constructor() : BarcodeDecoder {
             QRCodeReader().decode(BinaryBitmap(HybridBinarizer(source)), HINTS).text?.takeIf { it.isNotEmpty() }
         } catch (ignored: ReaderException) {
             null
+        } catch (ignored: RuntimeException) {
+            // A hostile image must never crash the process: no read.
+            null
         }
     }
 

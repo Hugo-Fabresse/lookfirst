@@ -2,13 +2,18 @@ package com.lookfirst
 
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import com.lookfirst.data.platform.ClipboardWriter
 import com.lookfirst.data.scan.camera.QrAnalyzerFactory
-import com.lookfirst.ui.screens.scan.ScanRoute
+import com.lookfirst.ui.components.TouchGuard
+import com.lookfirst.ui.components.isPartiallyObscured
+import com.lookfirst.ui.navigation.LookFirstNavHost
+import com.lookfirst.ui.screens.result.ResultViewModel
 import com.lookfirst.ui.screens.scan.ScanViewModel
 import com.lookfirst.ui.theme.LookFirstTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -17,20 +22,43 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val scanViewModel: ScanViewModel by viewModels()
+    private val resultViewModel: ResultViewModel by viewModels()
 
     @Inject
     lateinit var analyzerFactory: QrAnalyzerFactory
+
+    @Inject
+    lateinit var clipboard: ClipboardWriter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             LookFirstTheme {
-                ScanRoute(viewModel = scanViewModel, analyzerFactory = analyzerFactory)
+                LookFirstNavHost(
+                    scanViewModel = scanViewModel,
+                    resultViewModel = resultViewModel,
+                    analyzerFactory = analyzerFactory,
+                )
             }
         }
         hardenAgainstOverlays()
     }
+
+    override fun onStop() {
+        super.onStop()
+        clipboard.onAppStopped()
+    }
+
+    /** From API 29 the clipboard is readable only with the focus: a sensitive copy is cleared here (T-SCH-11). */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) clipboard.onWindowFocused()
+    }
+
+    /** Reports touches that arrive under an overlay to [TouchGuard], which the action buttons consult. */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean =
+        TouchGuard.track(ev.isPartiallyObscured()) { super.dispatchTouchEvent(ev) }
 
     /**
      * Threat model T-UI-3 (tapjacking): touches are dropped while another window covers ours, and on API 31+

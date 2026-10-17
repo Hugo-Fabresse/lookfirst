@@ -132,6 +132,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.navigation.compose)
 
     // Camera + QR decoding on the device (D11: ZXing core, no Google services).
     implementation(libs.androidx.camera.core)

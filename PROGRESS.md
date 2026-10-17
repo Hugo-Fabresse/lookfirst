@@ -10,7 +10,8 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-13 — Robolectric android-all résolu et vérifié par Gradle (tests hors ligne)
 - [✅ DONE] LF-7 — parcours et écrans (docs/design/ux.md)
 - [✅ DONE] LF-8 — décodage sûr de tous les types de contenu QR (fusionné, PR #13) — tests: 98 passed
-- [🔄 WIP] LF-14 — alertes semgrep ouvertes triées (#5 faux positif accepté, #6/#10/#11 minimumReleaseAge par règle Renovate)
+- [✅ DONE] LF-14 — alertes semgrep ouvertes triées (#5 faux positif accepté, #6/#10/#11 minimumReleaseAge par règle Renovate)
 - [✅ DONE] LF-15 — signaux de risque par type de contenu (analyseurs purs, fusionné, PR #16) — tests: 58 ajoutés
-- [🔄 WIP] LF-9 — scan caméra (CameraX + ZXing, permission, écran Scan, résultat provisoire) — PR ouverte, CI à confirmer
-- [🔄 WIP] LF-16 — normalisation des hôtes (UTS #46 embarqué, PSL), homographes, imitations de marques — PR ouverte, CI à confirmer
+- [✅ DONE] LF-9 — scan caméra (CameraX + ZXing, permission, écran Scan) — fusionné, PR #15
+- [🔄 WIP] LF-11 — écran Résultat : contenu exact + Copier / Annuler, navigation Scan → Résultat
+- [🔄 WIP] LF-16 — normalisation des hôtes (UTS #46 embarqué, PSL), homographes, imitations de marques — PR ouverte (#18), CI à confirmer

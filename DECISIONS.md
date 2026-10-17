@@ -48,6 +48,16 @@ DECISION [analyse] : USERINFO_AT = DANGEROUS si le userinfo contient un « . » 
 DECISION [analyse] : détails de signal typés (PaymentProblem, OtpParam) — Untrusted reste réservé au texte scanné
 DECISION [scan] : permission HIDE_OVERLAY_WINDOWS (normale, sans invite) ajoutée — setHideOverlayWindows(true) n'a d'effet qu'avec elle (T-UI-3)
 DECISION [scan] : tout refus de CAMERA mène à l'écran « refusée » (réglages Android) — pas de seconde invite, ni culpabilisation (ux 5.3)
+DECISION [scan] : après lecture ScanViewModel ne garde pas la chaîne — elle passe à ResultViewModel (jamais dans une route ni dans l'état sauvegardé), conservée tant que l'écran Résultat est ouvert
+DECISION [result] : navigation Scan -> Résultat sans animation, ViewModels portés par l'activité — pas de hilt-navigation-compose, pas d'argument de route contenant le QR
+DECISION [result] : contenu exact masqué tant que l'utilisateur ne touche pas « Afficher » quand il contient un secret (otpauth, mot de passe Wi-Fi) — sinon le secret fuit dans le bloc de contenu
+DECISION [result] : Copier copie la chaîne lue par la caméra telle quelle (pas la forme NFC affichée) — « texte exact » ; presse-papiers vidé au retour dans l'app seulement s'il contient encore ce secret (API 28+)
+DECISION [result] : textes ajoutés hors ux.md §7 (type_url_no_scheme, field_*, userinfo_note, camera_unavailable, camera_retry, a11y_invisible_other) — à reporter dans ux.md par le designer
+DECISION [scan] : caméra absente ou occupée = état « caméra indisponible » avec Réessayer, image conservée — pas de viseur vide muet
+DECISION [result] : hôte non ASCII = avertissement « caractères non latins » sous l'hôte — la forme punycode viendra avec LF-16/LF-18
+DECISION [result] : presse-papiers vidé sur le focus de la fenêtre après avoir quitté l'app, label aléatoire comparé sans jamais lire le texte — API 29+ ne donne la lecture qu'avec le focus
+DECISION [result] : TouchGuard protège Copier seulement (écran et dialogue), message si bloqué — Annuler et Retour restent toujours utilisables
+DECISION [result] : FLAG_SECURE et capture des récents désactivée tant qu'un contenu avec secret est affiché — l'utilisateur peut le révéler
 DECISION [scan] : après lecture le ViewModel ne garde que la longueur du contenu — la chaîne brute sera conservée par LF-11 avec l'écran résultat
 DECISION [hôtes] : UTS #46 non transitoire + Punycode embarqués en Kotlin pur, générés depuis les fichiers Unicode 18.0.0 (ADR-0006) — ICU4J trop lourd, android.icu exige l'API 24, java.net.IDN est IDNA2003 ; testés sur IdnaTestV2 (6 396 cas) et les vecteurs RFC 3492
 DECISION [hôtes] : paramètres WHATWG (pas de STD3, pas de CheckHyphens) + longueurs DNS + rejet des caractères d'hôte interdits après mapping (un ＠ pleine chasse devient « @ ») — évite le contournement du userinfo ; hôte invalide = URL_MALFORMED + ANALYSIS_INCOMPLETE

@@ -52,7 +52,7 @@ internal fun OptionalChecksSection(checks: OptionalChecks, onTrace: () -> Unit, 
             modifier = modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         )
     }
-    if (checks.trace == TraceState.DONE) return
+    if (checks.trace == CheckState.DONE) return
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = stringResource(R.string.optional_checks),
@@ -61,14 +61,14 @@ internal fun OptionalChecksSection(checks: OptionalChecks, onTrace: () -> Unit, 
         )
         TextButton(
             onClick = onTrace,
-            enabled = checks.traceable && checks.online && checks.trace != TraceState.RUNNING,
+            enabled = checks.traceable && checks.online && checks.trace != CheckState.RUNNING,
             modifier = Modifier.heightIn(min = MinTarget),
         ) { Text(stringResource(R.string.trace_redirects)) }
         val note = when {
             checks.httpsOnly -> R.string.trace_https_only
             checks.unusualPort -> R.string.trace_port_only
             !checks.online -> R.string.check_offline_note
-            checks.trace == TraceState.FAILED -> R.string.check_failed
+            checks.trace == CheckState.FAILED -> R.string.check_failed
             else -> null
         }
         note?.let {
@@ -87,8 +87,8 @@ internal fun OptionalChecksSection(checks: OptionalChecks, onTrace: () -> Unit, 
  * (tapjacking, T-UI-3). Cancel stays available while the request runs.
  */
 @Composable
-internal fun TraceSheet(state: TraceState?, actions: ChecksActions, onBlocked: () -> Unit) {
-    if (state != TraceState.WARNING && state != TraceState.RUNNING) return
+internal fun TraceSheet(state: CheckState?, actions: ChecksActions, onBlocked: () -> Unit) {
+    if (state != CheckState.WARNING && state != CheckState.RUNNING) return
     val onConfirm = actions.onConfirmTrace
     val onCancel = actions.onCancelTrace
     val cancelFocus = remember { FocusRequester() }
@@ -98,7 +98,7 @@ internal fun TraceSheet(state: TraceState?, actions: ChecksActions, onBlocked: (
         title = { Text(stringResource(R.string.warn_trace_title)) },
         text = {
             HardenDialogWindow()
-            if (state == TraceState.WARNING) {
+            if (state == CheckState.WARNING) {
                 Text(stringResource(R.string.warn_trace_body))
             } else {
                 Row(
@@ -116,7 +116,7 @@ internal fun TraceSheet(state: TraceState?, actions: ChecksActions, onBlocked: (
             }
         },
         confirmButton = {
-            if (state == TraceState.WARNING) {
+            if (state == CheckState.WARNING) {
                 TextButton(onClick = guarded(onBlocked = onBlocked, action = onConfirm)) {
                     Text(stringResource(R.string.warn_continue))
                 }

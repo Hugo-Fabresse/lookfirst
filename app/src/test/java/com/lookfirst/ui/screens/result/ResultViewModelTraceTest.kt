@@ -119,7 +119,7 @@ class ResultViewModelTraceTest {
         val vm = shown("http://a.example/")
         assertTrue(vm.checks()!!.httpsOnly)
         vm.onTraceRequested()
-        assertEquals(TraceState.IDLE, vm.checks()!!.trace)
+        assertEquals(CheckState.IDLE, vm.checks()!!.trace)
     }
 
     @Test
@@ -127,16 +127,16 @@ class ResultViewModelTraceTest {
         val vm = shown("https://a.example:8443/")
         assertTrue(vm.checks()!!.unusualPort)
         vm.onTraceRequested()
-        assertEquals(TraceState.IDLE, vm.checks()!!.trace)
+        assertEquals(CheckState.IDLE, vm.checks()!!.trace)
         assertTrue(tracer.requested.isEmpty())
     }
 
     @Test
     fun `asking opens the warning and nothing is sent`() {
         val vm = shown("https://a.example/")
-        assertEquals(TraceState.IDLE, vm.checks()!!.trace)
+        assertEquals(CheckState.IDLE, vm.checks()!!.trace)
         vm.onTraceRequested()
-        assertEquals(TraceState.WARNING, vm.checks()!!.trace)
+        assertEquals(CheckState.WARNING, vm.checks()!!.trace)
         assertTrue(tracer.requested.isEmpty())
     }
 
@@ -146,7 +146,7 @@ class ResultViewModelTraceTest {
         val before = vm.content().verdict
         vm.onTraceRequested()
         vm.onTraceCancelled()
-        assertEquals(TraceState.IDLE, vm.checks()!!.trace)
+        assertEquals(CheckState.IDLE, vm.checks()!!.trace)
         assertTrue(tracer.requested.isEmpty())
         assertEquals(before, vm.content().verdict)
     }
@@ -156,7 +156,7 @@ class ResultViewModelTraceTest {
         val vm = shown("https://a.example/")
         vm.onTraceConfirmed()
         assertTrue(tracer.requested.isEmpty())
-        assertEquals(TraceState.IDLE, vm.checks()!!.trace)
+        assertEquals(CheckState.IDLE, vm.checks()!!.trace)
     }
 
     @Test
@@ -165,7 +165,7 @@ class ResultViewModelTraceTest {
         val vm = shown("https://a.example/")
         assertFalse(vm.checks()!!.online)
         vm.onTraceRequested()
-        assertEquals(TraceState.IDLE, vm.checks()!!.trace)
+        assertEquals(CheckState.IDLE, vm.checks()!!.trace)
         assertTrue(tracer.requested.isEmpty())
     }
 
@@ -175,7 +175,7 @@ class ResultViewModelTraceTest {
         online = false
         vm.onTraceRequested()
         assertFalse(vm.checks()!!.online)
-        assertEquals(TraceState.IDLE, vm.checks()!!.trace)
+        assertEquals(CheckState.IDLE, vm.checks()!!.trace)
     }
 
     @Test
@@ -198,7 +198,7 @@ class ResultViewModelTraceTest {
         assertEquals(VerdictLevel.DANGEROUS, after.level)
         assertEquals(before.payloadId, after.payloadId)
         assertTrue(SignalCode.REDIRECT_FINAL in after.reasons.map { it.code })
-        assertEquals(TraceState.DONE, vm.checks()!!.trace)
+        assertEquals(CheckState.DONE, vm.checks()!!.trace)
         assertEquals(VerdictLevel.DANGEROUS, vm.checks()!!.levelChangedTo)
     }
 
@@ -207,7 +207,7 @@ class ResultViewModelTraceTest {
         val vm = shown("https://a.example/")
         vm.onTraceRequested()
         vm.onTraceConfirmed()
-        assertEquals(TraceState.DONE, vm.checks()!!.trace)
+        assertEquals(CheckState.DONE, vm.checks()!!.trace)
         assertNull(vm.checks()!!.levelChangedTo)
         assertTrue(SignalCode.REDIRECT_FINAL in vm.content().verdict!!.reasons.map { it.code })
     }
@@ -245,10 +245,10 @@ class ResultViewModelTraceTest {
         tracer.outcome = { TraceOutcome.Failed(TraceFailure.TIMEOUT) }
         vm.onTraceRequested()
         vm.onTraceConfirmed()
-        assertEquals(TraceState.FAILED, vm.checks()!!.trace)
+        assertEquals(CheckState.FAILED, vm.checks()!!.trace)
         assertEquals(before, vm.content().verdict)
         vm.onTraceRequested()
-        assertEquals(TraceState.WARNING, vm.checks()!!.trace)
+        assertEquals(CheckState.WARNING, vm.checks()!!.trace)
         assertEquals(1, tracer.requested.size)
     }
 
@@ -258,7 +258,7 @@ class ResultViewModelTraceTest {
         vm.onTraceRequested()
         vm.onTraceConfirmed()
         vm.onTraceRequested()
-        assertEquals(TraceState.DONE, vm.checks()!!.trace)
+        assertEquals(CheckState.DONE, vm.checks()!!.trace)
         assertEquals(1, tracer.requested.size)
     }
 
@@ -271,11 +271,11 @@ class ResultViewModelTraceTest {
         val before = vm.content().verdict
         vm.onTraceRequested()
         vm.onTraceConfirmed()
-        assertEquals(TraceState.RUNNING, vm.checks()!!.trace)
+        assertEquals(CheckState.RUNNING, vm.checks()!!.trace)
         vm.onTraceCancelled()
         gate.complete(Unit)
         shadowOf(Looper.getMainLooper()).idle()
-        assertEquals(TraceState.IDLE, vm.checks()!!.trace)
+        assertEquals(CheckState.IDLE, vm.checks()!!.trace)
         assertEquals(before, vm.content().verdict)
     }
 

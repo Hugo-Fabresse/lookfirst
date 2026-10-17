@@ -226,10 +226,10 @@ class ResultViewModel @Inject constructor(
     fun onTraceRequested() {
         val current = mutableState.value as? ResultUiState.Content ?: return
         val checks = current.checks ?: return
-        val busy = checks.trace == TraceState.RUNNING || checks.trace == TraceState.DONE
+        val busy = checks.trace == CheckState.RUNNING || checks.trace == CheckState.DONE
         if (!checks.traceable || busy) return
         val online = networkStatus.isOnline()
-        updateChecks { it.copy(online = online, trace = if (online) TraceState.WARNING else it.trace) }
+        updateChecks { it.copy(online = online, trace = if (online) CheckState.WARNING else it.trace) }
     }
 
     /** "Continue" in the warning: the one place where a request about the scanned link is made. */
@@ -237,12 +237,12 @@ class ResultViewModel @Inject constructor(
         val checks = (mutableState.value as? ResultUiState.Content)?.checks ?: return
         val start = traceStart
         val base = localVerdict
-        if (checks.trace != TraceState.WARNING || start == null || base == null) return
-        updateChecks { it.copy(trace = TraceState.RUNNING) }
+        if (checks.trace != CheckState.WARNING || start == null || base == null) return
+        updateChecks { it.copy(trace = CheckState.RUNNING) }
         tracing = viewModelScope.launch {
             val outcome = redirectTracer.trace(start)
             if (outcome !is TraceOutcome.Completed) {
-                updateChecks { it.copy(trace = TraceState.FAILED) }
+                updateChecks { it.copy(trace = CheckState.FAILED) }
                 return@launch
             }
             val updated = withContext(workDispatcher) { merge(base, outcome) }
@@ -250,7 +250,7 @@ class ResultViewModel @Inject constructor(
                 if (it !is ResultUiState.Content || it.checks == null) return@update it
                 val before = it.verdict?.level
                 val changed = if (before != null && updated.level != before) updated.level else null
-                it.copy(verdict = updated, checks = it.checks.copy(trace = TraceState.DONE, levelChangedTo = changed))
+                it.copy(verdict = updated, checks = it.checks.copy(trace = CheckState.DONE, levelChangedTo = changed))
             }
         }
     }
@@ -260,10 +260,10 @@ class ResultViewModel @Inject constructor(
         tracing?.cancel()
         tracing = null
         updateChecks {
-            if (it.trace == TraceState.WARNING ||
-                it.trace == TraceState.RUNNING
+            if (it.trace == CheckState.WARNING ||
+                it.trace == CheckState.RUNNING
             ) {
-                it.copy(trace = TraceState.IDLE)
+                it.copy(trace = CheckState.IDLE)
             } else {
                 it
             }

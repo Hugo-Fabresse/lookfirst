@@ -112,33 +112,33 @@ class OptionalChecksScreenTest {
 
     @Test
     fun `a failed check keeps the button and explains that the verdict is the local analysis`() {
-        show(checks = OptionalChecks(trace = TraceState.FAILED))
+        show(checks = OptionalChecks(trace = CheckState.FAILED))
         traceButton.performScrollTo().assertIsEnabled()
         composeRule.onNodeWithText(text(R.string.check_failed)).assertExists()
     }
 
     @Test
     fun `a done check is not offered again`() {
-        show(checks = OptionalChecks(trace = TraceState.DONE))
+        show(checks = OptionalChecks(trace = CheckState.DONE))
         composeRule.onAllNodesWithText(text(R.string.optional_checks)).assertCountEquals(0)
         composeRule.onAllNodesWithText(text(R.string.trace_redirects)).assertCountEquals(0)
     }
 
     @Test
     fun `a level change is announced once and an unchanged level says nothing`() {
-        show(checks = OptionalChecks(trace = TraceState.DONE, levelChangedTo = VerdictLevel.DANGEROUS))
+        show(checks = OptionalChecks(trace = CheckState.DONE, levelChangedTo = VerdictLevel.DANGEROUS))
         composeRule.onNodeWithText(text(R.string.a11y_level_changed, text(R.string.level_dangerous))).assertExists()
     }
 
     @Test
     fun `no announcement without a level change`() {
-        show(checks = OptionalChecks(trace = TraceState.DONE))
+        show(checks = OptionalChecks(trace = CheckState.DONE))
         composeRule.onAllNodesWithText(text(R.string.a11y_level_changed, ""), substring = true).assertCountEquals(0)
     }
 
     @Test
     fun `the warning explains what is sent, focuses Cancel and continues only on its button`() {
-        show(checks = OptionalChecks(trace = TraceState.WARNING))
+        show(checks = OptionalChecks(trace = CheckState.WARNING))
         composeRule.onNodeWithText(text(R.string.warn_trace_title)).assertExists()
         composeRule.onNodeWithText(text(R.string.warn_trace_body)).assertExists()
         composeRule.onNode(dialogCancel).assertIsFocused()
@@ -154,7 +154,7 @@ class OptionalChecksScreenTest {
 
     @Test
     fun `while it loads the sheet shows progress and keeps Cancel, without Continue`() {
-        show(checks = OptionalChecks(trace = TraceState.RUNNING))
+        show(checks = OptionalChecks(trace = CheckState.RUNNING))
         composeRule.onNodeWithText(text(R.string.check_loading)).assertExists()
         composeRule.onAllNodesWithText(text(R.string.warn_continue)).assertCountEquals(0)
         composeRule.onNode(dialogCancel).assertIsFocused().performClick()
@@ -169,7 +169,7 @@ class OptionalChecksScreenTest {
 
     @Test
     fun `the link will open stays the scanned address and Open is unchanged`() {
-        show(checks = OptionalChecks(trace = TraceState.DONE, levelChangedTo = VerdictLevel.CAUTION))
+        show(checks = OptionalChecks(trace = CheckState.DONE, levelChangedTo = VerdictLevel.CAUTION))
         composeRule.onNodeWithText(text(R.string.link_will_open)).assertExists()
         composeRule.onNodeWithText("a.example").assertExists()
         composeRule.onNodeWithContentDescription(text(R.string.open_in_browser)).assertExists()

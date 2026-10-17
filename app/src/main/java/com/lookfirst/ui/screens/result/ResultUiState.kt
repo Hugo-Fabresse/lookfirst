@@ -84,7 +84,7 @@ data class HostDisplay(val shown: Untrusted, val technical: String?, val strongF
 enum class OpenKind { BROWSER, DIALER, SMS, MAIL, MAPS, WIFI }
 
 /** Where the redirect check stands. The warning is shown every time, never remembered. */
-enum class TraceState {
+enum class CheckState {
     IDLE,
 
     /** The warning sheet (ux.md 5.12) is open. */
@@ -106,7 +106,7 @@ enum class TraceState {
  * (TalkBack announces it through a live region, nothing is announced otherwise).
  */
 data class OptionalChecks(
-    val trace: TraceState = TraceState.IDLE,
+    val trace: CheckState = CheckState.IDLE,
     val httpsOnly: Boolean = false,
     /** The link names a port other than 443: the tracer only contacts 443 (T-NET-2). */
     val unusualPort: Boolean = false,

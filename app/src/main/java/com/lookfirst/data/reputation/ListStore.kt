@@ -44,9 +44,15 @@ internal object ListVariation {
     fun tolerancePercent(ageDays: Long): Long? =
         if (ageDays >= NO_LIMIT_AFTER_DAYS) null else BASE_VARIATION_PERCENT + VARIATION_PERCENT_PER_DAY * ageDays
 
-    fun exceedsTolerance(oldCount: Long, newCount: Long, tolerancePercent: Long?): Boolean {
+    /**
+     * True when more than [tolerancePercent] of the [oldCount] installed entries were removed, or when more than
+     * that share of them was added (LF-32: a count alone lets a full swap through at equal size). No limit when
+     * [tolerancePercent] is null or nothing is installed.
+     */
+    fun exceedsTolerance(oldCount: Long, difference: SetDifference, tolerancePercent: Long?): Boolean {
         if (tolerancePercent == null || oldCount <= 0) return false
-        return Math.abs(newCount - oldCount) * PERCENT > oldCount * tolerancePercent
+        val limit = oldCount * tolerancePercent
+        return difference.removed * PERCENT > limit || difference.added * PERCENT > limit
     }
 }
 
@@ -77,6 +83,9 @@ class ListStore internal constructor(
 
     @Volatile private var maxSeenMillis = 0L
 
+    /** Sources whose recorded time is in the future of the clock and of the publisher's `Date`; memory only. */
+    private val unknownAgeSources = HashSet<Int>()
+
     /** The indexes to look hosts up in; null when none is installed or when a load/installation holds the lock. */
     internal fun current(): LoadedLists? {
         if (loadAttempted) return loaded
@@ -99,6 +108,13 @@ class ListStore internal constructor(
         return ListsSummary(lists.sources.sumOf { it.index.entryCount }, ageDays(lists))
     }
 
+    /**
+     * The age the lookup judges staleness by: -1 (unknown, shown as `LISTS_STALE`) while a source's recorded time
+     * lies after both the device clock and the publisher's `Date` (recorded with a wrong clock); else [ageDays].
+     */
+    internal fun staleAgeDays(lists: LoadedLists): Int =
+        if (lists.sources.any { it.source.id in unknownAgeSources }) -1 else ageDays(lists)
+
     /** Whole days since the oldest source was last confirmed, against `max(clock, latest time ever seen)`. */
     internal fun ageDays(lists: LoadedLists): Int {
         val oldest = lists.sources.minOf { it.checkedAtMillis }
@@ -120,7 +136,19 @@ class ListStore internal constructor(
         InstalledInfo(entry.index.entryCount, daysBetween(entry.checkedAtMillis, now), validator)
     }
 
-    private fun referenceClock(): Long = maxOf(clock(), maxSeenMillis)
+    /**
+     * The time recorded for a successful contact: `max(clock, latest time seen)`, never below the device clock. The
+     * publisher's `Date` is untrusted (the publisher chooses it): it may only bring a latest time seen that lies
+     * more than a day after it back down, and never below the clock (LF-32). It is never used to lift a limit.
+     */
+    private fun referenceClock(serverTime: Long? = null): Long = maxOf(clock(), cappedMaxSeen(serverTime))
+
+    private fun cappedMaxSeen(serverTime: Long?): Long =
+        if (serverTime != null && maxSeenMillis > serverTime + DAY_MILLIS) {
+            maxOf(clock(), serverTime + DAY_MILLIS)
+        } else {
+            maxSeenMillis
+        }
 
     private fun daysBetween(from: Long, to: Long): Int = ((to - from).coerceAtLeast(0L) / DAY_MILLIS).toInt()
 
@@ -177,17 +205,19 @@ class ListStore internal constructor(
     }
 
     /** The server said "not modified": the installed index is current as of now. */
-    internal fun markUpToDate(source: ListSource) = lock.withLock {
+    internal fun markUpToDate(source: ListSource, serverTimeMillis: Long? = null) = lock.withLock {
         ensureLoaded()
-        val now = referenceClock()
+        val now = referenceClock(serverTimeMillis)
+        val seen = maxOf(cappedMaxSeen(serverTimeMillis), now)
         val state = ListsState.read(stateFile)
         val fresh = state.of(source.id).copy(fetchedAtMillis = now, failure = null, failureAtMillis = null)
         try {
-            persist(state.with(source.id, fresh).copy(maxSeenMillis = maxOf(state.maxSeenMillis, now)))
+            persist(state.with(source.id, fresh).copy(maxSeenMillis = seen))
         } catch (@Suppress("SwallowedException") ignored: IOException) {
             // Only the age is not refreshed: the installed index is still the right one.
         }
-        maxSeenMillis = maxOf(maxSeenMillis, now)
+        maxSeenMillis = seen
+        unknownAgeSources -= source.id
         loaded = loaded?.let { lists ->
             LoadedLists(
                 lists.sources.map {
@@ -209,45 +239,71 @@ class ListStore internal constructor(
     }
 
     /** Applies the checks of ADR-0008 to a parsed list and, if all pass, replaces the installed index atomically. */
-    internal fun install(source: ListSource, parsed: ParseOutcome.Parsed, validatorMillis: Long?): ListInstallResult =
-        lock.withLock {
-            val result = try {
-                installLocked(source, parsed, validatorMillis)
-            } catch (@Suppress("SwallowedException") ignored: IOException) {
-                ListInstallResult.Rejected(ListFailure.STORAGE)
-            }
-            if (result is ListInstallResult.Rejected) recordFailureLocked(source, result.reason)
-            result
+    internal fun install(
+        source: ListSource,
+        parsed: ParseOutcome.Parsed,
+        validatorMillis: Long?,
+        serverTimeMillis: Long? = null,
+    ): ListInstallResult = lock.withLock {
+        noteUnknownAge(source, serverTimeMillis)
+        val result = try {
+            installLocked(source, parsed, validatorMillis, serverTimeMillis)
+        } catch (@Suppress("SwallowedException") ignored: IOException) {
+            ListInstallResult.Rejected(ListFailure.STORAGE)
         }
+        if (result is ListInstallResult.Rejected) recordFailureLocked(source, result.reason)
+        result
+    }
 
     private fun installLocked(
         source: ListSource,
         parsed: ParseOutcome.Parsed,
         validatorMillis: Long?,
+        serverTimeMillis: Long?,
     ): ListInstallResult {
-        val refusal = refusalFor(source, parsed.keys.size.toLong()) ?: writeIndex(source, parsed)
+        val entries = parsed.keys.size.toLong()
+        val refusal = refusalFor(source, parsed) ?: writeIndex(source, parsed)
         return if (refusal != null) {
             ListInstallResult.Rejected(refusal)
         } else {
-            adopt(source, parsed.keys.size.toLong(), validatorMillis)
+            adopt(source, entries, validatorMillis, serverTimeMillis)
         }
     }
 
     /** The entry bounds, then the variation limit against the installed index. Null when both pass. */
-    private fun refusalFor(source: ListSource, entries: Long): ListFailure? {
+    private fun refusalFor(source: ListSource, parsed: ParseOutcome.Parsed): ListFailure? {
+        val entries = parsed.keys.size.toLong()
         val installed = ensureLoaded()?.sources?.firstOrNull { it.source.id == source.id }
-        val age = installed?.let { daysBetween(it.checkedAtMillis, referenceClock()).toLong() }
         return when {
             entries < source.minEntries -> ListFailure.TOO_FEW
             entries > source.maxEntries -> ListFailure.TOO_MANY
-            installed != null && age != null && exceeds(installed.index.entryCount, entries, age) ->
-                ListFailure.VARIATION
+            installed != null && exceedsVariation(installed, parsed.keys) -> ListFailure.VARIATION
             else -> null
         }
     }
 
-    private fun exceeds(oldCount: Long, newCount: Long, ageDays: Long): Boolean =
-        ListVariation.exceedsTolerance(oldCount, newCount, ListVariation.tolerancePercent(ageDays))
+    /** Only ever makes the app more careful: flags a recorded time that neither the clock nor `Date` can explain. */
+    private fun noteUnknownAge(source: ListSource, serverTime: Long?) {
+        val installed = ensureLoaded()?.sources?.firstOrNull { it.source.id == source.id } ?: return
+        val recorded = installed.checkedAtMillis
+        if (serverTime != null && recorded > serverTime + DAY_MILLIS && recorded > clock() + DAY_MILLIS) {
+            unknownAgeSources += source.id
+        }
+    }
+
+    /**
+     * Set difference between the installed index and the candidate (both strictly increasing, merged in one linear
+     * pass over the mapped file: no copy, no hash set). An installed index that is not strictly increasing is
+     * damaged and cannot serve as a baseline: it is replaced like a first install, the entry bounds still apply.
+     * The tolerance depends on the local age only (recorded time against `max(clock, latest time seen)`): the
+     * publisher's `Date` never relaxes it.
+     */
+    private fun exceedsVariation(installed: LoadedSource, keys: LongArray): Boolean {
+        val age = daysBetween(installed.checkedAtMillis, referenceClock()).toLong()
+        val tolerance = ListVariation.tolerancePercent(age) ?: return false
+        val difference = installed.index.differenceTo(keys) ?: return false
+        return ListVariation.exceedsTolerance(installed.index.entryCount, difference, tolerance)
+    }
 
     /** Writes the index to a temporary file, validates it and renames it over the installed one. Null on success. */
     private fun writeIndex(source: ListSource, parsed: ParseOutcome.Parsed): ListFailure? {
@@ -271,15 +327,22 @@ class ListStore internal constructor(
         }
     }
 
-    private fun adopt(source: ListSource, entries: Long, validatorMillis: Long?): ListInstallResult {
-        val now = referenceClock()
+    private fun adopt(
+        source: ListSource,
+        entries: Long,
+        validatorMillis: Long?,
+        serverTime: Long?,
+    ): ListInstallResult {
+        val now = referenceClock(serverTime)
+        val seen = maxOf(cappedMaxSeen(serverTime), now)
         val state = ListsState.read(stateFile)
         val validator = validatorMillis?.takeIf { it in 1..now }
         persist(
             state.with(source.id, SourceState(fetchedAtMillis = now, fullAtMillis = now, validatorMillis = validator))
-                .copy(maxSeenMillis = maxOf(state.maxSeenMillis, now)),
+                .copy(maxSeenMillis = seen),
         )
-        maxSeenMillis = maxOf(maxSeenMillis, now)
+        maxSeenMillis = seen
+        unknownAgeSources -= source.id
         val index = MappedIndex.open(indexFile(source)) ?: return ListInstallResult.Rejected(ListFailure.STORAGE)
         val others = loaded?.sources.orEmpty().filter { it.source.id != source.id }
         loaded = LoadedLists(others + LoadedSource(source, index, now))

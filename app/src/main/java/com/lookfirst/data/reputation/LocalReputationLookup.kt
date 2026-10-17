@@ -35,7 +35,7 @@ class LocalReputationLookup internal constructor(
 
     override fun lookup(host: NormalizedHost): ReputationResult {
         val lists = store.current() ?: return ReputationResult.ListsMissing
-        return lookupIn(lists, store.ageDays(lists), host)
+        return lookupIn(lists, store.staleAgeDays(lists), host)
     }
 
     internal fun lookupIn(lists: LoadedLists, ageDays: Int, host: NormalizedHost): ReputationResult {
@@ -54,7 +54,7 @@ class LocalReputationLookup internal constructor(
             val domainListed = domains.any { loaded.index.contains(Lfix.keyOf(Lfix.KIND_DOMAIN, it)) }
             if (hostListed || domainListed) return ReputationResult.Listed(loaded.source.displayName)
         }
-        return if (ageDays > LISTS_STALE_AFTER_DAYS) {
+        return if (ageDays > LISTS_STALE_AFTER_DAYS || ageDays < 0) {
             ReputationResult.ListsStale(ageDays)
         } else {
             ReputationResult.NotListed

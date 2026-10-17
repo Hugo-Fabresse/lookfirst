@@ -355,4 +355,40 @@ class PublisherDownloaderTest {
         assertTrue(runBlocking { none.download() }.outcomes.isEmpty())
         assertTrue(server.requests.isEmpty())
     }
+
+    @Test
+    fun aPastDateOnA200DoesNotLiftTheVariationLimit() {
+        server.put(first.url, domainLines(20), lastModified = TEST_LAST_MODIFIED)
+        run()
+        server.put(first.url, domainLines(20, "other"), date = PAST_DATE)
+        val outcome = only(run())
+        assertEquals(ListFailure.VARIATION, (outcome as SourceOutcome.Rejected).reason)
+        assertTrue(store.current()!!.sources.single().index.contains(Lfix.keyOf('d', "site3.com")))
+    }
+
+    @Test
+    fun aPastDateOnA304ThenA200WithoutDateKeepsTheLimit() {
+        server.put(first.url, domainLines(20), lastModified = TEST_LAST_MODIFIED)
+        run()
+        now += 2 * TEST_DAY
+        server.putStatus(first.url, 304, date = PAST_DATE)
+        assertEquals(SourceOutcome.UpToDate, only(run()))
+        server.put(first.url, domainLines(20, "other"))
+        val outcome = only(run())
+        assertEquals(ListFailure.VARIATION, (outcome as SourceOutcome.Rejected).reason)
+    }
+
+    @Test
+    fun aMalformedDateIsIgnored() {
+        server.put(first.url, domainLines(20), lastModified = TEST_LAST_MODIFIED)
+        run()
+        server.put(first.url, domainLines(21), date = "yesterday, around noon")
+        assertEquals(21L, (only(run()) as SourceOutcome.Installed).entries)
+        server.put(first.url, domainLines(21, "other"), date = "yesterday, around noon")
+        assertTrue(only(run()) is SourceOutcome.Rejected)
+    }
+
+    private companion object {
+        const val PAST_DATE = "Sat, 01 Jan 2000 00:00:00 GMT"
+    }
 }

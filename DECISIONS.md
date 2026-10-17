@@ -54,3 +54,7 @@ DECISION [result] : contenu exact masqué tant que l'utilisateur ne touche pas �
 DECISION [result] : Copier copie la chaîne lue par la caméra telle quelle (pas la forme NFC affichée) — « texte exact » ; presse-papiers vidé au retour dans l'app seulement s'il contient encore ce secret (API 28+)
 DECISION [result] : textes ajoutés hors ux.md §7 (type_url_no_scheme, field_*, userinfo_note, camera_unavailable, camera_retry, a11y_invisible_other) — à reporter dans ux.md par le designer
 DECISION [scan] : caméra absente ou occupée = état « caméra indisponible » avec Réessayer, image conservée — pas de viseur vide muet
+DECISION [result] : hôte non ASCII = avertissement « caractères non latins » sous l'hôte — la forme punycode viendra avec LF-16/LF-18
+DECISION [result] : presse-papiers vidé sur le focus de la fenêtre après avoir quitté l'app, label aléatoire comparé sans jamais lire le texte — API 29+ ne donne la lecture qu'avec le focus
+DECISION [result] : TouchGuard protège Copier seulement (écran et dialogue), message si bloqué — Annuler et Retour restent toujours utilisables
+DECISION [result] : FLAG_SECURE et capture des récents désactivée tant qu'un contenu avec secret est affiché — l'utilisateur peut le révéler

@@ -1,5 +1,6 @@
 package com.lookfirst.data.reputation
 
+import com.lookfirst.data.network.SystemTrust
 import com.lookfirst.domain.analysis.BrandList
 import com.lookfirst.domain.host.PublicSuffixList
 import kotlinx.coroutines.Job
@@ -62,8 +63,8 @@ internal class PublisherDownloader internal constructor(
     private val nanoTime: () -> Long = System::nanoTime,
 ) {
     @Inject
-    internal constructor(store: ListStore) : this(
-        UrlConnectionTransport(),
+    internal constructor(store: ListStore, trust: SystemTrust) : this(
+        UrlConnectionTransport(trust),
         ListSources.ALL,
         store,
         BrandList.officialDomains,

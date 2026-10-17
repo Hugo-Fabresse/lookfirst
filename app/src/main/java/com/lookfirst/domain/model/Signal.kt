@@ -27,6 +27,9 @@ enum class SignalCode(val severity: Severity) {
     NON_BROWSER_HANDLER(Severity.CAUTION),
     LISTS_STALE(Severity.CAUTION),
     LISTS_MISSING(Severity.CAUTION),
+
+    /** New. The reputation lookup failed: nothing can be said about the host. */
+    LISTS_UNAVAILABLE(Severity.CAUTION),
     UNPARSABLE(Severity.CAUTION),
     REDIRECT_HTTP(Severity.SUSPICIOUS),
     REDIRECT_FINAL(Severity.INFO),

@@ -1,5 +1,7 @@
 package com.lookfirst.domain.model
 
+import com.lookfirst.domain.host.HostNormalizer
+import com.lookfirst.domain.host.HostResult
 import java.math.BigDecimal
 
 /** One name/value pair of a query string, percent-decoded. Duplicates are kept in order. Never printed. */
@@ -33,6 +35,11 @@ sealed interface ScanPayload {
         val issues: Set<UrlIssue>,
     ) : ScanPayload {
         val hasUserinfo: Boolean get() = userinfo != null
+
+        /** UTS #46 result for [rawHost], computed once per payload (null for an IPv6 literal). Not part of equals. */
+        internal val normalizedHostResult: HostResult? by lazy(LazyThreadSafetyMode.NONE) {
+            if (hostKind == HostKind.IPV6) null else HostNormalizer.normalize(rawHost.value)
+        }
     }
 
     /** `WIFI:` credentials. */

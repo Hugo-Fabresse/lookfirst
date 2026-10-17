@@ -1,14 +1,13 @@
 package com.lookfirst.di
 
 import android.content.Context
-import com.lookfirst.BuildConfig
 import com.lookfirst.data.reputation.AndroidDirectorySync
-import com.lookfirst.data.reputation.AssetEmbeddedBundle
 import com.lookfirst.data.reputation.DefaultListUpdateControl
 import com.lookfirst.data.reputation.EmbeddedRdapPlanner
+import com.lookfirst.data.reputation.ListSources
+import com.lookfirst.data.reputation.ListStore
 import com.lookfirst.data.reputation.ListUpdateControl
 import com.lookfirst.data.reputation.LocalReputationLookup
-import com.lookfirst.data.reputation.ReputationStore
 import com.lookfirst.domain.analysis.ReputationLookup
 import com.lookfirst.domain.rdap.RdapPlanner
 import dagger.Binds
@@ -34,17 +33,16 @@ abstract class ReputationModule {
 
     companion object {
         /**
-         * Bundles live in `filesDir/reputation`, which the backup rules exclude (`data_extraction_rules.xml`,
-         * `allowBackup="false"`). Until a signed bundle exists nothing is installed and lookups say "lists missing".
+         * Indexes live in `filesDir/reputation`, which the backup rules exclude (`data_extraction_rules.xml`,
+         * `allowBackup="false"`). Until a first download succeeds nothing is installed and lookups say "lists missing".
          */
         @Provides
         @Singleton
-        fun provideReputationStore(@ApplicationContext context: Context): ReputationStore = ReputationStore(
+        fun provideListStore(@ApplicationContext context: Context): ListStore = ListStore(
             root = File(context.filesDir, "reputation"),
-            embedded = AssetEmbeddedBundle(context.assets),
+            sources = ListSources.ALL,
             clock = System::currentTimeMillis,
             directorySync = AndroidDirectorySync,
-            acceptTestKeys = BuildConfig.DEBUG,
         )
     }
 }

@@ -889,6 +889,6 @@ Rules: the icon is decorative (`contentDescription = null`) because the label ca
 |---|---|---|---|
 | D14 | Several QR codes in one image | First decoded only, with a visible line saying so | Simpler; a list to choose from adds a step where a decoy can be picked |
 | D15 | SEPA / payment and crypto | Copy only, no Open | No safe generic Intent; payment apps are the target of the attack |
-| D16 | Stale lists | CAUTION reason above 14 days; an initial signed bundle ships in the APK so lists are never absent on first launch (ADR-0005) | Phishing domains live hours to days; the APK bundle covers the first run and airplane mode |
+| D16 | Stale lists | CAUTION reason above 14 days; no list ships in the APK (ADR-0008): the first download starts at the end of the first-launch screen, until then the verdict says lists are missing | Phishing domains live hours to days; a list older than two weeks is no longer a reason for confidence |
 | D17 | SUSPICIOUS and DANGEROUS | Open kept, behind one confirmation dialog (Cancel default) | Removing it contradicts "the user decides" and would push users to copy-paste around the app; aligned with threat model T-UI-2 |
 | D18 | "Vérifié : …" line | Reworded "Contrôles effectués : …" / "Checks run: …" | Lists what was checked without sounding like a seal of approval |

@@ -4,7 +4,6 @@ import com.lookfirst.domain.analysis.ReputationResult
 import com.lookfirst.domain.host.HostNormalizer
 import com.lookfirst.domain.host.HostResult
 import com.lookfirst.domain.host.NormalizedHost
-import com.lookfirst.domain.host.PublicSuffixList
 import com.lookfirst.domain.model.HostKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -17,32 +16,36 @@ class LocalReputationLookupTest {
     @get:Rule
     val folder = TemporaryFolder()
 
-    private var clock = NOW
+    private var clock = TEST_NOW
+    private val cert = testSource(id = SourceIds.CERT_PL, minEntries = 1)
+    private val other = testSource(id = OTHER_SOURCE_ID, minEntries = 1)
 
     private fun host(text: String): NormalizedHost = (HostNormalizer.normalize(text) as HostResult.Normalized).host
 
-    private fun lookupWith(spec: BundleSpec?): LocalReputationLookup {
-        val store =
-            ReputationStore(File(folder.root, "rep"), null, { clock }, directorySync = {}, acceptTestKeys = true)
-        if (spec != null) {
-            val candidate = BundleBuilder.build(store.newCandidateDirectory(), spec).directory
-            assertTrue(store.install(candidate) is InstallResult.Installed)
-        }
-        return LocalReputationLookup(store)
+    private fun lookupWith(
+        entries: Parsed? = null,
+        officials: Set<String> = setOf("good.com"),
+        second: Parsed? = null,
+    ): LocalReputationLookup {
+        val store = ListStore(File(folder.root, "rep"), listOf(cert, other), { clock }, {})
+        if (entries != null) assertTrue(store.install(cert, entries, null) is ListInstallResult.Installed)
+        if (second != null) assertTrue(store.install(other, second, null) is ListInstallResult.Installed)
+        return LocalReputationLookup(store, officials) { TEST_PSL }
     }
 
     private fun LocalReputationLookup.result(text: String) = lookup(host(text))
 
-    private val listed = ReputationResult.Listed("Phishing.Database")
+    private val listed = ReputationResult.Listed("Test list ${SourceIds.CERT_PL}")
+    private val standard get() = keyed("h:evil.example.com", "d:phish.net", "d:bad.blogspot.com")
 
     @Test
-    fun noBundleMeansListsMissing() {
+    fun noListMeansListsMissing() {
         assertEquals(ReputationResult.ListsMissing, lookupWith(null).result("evil.example.com"))
     }
 
     @Test
     fun exactHostEntryIsListedButNotItsSiblings() {
-        val lookup = lookupWith(BundleSpec())
+        val lookup = lookupWith(standard)
         assertEquals(listed, lookup.result("evil.example.com"))
         assertEquals(ReputationResult.NotListed, lookup.result("other.example.com"))
         assertEquals(ReputationResult.NotListed, lookup.result("deep.evil.example.com"))
@@ -51,7 +54,7 @@ class LocalReputationLookupTest {
 
     @Test
     fun domainEntryCoversTheDomainAndEverySubdomain() {
-        val lookup = lookupWith(BundleSpec())
+        val lookup = lookupWith(standard)
         assertEquals(listed, lookup.result("phish.net"))
         assertEquals(listed, lookup.result("www.phish.net"))
         assertEquals(listed, lookup.result("a.b.c.phish.net"))
@@ -62,98 +65,93 @@ class LocalReputationLookupTest {
 
     @Test
     fun privateSuffixSectionDecidesWhatIsRegistrable() {
-        val lookup = lookupWith(BundleSpec())
+        val lookup = lookupWith(standard)
         assertEquals(listed, lookup.result("bad.blogspot.com"))
         assertEquals(listed, lookup.result("x.bad.blogspot.com"))
-        assertEquals(ReputationResult.NotListed, lookup.result("good.blogspot.com"))
+        assertEquals(ReputationResult.NotListed, lookup.result("good2.blogspot.com"))
         assertEquals(ReputationResult.NotListed, lookup.result("blogspot.com"))
     }
 
     @Test
     fun theSuffixItselfIsNeverProbedAsADomain() {
-        val lookup = lookupWith(BundleSpec(phishing = listOf("d:co.uk", "d:uk")))
+        val lookup = lookupWith(keyed("d:co.uk", "d:uk"))
         assertEquals(ReputationResult.NotListed, lookup.result("anything.co.uk"))
         assertEquals(ReputationResult.NotListed, lookup.result("anything.uk"))
     }
 
-    /** A bundle opened without the verifier: the poisoned shapes the verifier would refuse (collision defence). */
-    private fun unverified(spec: BundleSpec): LoadedBundle {
-        val directory = BundleBuilder.build(File(folder.root, "raw"), spec).directory
-        val lines = File(directory, BundleFile.PUBLIC_SUFFIX_LIST.path).readLines()
-        return LoadedBundle(
-            BundleVersion(0, 1),
-            NOW,
-            directory,
-            "00".repeat(32),
-            MappedIndex.open(File(directory, BundleFile.PHISHING_INDEX.path))!!,
-            MappedIndex.open(File(directory, BundleFile.ALLOWLIST.path))!!,
-            PublicSuffixList.parse(lines),
+    @Test
+    fun theEmbeddedAllowlistIsConsultedFirstForTheDomainAndEverythingUnderIt() {
+        // The list holds good.com in every shape (a poisoned list or a hash collision): the allow-list wins.
+        val lookup = lookupWith(
+            keyed("d:good.com", "h:good.com", "h:www.good.com", "h:cdn.good.com", "d:other.good.com"),
         )
+        assertEquals(ReputationResult.NotListed, lookup.result("good.com"))
+        assertEquals(ReputationResult.NotListed, lookup.result("www.good.com"))
+        assertEquals(ReputationResult.NotListed, lookup.result("x.other.good.com"))
+        assertEquals(ReputationResult.NotListed, lookup.result("cdn.good.com"))
     }
 
     @Test
-    fun allowlistWinsOverDomainEntries() {
-        // Index and allow-list both hold good.com (a hash collision or a poisoned list): the allow-list is first.
-        val spec = BundleSpec(
-            phishing = listOf("d:good.com", "h:good.com", "h:www.good.com", "h:cdn.good.com", "d:other.good.com"),
-            allowlist = listOf("d:good.com"),
-        )
-        val bundle = unverified(spec)
-        val lookup = lookupWith(null)
-        fun result(text: String) = lookup.lookupIn(bundle, 0, host(text))
-        assertEquals("d: of a popular domain is ignored", ReputationResult.NotListed, result("www.good.com"))
-        assertEquals("h: equal to the popular domain is ignored", ReputationResult.NotListed, result("good.com"))
-        assertEquals(
-            "d: of a subdomain of a popular domain is ignored",
-            ReputationResult.NotListed,
-            result("x.other.good.com"),
-        )
-        assertEquals("h: www. + popular domain is ignored", ReputationResult.NotListed, result("www.good.com"))
-        assertEquals("h: of a specific subdomain stays valid", listed, result("cdn.good.com"))
+    fun withoutThePublicSuffixListNothingIsListedAndTheAnswerIsListsMissing() {
+        val store = ListStore(File(folder.root, "rep"), listOf(cert), { clock }, {})
+        store.install(cert, standard, null)
+        val lookup = LocalReputationLookup(store, emptySet()) { null }
+        assertEquals(ReputationResult.ListsMissing, lookup.result("evil.example.com"))
+        assertEquals(ReputationResult.ListsMissing, lookup.result("phish.net"))
+    }
+
+    @Test
+    fun aListCanOnlyAddAWarningNeverRemoveOne() {
+        // With no list, an official domain is just "lists missing": the lookup never produces a clean verdict.
+        assertEquals(ReputationResult.ListsMissing, lookupWith(null).result("good.com"))
     }
 
     @Test
     fun ipAddressesAreOnlyLookedUpAsHosts() {
-        val lookup = lookupWith(BundleSpec(phishing = listOf("h:192.0.2.7", "d:0.2.7")))
+        val lookup = lookupWith(keyed("h:192.0.2.7", "d:0.2.7"))
         assertEquals(listed, lookup.result("192.0.2.7"))
         assertEquals(ReputationResult.NotListed, lookup.result("192.0.2.8"))
     }
 
     @Test
     fun idnHostsAreLookedUpInTheirAsciiForm() {
-        val lookup = lookupWith(BundleSpec(phishing = listOf("d:xn--pypal-4ve.com")))
-        assertEquals(listed, lookup.result("pаypal.com".replace('а', 'á')).takeIf { false } ?: listed)
-        assertEquals(listed, lookup.result("www.xn--pypal-4ve.com"))
+        val lookup = lookupWith(keyed("d:xn--bcher-kva.com"))
+        assertEquals(listed, lookup.result("bücher.com"))
+        assertEquals(listed, lookup.result("www.xn--bcher-kva.com"))
+    }
+
+    @Test
+    fun anySourceThatListsAHostWins() {
+        val lookup = lookupWith(standard, second = keyed("d:only-in-second.com"))
+        val inSecond = ReputationResult.Listed("Test list ${OTHER_SOURCE_ID}")
+        assertEquals(inSecond, lookup.result("only-in-second.com"))
+        assertEquals(listed, lookup.result("phish.net"))
     }
 
     @Test
     fun listedWinsOverStaleButStaleListsReplaceNotListed() {
-        val lookup = lookupWith(BundleSpec())
-        clock = NOW + 20 * UtcTime.DAY
+        val lookup = lookupWith(standard)
+        clock = TEST_NOW + 20 * TEST_DAY
         assertEquals(listed, lookup.result("evil.example.com"))
         assertEquals(ReputationResult.ListsStale(20), lookup.result("fine.example.org"))
-        clock = NOW + 3 * UtcTime.DAY
+        clock = TEST_NOW + 3 * TEST_DAY
         assertEquals(ReputationResult.NotListed, lookup.result("fine.example.org"))
     }
 
     @Test
-    fun ageIsComputedFromReferenceNowOfTheDocument() {
-        val lookup = lookupWith(BundleSpec(generatedAt = "2026-10-03T12:00:00Z"))
-        clock = UtcTime.parseMinuteStamp("2026-10-17T12:00:00Z")!!
-        assertEquals("exactly 14 days is not yet stale", ReputationResult.NotListed, lookup.result("fine.example.org"))
-        clock += UtcTime.DAY
+    fun exactlyFourteenDaysIsNotYetStaleAndAClockSetBackDoesNotRejuvenate() {
+        val lookup = lookupWith(standard)
+        clock = TEST_NOW + 14 * TEST_DAY
+        assertEquals(ReputationResult.NotListed, lookup.result("fine.example.org"))
+        clock += TEST_DAY
         assertEquals(ReputationResult.ListsStale(15), lookup.result("fine.example.org"))
-        clock = UtcTime.parseMinuteStamp("2026-01-01T00:00:00Z")!!
-        assertEquals(
-            "a clock set back cannot make lists look younger than their own date",
-            ReputationResult.NotListed,
-            lookup.result("fine.example.org"),
-        )
+        clock = TEST_NOW - 400 * TEST_DAY
+        assertEquals(ReputationResult.NotListed, lookup.result("fine.example.org"))
     }
 
     @Test
     fun hundredLabelHostCostsAtMostSixteenProbes() {
-        val lookup = lookupWith(BundleSpec())
+        val lookup = lookupWith(standard)
         val long = (1..100).joinToString(".") { "l$it" } + ".phish.net"
         val candidates = lookup.domainCandidates(long, "phish.net")
         assertTrue(candidates.size + 1 <= 16)
@@ -163,7 +161,7 @@ class LocalReputationLookupTest {
 
     @Test
     fun shortHostsProbeEveryParentUpToTheRegistrableDomain() {
-        val lookup = lookupWith(BundleSpec())
+        val lookup = lookupWith(standard)
         assertEquals(
             listOf("a.b.phish.net", "b.phish.net", "phish.net"),
             lookup.domainCandidates("a.b.phish.net", "phish.net"),
@@ -173,7 +171,7 @@ class LocalReputationLookupTest {
 
     @Test
     fun lookupOfHostileHostsIsFastAndNeverThrows() {
-        val lookup = lookupWith(BundleSpec())
+        val lookup = lookupWith(standard)
         val start = System.nanoTime()
         repeat(2_000) { i ->
             val name = "a".repeat(60) + ".x$i." + "b".repeat(60) + ".com"
@@ -182,3 +180,5 @@ class LocalReputationLookupTest {
         assertTrue((System.nanoTime() - start) / 1_000_000 < 3_000)
     }
 }
+
+private typealias Parsed = ParseOutcome.Parsed

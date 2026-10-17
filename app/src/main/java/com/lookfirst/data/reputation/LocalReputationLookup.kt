@@ -1,9 +1,11 @@
 package com.lookfirst.data.reputation
 
+import com.lookfirst.domain.analysis.BrandList
 import com.lookfirst.domain.analysis.LISTS_STALE_AFTER_DAYS
 import com.lookfirst.domain.analysis.ReputationLookup
 import com.lookfirst.domain.analysis.ReputationResult
 import com.lookfirst.domain.host.NormalizedHost
+import com.lookfirst.domain.host.PublicSuffixList
 import com.lookfirst.domain.model.HostKind
 import javax.inject.Inject
 
@@ -13,34 +15,41 @@ private const val MAX_PROBES = 16
 private const val MAX_DOMAIN_PROBES = MAX_PROBES - 1
 
 /**
- * Looks a host up in the installed bundle (design document, sections 5 and 8). Offline and synchronous: the index
- * is searched in place, nothing about the host leaves the phone and nothing is logged.
+ * Looks a host up in the indexes the phone built from the public lists (ADR-0008). Offline and synchronous: the
+ * indexes are searched in place, nothing about the host leaves the phone and nothing is logged.
  *
- * Order: registrable domain from the bundle's own Public Suffix List; allow-list first (a popular domain is never
- * `Listed` from a `d:` hit); then `h:` for the host and `d:` for the host and each parent down to the registrable
- * domain included, never the public suffix. At most [MAX_PROBES] probes.
+ * The embedded allow-list of official domains ([BrandList.officialDomains]) is consulted first: a list can add a
+ * warning for any other host but never for an official registrable domain or anything under it. Without the
+ * Public Suffix List nothing can be classified and the answer is "lists missing", never a clean result. Then, for
+ * each source, `h:` for the host and `d:` for the host and each parent down to
+ * the registrable domain included, never the public suffix. At most [MAX_PROBES] probes per source.
  */
-class LocalReputationLookup @Inject internal constructor(private val store: ReputationStore) : ReputationLookup {
+class LocalReputationLookup internal constructor(
+    private val store: ListStore,
+    private val officialDomains: Set<String>,
+    private val publicSuffixList: () -> PublicSuffixList?,
+) : ReputationLookup {
+    @Inject
+    internal constructor(store: ListStore) : this(store, BrandList.officialDomains, { PublicSuffixList.instance })
+
     override fun lookup(host: NormalizedHost): ReputationResult {
-        val bundle = store.current() ?: return ReputationResult.ListsMissing
-        return lookupIn(bundle, store.ageDays(bundle), host)
+        val lists = store.current() ?: return ReputationResult.ListsMissing
+        return lookupIn(lists, store.ageDays(lists), host)
     }
 
-    internal fun lookupIn(bundle: LoadedBundle, ageDays: Int, host: NormalizedHost): ReputationResult {
+    internal fun lookupIn(lists: LoadedLists, ageDays: Int, host: NormalizedHost): ReputationResult {
+        val suffixes = publicSuffixList() ?: return ReputationResult.ListsMissing
         val ascii = host.ascii
-        val registrable = if (host.kind == HostKind.DOMAIN) bundle.publicSuffixList.registrableDomain(ascii) else null
-        val allowlisted = registrable != null && bundle.allowlist.contains(Lfix.keyOf(Lfix.KIND_DOMAIN, registrable))
-        val hostListed = bundle.phishing.contains(Lfix.keyOf(Lfix.KIND_HOST, ascii)) &&
-            !(allowlisted && (ascii == registrable || ascii == "www.$registrable"))
-        val domainListed = !allowlisted &&
-            registrable != null &&
-            domainCandidates(ascii, registrable).any { bundle.phishing.contains(Lfix.keyOf(Lfix.KIND_DOMAIN, it)) }
-        if (hostListed || domainListed) {
-            return ReputationResult.Listed(SourceIds.nameFor(bundle.phishing.header.sourceId) ?: UNKNOWN_SOURCE)
+        val registrable = if (host.kind == HostKind.DOMAIN) suffixes.registrableDomain(ascii) else null
+        val official = registrable != null && registrable in officialDomains
+        val domains = if (!official && registrable != null) domainCandidates(ascii, registrable) else emptyList()
+        val hostKey = Lfix.keyOf(Lfix.KIND_HOST, ascii)
+        for (loaded in lists.sources) {
+            val hostListed = !official && loaded.index.contains(hostKey)
+            val domainListed = domains.any { loaded.index.contains(Lfix.keyOf(Lfix.KIND_DOMAIN, it)) }
+            if (hostListed || domainListed) return ReputationResult.Listed(loaded.source.displayName)
         }
-        return if (ageDays >
-            LISTS_STALE_AFTER_DAYS
-        ) {
+        return if (ageDays > LISTS_STALE_AFTER_DAYS) {
             ReputationResult.ListsStale(ageDays)
         } else {
             ReputationResult.NotListed
@@ -56,10 +65,5 @@ class LocalReputationLookup @Inject internal constructor(private val store: Repu
             name = if (name == registrable) null else name.substringAfter('.', "").takeIf { it.isNotEmpty() }
         }
         return if (names.lastOrNull() == registrable) names else listOf(host, registrable).distinct()
-    }
-
-    private companion object {
-        /** A source id the app has no name for: the bundle's own string is never shown. */
-        const val UNKNOWN_SOURCE = "reputation list"
     }
 }

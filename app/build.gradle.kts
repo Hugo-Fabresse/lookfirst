@@ -68,42 +68,6 @@ val prepareRobolectricAndroidAll by tasks.registering(Sync::class) {
     into(layout.buildDirectory.dir("robolectric-android-all"))
 }
 
-/**
- * Release-publication guard (LF-23): the public keys pinned in PinnedKeys.kt are test keys (their private halves are
- * in the test sources) until LF-25 replaces them and sets KEYS_ARE_PRODUCTION to true. Publishing an APK that trusts
- * them is refused: the guard is active with `-Plookfirst.publish=true` or when the release build type has a
- * signingConfig. An unsigned `assembleRelease` (full gate, R8 proof) stays possible; such a build also refuses every
- * bundle at run time (ReputationStore) and its version name ends in `-testkeys`.
- * See docs/design/reputation-bundle.md, "Production keys".
- */
-val pinnedKeysFile = layout.projectDirectory.file("src/main/java/com/lookfirst/data/reputation/PinnedKeys.kt")
-
-fun pinnedKeysAreProduction(): Boolean {
-    // Comments are removed first: a mention of the flag in documentation must not decide anything.
-    val code = pinnedKeysFile.asFile.readText()
-        .replace(Regex("/\\*[\\s\\S]*?\\*/"), "")
-        .replace(Regex("//[^\\n]*"), "")
-    return Regex("""const\s+val\s+KEYS_ARE_PRODUCTION\s*=\s*true\b""").containsMatchIn(code)
-}
-
-val verifyPinnedKeysAreProduction by tasks.registering {
-    inputs.file(pinnedKeysFile)
-    doLast {
-        if (!pinnedKeysAreProduction()) {
-            throw GradleException(
-                "PinnedKeys.kt still pins TEST keys (KEYS_ARE_PRODUCTION is not true): refusing to publish. " +
-                    "Replace the keys and set the flag in LF-25 (docs/design/reputation-bundle.md).",
-            )
-        }
-    }
-}
-
-tasks.matching { it.name == "preReleaseBuild" }.configureEach {
-    val publishing = providers.gradleProperty("lookfirst.publish").orNull == "true" ||
-        android.buildTypes.getByName("release").signingConfig != null
-    if (publishing) dependsOn(verifyPinnedKeysAreProduction)
-}
-
 android {
     namespace = "com.lookfirst"
     compileSdk = 36
@@ -113,7 +77,7 @@ android {
         minSdk = 23
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0" + if (pinnedKeysAreProduction()) "" else "-testkeys"
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

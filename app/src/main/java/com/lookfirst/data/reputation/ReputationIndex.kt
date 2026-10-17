@@ -12,28 +12,20 @@ private const val ENTRY_SIZE = 8
 private const val INDEX_FORMAT = 1
 private const val RESERVED_START = 12
 private const val RESERVED_END = 32
-private const val PSL_HASH_START = 32
-private const val PSL_HASH_LENGTH = 32
 private const val SHORT_MASK = 0xFFFF
 private const val INT_MASK = 0xFFFFFFFFL
 private const val READ_CHUNK = 64 * 1024
 private val MAGIC = byteArrayOf('L'.code.toByte(), 'F'.code.toByte(), 'I'.code.toByte(), 'X'.code.toByte())
 
-/** Source id 0 is the allow-list; sources of reputation start at 1. */
+/** Index source ids. Each list the app knows has its own, never reused: ids 0 and 1 belonged to the removed bundle. */
 internal object SourceIds {
-    const val ALLOWLIST = 0
-    const val PHISHING_DATABASE = 1
-
-    /** Human names come from this table, never from the bundle. */
-    fun nameFor(id: Int): String? = when (id) {
-        PHISHING_DATABASE -> "Phishing.Database"
-        else -> null
-    }
+    const val CERT_PL = 2
 }
 
-internal class LfixHeader(val sourceId: Int, val entryCount: Long, val pslSha256: String)
+/** Bytes 32 to 63 of the file are reserved (they once held a Public Suffix List hash): written as zero, not read. */
+internal class LfixHeader(val sourceId: Int, val entryCount: Long)
 
-/** Hashing of index keys and one-pass validation of the LFIX layout (design document, section 5). */
+/** Hashing of index keys and one-pass validation of the LFIX layout (`docs/design/reputation-lists.md`, section 6). */
 internal object Lfix {
     const val KIND_HOST = 'h'
     const val KIND_DOMAIN = 'd'
@@ -85,8 +77,7 @@ internal object Lfix {
         if (!magicOk || buffer.getShort(MAGIC.size).toInt() != INDEX_FORMAT || !reservedZero) return null
         val sourceId = buffer.getShort(MAGIC.size + Short.SIZE_BYTES).toInt() and SHORT_MASK
         val count = buffer.getInt(MAGIC.size + 2 * Short.SIZE_BYTES).toLong() and INT_MASK
-        val psl = Hex.encode(head.copyOfRange(PSL_HASH_START, PSL_HASH_START + PSL_HASH_LENGTH))
-        return LfixHeader(sourceId, count, psl)
+        return LfixHeader(sourceId, count)
     }
 
     private fun isStrictlyIncreasing(file: File): Boolean {
@@ -100,28 +91,6 @@ internal object Lfix {
             }
         } finally {
             cursor.close()
-        }
-    }
-
-    /** True if some entry of [a] equals an entry of [b] (both sorted): a linear merge, used for allow-list checks. */
-    fun intersects(a: File, b: File): Boolean {
-        val left = Cursor(a)
-        val right = Cursor(b)
-        try {
-            var x = left.next()
-            var y = right.next()
-            while (x != null && y != null) {
-                val cmp = java.lang.Long.compareUnsigned(x, y)
-                when {
-                    cmp == 0 -> return true
-                    cmp < 0 -> x = left.next()
-                    else -> y = right.next()
-                }
-            }
-            return false
-        } finally {
-            left.close()
-            right.close()
         }
     }
 

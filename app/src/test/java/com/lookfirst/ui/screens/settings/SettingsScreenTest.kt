@@ -45,13 +45,13 @@ class SettingsScreenTest {
         }
     }
 
-    private val loaded = SettingsUiState(listsVersion = 128, listsAgeDays = 3, lastAttempt = LastAttemptLine.SUCCEEDED)
+    private val loaded = SettingsUiState(listsEntries = 128, listsAgeDays = 3, lastAttempt = LastAttemptLine.SUCCEEDED)
 
     @Test
     fun showsVersionAgeLastAttemptAndAppVersion() {
         show(loaded, appVersion = "9.8.7")
         composeRule.onNodeWithText(text(R.string.settings_lists_header)).assertExists()
-        composeRule.onNodeWithText("Version 128 · 3 days ago").assertExists()
+        composeRule.onNodeWithText("128 entries · 3 days ago").assertExists()
         composeRule.onNodeWithText(text(R.string.settings_last_attempt_ok)).assertExists()
         composeRule.onNodeWithText(text(R.string.settings_unmetered_only)).assertExists()
         composeRule.onNodeWithText("9.8.7").assertExists()
@@ -60,7 +60,7 @@ class SettingsScreenTest {
     @Test
     fun listsYoungerThanADayReadToday() {
         show(loaded.copy(listsAgeDays = 0))
-        composeRule.onNodeWithText("Version 128 · today").assertExists()
+        composeRule.onNodeWithText("128 entries · today").assertExists()
     }
 
     @Test

@@ -3,7 +3,7 @@
     <string name="onboarding_tagline">Regardez avant d\'ouvrir.</string>
     <string name="onboarding_nothing_opens">Rien ne s\'ouvre tout seul. Vous choisissez toujours.</string>
     <string name="onboarding_privacy">Tout est analysé sur votre téléphone. Les adresses scannées ne sont envoyées nulle part, sauf si vous lancez une vérification facultative.</string>
-    <string name="onboarding_lists">Les listes de sites signalés sont téléchargées en tâche de fond.</string>
+    <string name="onboarding_lists">Les listes de sites signalés sont téléchargées maintenant puis chaque jour, depuis l\'éditeur (CERT Polska).</string>
     <string name="onboarding_auto_update">Mise à jour automatique</string>
     <string name="onboarding_changeable">Modifiable dans Réglages.</string>
     <string name="onboarding_no_guarantee">Aucun scan ne garantit rien : un site nouveau peut ne figurer dans aucune liste.</string>
@@ -11,7 +11,7 @@
 
     <string name="settings_title">Réglages</string>
     <string name="settings_lists_header">Listes de réputation</string>
-    <string name="settings_lists_version">Version %1$d · %2$s</string>
+    <string name="settings_lists_version">%1$,d entrées · %2$s</string>
     <string name="settings_last_attempt_ok">Dernière tentative : réussie</string>
     <string name="settings_last_attempt_failed">Dernière tentative : échouée</string>
     <string name="settings_last_attempt_none">Aucune tentative pour l\'instant</string>
@@ -31,7 +31,7 @@
     <string name="about_local_body">Le contenu des QR codes, l\'analyse et les résultats. LookFirst n\'enregistre pas vos scans.</string>
     <string name="about_network_header">Ce qui utilise le réseau</string>
     <string name="about_net_lists">Mise à jour des listes (automatique)</string>
-    <string name="about_net_lists_who">Codeberg, l\'hébergeur des listes, voit votre adresse IP lors de la mise à jour des listes. Rien d\'autre.</string>
+    <string name="about_net_lists_who">L\'éditeur de la liste (CERT Polska, hole.cert.pl) voit votre adresse IP lors de la mise à jour des listes. Rien sur vos scans n\'est envoyé.</string>
     <string name="about_net_redirects">Redirections (sur demande)</string>
     <string name="about_net_redirects_who">Le site scanné voit votre adresse IP et sait que son QR code a été scanné.</string>
     <string name="about_net_rdap">Âge du domaine (sur demande)</string>
@@ -39,5 +39,5 @@
     <string name="about_no_guarantee_header">Ce que LookFirst ne garantit pas</string>
     <string name="about_no_guarantee_body">Un site neuf ou non signalé peut être malveillant. Restez vigilant.</string>
     <string name="about_licences">Licences</string>
-    <string name="about_licences_body">LookFirst utilise ZXing et AndroidX (licence Apache 2.0). Les listes de réputation contiennent la Public Suffix List (Mozilla Public License 2.0) et des données de Phishing.Database (licence MIT) ; le fichier NOTICE.txt livré avec chaque liste donne le détail.</string>
+    <string name="about_licences_body">LookFirst utilise ZXing et AndroidX (licence Apache 2.0) et embarque la Public Suffix List (Mozilla Public License 2.0). La liste d\'hameçonnage vient du CERT Polska (Warning List, utilisation libre à toute fin). L\'application contacte l\'éditeur directement et n\'envoie rien sur vos scans.</string>
 </resources>

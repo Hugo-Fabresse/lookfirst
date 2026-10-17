@@ -1,6 +1,6 @@
 # 0007 - ECDSA P-256 for the reputation bundle signature
 
-Status: accepted (LF-22). Replaces the "Ed25519" part of D13, ADR-0002 and ADR-0005 (their other content stands).
+Status: REPLACED by ADR-0008 (LF-28, decision D20): there is no signed bundle and no key any more. Text below kept for history.
 
 ## Context
 D13 chose Ed25519 for the signed bundle (manifest). The app verifies, it never signs. The platform provides Ed25519 natively only from API 33 (`Signature.getInstance("Ed25519")` and `KeyFactory`), and minSdk is 23 (D8): on most supported phones there is no native Ed25519. We do not write our own cryptography (a verifier written by us, even a short one, is the kind of code that fails silently).

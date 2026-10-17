@@ -22,7 +22,10 @@ private const val SECOND = 1000L
 private const val HOURS_PER_DAY = 24
 private const val MINUTES_PER_HOUR = 60
 
-/** Dates of the bundle manifest: only `YYYY-MM-DDThh:mm:00Z`, whole minutes, UTC. No `java.time` (API 26). */
+/**
+ * Strict UTC date arithmetic without `java.time` (API 26): whole-minute stamps `YYYY-MM-DDThh:mm:00Z`, RFC 3339
+ * instants (the RDAP responses) and midnight constants (the HTTP date of `HttpDate`).
+ */
 @Suppress("MagicNumber", "TooManyFunctions") // calendar arithmetic: string positions and Gregorian constants
 internal object UtcTime {
     const val MINUTE: Long = 60_000L

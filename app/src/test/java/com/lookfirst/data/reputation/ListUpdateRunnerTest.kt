@@ -17,6 +17,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.IOException
+import java.net.URI
 import java.net.UnknownHostException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -62,40 +63,37 @@ class ListUpdateRunnerTest {
     @get:Rule
     val folder = TemporaryFolder()
 
-    private val server = FakeListServer()
+    private val server = FakePublisher()
     private val preferences = FakeAppPreferences()
-    private val clockValue = NOW
+    private val clockValue = TEST_NOW
+    private val first = testSource(id = SourceIds.CERT_PL, url = URI("https://lists.example.org/domains.txt"))
+    private val second = testSource(id = OTHER_SOURCE_ID, url = URI("https://other.example.net/p.txt"))
     private val store by lazy {
-        ReputationStore(File(folder.root, "reputation"), null, { NOW }, directorySync = {}, acceptTestKeys = true)
-    }
-    private val runner by lazy {
-        ListUpdateRunner(
-            ListDownloader(server, server.endpoint, store, pause = {
-            }),
-            preferences,
-            Dispatchers.IO,
-        ) { clockValue }
+        ListStore(File(folder.root, "reputation"), listOf(first, second), { clockValue }, {})
     }
 
-    private val day10 =
-        BundleSpec(generatedAt = "2026-10-10T03:12:00Z", phishingKeys = BundleBuilder.syntheticKeys(100, 1))
+    private fun runnerFor(vararg sources: ListSource) = ListUpdateRunner(
+        PublisherDownloader(server, sources.toList(), store, emptySet(), publicSuffixList = { TEST_PSL }),
+        preferences,
+        Dispatchers.IO,
+    ) { clockValue }
 
-    private fun publish(spec: BundleSpec) = server.publish(BundleBuilder.build(File(folder.root, "pub"), spec))
+    private val runner by lazy { runnerFor(first) }
 
     @Test
     fun successInstallsAndRecordsTheAttempt() = runBlocking {
-        publish(day10)
+        server.put(first.url, domainLines(20), TEST_LAST_MODIFIED)
         val result = runner.runNow()
         assertEquals(UpdateOutcome.UPDATED, result.outcome)
         assertFalse(result.retry)
-        assertEquals(LastAttempt(clockValue, UpdateOutcome.UPDATED).outcome, preferences.last?.outcome)
         assertEquals(clockValue, preferences.last?.timeMillis)
+        server.putStatus(first.url, 304)
         assertEquals(UpdateOutcome.UP_TO_DATE, runner.runNow().outcome)
     }
 
     @Test
     fun securityRejectionIsASuccessForWorkManagerAndIsNotRetried() = runBlocking {
-        publish(day10.copy(signer = TestKeys.other))
+        server.put(first.url, "<html>nope</html>\n".repeat(20))
         val result = runner.runAutomatic()
         assertEquals(UpdateOutcome.REJECTED, result.outcome)
         assertFalse(result.retry)
@@ -121,17 +119,33 @@ class ListUpdateRunnerTest {
 
     @Test
     fun serverErrorRetriesButNotFoundDoesNot() = runBlocking {
-        server.putStatus(server.urlOf("latest", "manifest.sig"), 503)
+        server.putStatus(first.url, 503)
         assertTrue(runner.runAutomatic().retry)
-        server.putStatus(server.urlOf("latest", "manifest.sig"), 404)
+        server.putStatus(first.url, 404)
         val notFound = runner.runAutomatic()
         assertEquals(UpdateOutcome.FAILED, notFound.outcome)
         assertFalse(notFound.retry)
     }
 
     @Test
+    fun oneSourceUpdatingIsAnUpdateEvenIfAnotherFailedAndTheFailureAsksForARetry() = runBlocking {
+        server.put(first.url, domainLines(20))
+        server.putStatus(second.url, 503)
+        val result = runnerFor(first, second).runNow()
+        assertEquals(UpdateOutcome.UPDATED, result.outcome)
+        assertTrue(result.retry)
+    }
+
+    @Test
+    fun aRefusedSourceNextToAFailedOneIsFailed() = runBlocking {
+        server.put(first.url, "<html>nope</html>\n".repeat(20))
+        server.putStatus(second.url, 503)
+        assertEquals(UpdateOutcome.FAILED, runnerFor(first, second).runNow().outcome)
+    }
+
+    @Test
     fun theDailyRunDoesNothingOnceAutomaticUpdateIsSwitchedOff() = runBlocking {
-        publish(day10)
+        server.put(first.url, domainLines(20))
         preferences.auto = false
         val result = runner.runAutomatic()
         assertNull(result.outcome)
@@ -141,7 +155,7 @@ class ListUpdateRunnerTest {
 
     @Test
     fun onlyOneDownloadRunsAtATime() {
-        publish(day10)
+        server.put(first.url, domainLines(20))
         val entered = CountDownLatch(1)
         val blocker = CountDownLatch(1)
         server.onRequest = {
@@ -149,7 +163,7 @@ class ListUpdateRunnerTest {
             blocker.await(5, TimeUnit.SECONDS)
         }
         runBlocking {
-            val first = async(Dispatchers.Default) { runner.runNow() }
+            val firstRun = async(Dispatchers.Default) { runner.runNow() }
             assertTrue(entered.await(5, TimeUnit.SECONDS))
             assertTrue(runner.running.value)
             val second = runner.runNow()
@@ -157,23 +171,10 @@ class ListUpdateRunnerTest {
             blocker.countDown()
             assertNull(second.outcome)
             assertNull(daily.outcome)
-            assertEquals(UpdateOutcome.UPDATED, first.await().outcome)
+            assertEquals(UpdateOutcome.UPDATED, firstRun.await().outcome)
             assertFalse(runner.running.value)
         }
-        // One manifest signature, one manifest and three files: nothing was fetched twice.
-        assertEquals(5, server.requests.size)
-    }
-
-    @Test
-    fun aRejectedBundleIsNotDownloadedAgainByTheNextRun() = runBlocking {
-        val bundle = BundleBuilder.build(File(folder.root, "pub"), day10)
-        server.publish(bundle)
-        val tag = BundleBuilder.version(day10.generatedAt).toString()
-        server.put(server.urlOf(tag, BundleFile.ALLOWLIST.path), ByteArray(80))
-        assertEquals(UpdateOutcome.REJECTED, runner.runAutomatic().outcome)
-        server.requests.clear()
-        assertEquals(UpdateOutcome.REJECTED, runner.runAutomatic().outcome)
-        assertEquals(2, server.requests.size)
+        assertEquals(1, server.requests.size)
     }
 
     @Test

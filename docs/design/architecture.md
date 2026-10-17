@@ -52,7 +52,7 @@ flowchart TD
     G -.->|optional button + warning| I2[Domain age via RDAP - network]
     I1 -.-> F
     I2 -.-> F
-    J[WorkManager list update] -.->|HTTPS, validated, signed| K[(Reputation index)]
+    J[WorkManager list update] -.->|HTTPS to the publishers, validated on the phone| K[(Reputation index)]
     K --> E3
 ```
 
@@ -84,7 +84,7 @@ Rules:
 
 | Use | Trigger | Data sent | Seen by | Default |
 |---|---|---|---|---|
-| Reputation list update | WorkManager periodic (unmetered, daily) + manual "update now" | Nothing about scans: a plain GET (IP, generic UA) | Codeberg (hosts the bundle; sees the phone's IP, to mention in the privacy notice) | On, explained at first run; can be disabled |
+| Reputation list update | WorkManager periodic (unmetered, daily) + manual "update now" | Nothing about scans: a plain GET per source (IP, generic UA, the publisher's own `Last-Modified` date) | The list publishers (CERT Polska; they see the phone's IP, stated in About) | On, explained at first run; can be disabled |
 | Redirect tracing | User taps "Trace redirects" after a warning | Requests to the scanned URL and each hop | **The attacker's server** (IP, timing, proof the QR was scanned) | Off, per use |
 | Domain age (RDAP) | User taps "Check domain age" after a warning | Registrable domain only (computed with the Public Suffix List), to the `https` RDAP server given by the IANA bootstrap embedded in the APK | RDAP registry | Off, per use |
 
@@ -122,11 +122,9 @@ Off by default. When on: Room database with scheme, host, level and timestamp; n
 - `usesCleartextTraffic="false"` globally via the Network Security Config, no exception anywhere (see threat model T-NET-4).
 - Overlays: `filterTouchesWhenObscured` on the Compose root view and `setHideOverlayWindows(true)` on API 31+.
 
-## Reputation bundle pipeline
+## Reputation lists (download and index on the phone)
 
-Lists are produced by a **separate, minimal repository and workflow** (not the app's build CI): pinned upstream fetch -> validation -> reduction to a compact index -> ECDSA P-256 signature -> publication on Codeberg (decisions D10, D13). The signing key is a secret of that workflow's environment only. Details and risks: `threat-model.md` (CI / supply chain) and ADR-0002.
-
-The bundle contains: the reputation index, the Public Suffix List, the IANA RDAP bootstrap file, the top-domains allow-list, and a signed manifest `{version (monotonic integer), generatedAt, files with hashes}`. An initial signed bundle is embedded in the APK so lists are never absent on first launch (ADR-0005). The app rejects a manifest whose version is lower than or equal to the installed one (anti-rollback), and shows the lists' age on every verdict.
+There is no bundle, no pipeline and no key of ours (D20, ADR-0008). `PublisherDownloader` fetches each public list from its publisher over `https` (one fixed URL per source in `ListSources`), `DomainListParser` turns it into sorted index keys (through `HostNormalizer` and the embedded Public Suffix List), `ListStore` checks size, entry bounds and variation against the installed index and swaps the LFIX file atomically; `LocalReputationLookup` searches the mapped files. The embedded official-domain list (`BrandList.officialDomains`) is consulted first, and a list can only add warnings. The Public Suffix List and the IANA RDAP bootstrap are embedded in the APK. No list ships in the APK: the first download starts at the end of the first-launch screen. Details: `reputation-lists.md`; sources and terms: `reputation-sources.md`; risks: `threat-model.md` (T-LST-*).
 
 ## Verdict immutability
 
@@ -138,5 +136,5 @@ While a verdict is displayed, scanning is paused. A second QR in front of the ca
 
 ## Open points
 
-- Brand list for typosquatting: shipped asset (top brands plus FR/EU banks and public services), refreshed inside the signed bundle.
+- Brand list for typosquatting: shipped asset (top brands plus FR/EU banks and public services), embedded in the APK (updated with the app).
 - Choice of the UTS #46 library (LF-3).

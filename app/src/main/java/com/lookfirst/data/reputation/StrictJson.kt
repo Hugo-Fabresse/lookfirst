@@ -11,7 +11,7 @@ private const val HEX_RADIX = 16
 private const val FIRST_PRINTABLE = 0x20
 private const val DECIMAL_OFFSET = 10
 
-/** JSON values the bundle manifest can contain. Numbers are integers only. */
+/** JSON values of the strictly parsed documents (the RDAP bootstrap and responses). Numbers are integers only. */
 internal sealed interface Json {
     data class Obj(val fields: Map<String, Json>) : Json
 

@@ -38,7 +38,7 @@ class SettingsViewModelTest {
     }
 
     private fun status(outcome: UpdateOutcome? = null, updating: Boolean = false, version: Long? = 128) = ListsStatus(
-        version = version,
+        entries = version,
         ageDays = version?.let { 3 },
         autoUpdate = true,
         lastAttempt = outcome?.let { LastAttempt(1L, it) },
@@ -71,7 +71,7 @@ class SettingsViewModelTest {
     @Test
     fun noAttemptAndNoListGiveTheEmptyState() {
         val ui = status(version = null).toUiState()
-        assertEquals(null, ui.listsVersion)
+        assertEquals(null, ui.listsEntries)
         assertEquals(LastAttemptLine.NONE, ui.lastAttempt)
         assertEquals(null, ui.notice)
     }
@@ -81,10 +81,10 @@ class SettingsViewModelTest {
         val control = FakeControl(status())
         val viewModel = SettingsViewModel(control)
         val states: StateFlow<SettingsUiState> = viewModel.state
-        assertEquals(128L, states.value.listsVersion)
+        assertEquals(128L, states.value.listsEntries)
         control.status.value = status(UpdateOutcome.UPDATED, version = 129)
         ShadowLooper.idleMainLooper()
-        assertEquals(129L, states.value.listsVersion)
+        assertEquals(129L, states.value.listsEntries)
         viewModel.onUpdateNow()
         viewModel.onAutoUpdateChanged(false)
         viewModel.onResume()

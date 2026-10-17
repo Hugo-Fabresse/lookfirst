@@ -23,14 +23,14 @@ class RunResult(val outcome: UpdateOutcome?, val retry: Boolean)
  */
 @Singleton
 class ListUpdateRunner internal constructor(
-    private val downloader: ListDownloader,
+    private val downloader: PublisherDownloader,
     private val preferences: AppPreferences,
     private val io: CoroutineDispatcher,
     private val clock: () -> Long,
 ) {
     @Inject
     internal constructor(
-        downloader: ListDownloader,
+        downloader: PublisherDownloader,
         preferences: AppPreferences,
         @IoDispatcher io: CoroutineDispatcher,
     ) : this(downloader, preferences, io, System::currentTimeMillis)
@@ -49,8 +49,8 @@ class ListUpdateRunner internal constructor(
         if (!gate.tryLock()) return RunResult(null, retry = false)
         try {
             mutableRunning.value = true
-            val outcome = withContext(io) { downloader.download() }
-            val result = toResult(outcome)
+            val report = withContext(io) { downloader.download() }
+            val result = toResult(report)
             result.outcome?.let { preferences.recordAttempt(LastAttempt(clock(), it)) }
             return result
         } finally {
@@ -59,13 +59,29 @@ class ListUpdateRunner internal constructor(
         }
     }
 
-    private fun toResult(outcome: DownloadOutcome): RunResult = when (outcome) {
-        is DownloadOutcome.Installed -> RunResult(UpdateOutcome.UPDATED, retry = false)
-        DownloadOutcome.UpToDate -> RunResult(UpdateOutcome.UP_TO_DATE, retry = false)
-        DownloadOutcome.AlreadyRejected,
-        is DownloadOutcome.Rejected,
-        -> RunResult(UpdateOutcome.REJECTED, retry = false)
-        is DownloadOutcome.Failed ->
-            RunResult(if (outcome.offline) UpdateOutcome.OFFLINE else UpdateOutcome.FAILED, outcome.retry)
+    /**
+     * One outcome for the settings screen: any installed source is an update; all current is "up to date"; a network
+     * trouble is "offline" only if every failure was; a refusal alone is "refused". A retry is asked for whenever
+     * some source failed in a way that trying again can fix.
+     */
+    private fun toResult(report: UpdateReport): RunResult {
+        val outcomes = report.outcomes
+        val failures = outcomes.filterIsInstance<SourceOutcome.Failed>()
+        val retry = failures.any { it.retry }
+        val outcome = when {
+            outcomes.isEmpty() -> UpdateOutcome.FAILED
+            outcomes.any { it is SourceOutcome.Installed } -> UpdateOutcome.UPDATED
+            outcomes.all { it == SourceOutcome.UpToDate } -> UpdateOutcome.UP_TO_DATE
+            failures.isNotEmpty() ->
+                if (failures.all { it.offline } &&
+                    failures.size == outcomes.size
+                ) {
+                    UpdateOutcome.OFFLINE
+                } else {
+                    UpdateOutcome.FAILED
+                }
+            else -> UpdateOutcome.REJECTED
+        }
+        return RunResult(outcome, retry)
     }
 }

@@ -39,12 +39,14 @@ class ListsStartupTest {
 
     private val root by lazy { File(folder.root, "reputation") }
 
-    private fun store() = ReputationStore(root, null, { NOW }, directorySync = {}, acceptTestKeys = true)
+    private val source = testSource()
+
+    private fun store() = ListStore(root, listOf(source), { TEST_NOW }, {})
 
     @Test
-    fun startLoadsTheInstalledBundleInTheBackgroundAndAppliesTheSchedule() {
+    fun startLoadsTheInstalledListsInTheBackgroundAndAppliesTheSchedule() {
         val first = store()
-        first.install(BundleBuilder.build(first.newCandidateDirectory(), BundleSpec()).directory)
+        first.install(source, parsed(*Array(10) { "site$it.com" }), null)
         val restarted = store()
         val control = CountingControl()
         val startup = ListsStartup(restarted, control, CoroutineScope(SupervisorJob() + Dispatchers.IO), Dispatchers.IO)

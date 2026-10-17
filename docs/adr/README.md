@@ -8,6 +8,7 @@ Le *pourquoi* des choix structurants. Un fichier par décision : `NNNN-titre-cou
 | 0002 | On-device reputation lists |
 | 0003 | Explicit user action |
 | 0004 | Optional network actions (redirections et RDAP) |
-| 0005 | Initial signed bundle embedded in the APK |
+| 0005 | Initial signed bundle embedded in the APK (replaced by 0008) |
 | 0006 | Embedded UTS #46 host normalization (no ICU) |
-| 0007 | ECDSA P-256 for the reputation bundle signature |
+| 0007 | ECDSA P-256 for the reputation bundle signature (replaced by 0008) |
+| 0008 | Reputation lists downloaded directly from their publishers |

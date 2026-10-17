@@ -61,7 +61,7 @@ class WorkManagerUpdateScheduler @Inject constructor(@ApplicationContext private
 /**
  * Runs one update through [ListUpdateRunner] (single download at a time, shared with "Update now"). Network,
  * 5xx and storage errors retry with WorkManager's exponential backoff, at most [MAX_ATTEMPTS] attempts per period;
- * a refused bundle is a success (the same bytes cannot become valid). Not exported: only WorkManager starts it.
+ * a refused list is a success (the same bytes cannot become valid). Not exported: only WorkManager starts it.
  */
 class ListUpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     @EntryPoint

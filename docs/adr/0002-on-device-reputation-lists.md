@@ -1,6 +1,6 @@
 # 0002 - On-device reputation lists
 
-Status: accepted (decision D3); signature algorithm amended by ADR-0007 (ECDSA P-256 instead of Ed25519)
+Status: accepted (decision D3); the parts about our own signing key, pipeline and Codeberg are replaced by ADR-0008 (lists come straight from their publishers)
 
 ## Context
 Reputation lookup APIs (Safe Browsing lookups, VirusTotal, etc.) require sending the scanned URL or a derived value to a third party. Public lists (Phishing.Database, URLhaus, OpenPhish, PhishTank) can be downloaded in full. Their licences vary (see `docs/design/reputation-sources.md`). A downloaded list is an input an attacker may try to tamper with.

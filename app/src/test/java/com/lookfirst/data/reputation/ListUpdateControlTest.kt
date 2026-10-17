@@ -14,22 +14,21 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.IOException
+import java.net.URI
 
 class ListUpdateControlTest {
     @get:Rule
     val folder = TemporaryFolder()
 
-    private val server = FakeListServer()
+    private val server = FakePublisher()
+    private val source = testSource(url = URI("https://lists.example.org/domains.txt"))
     private val preferences = FakeAppPreferences(firstLaunch = false)
     private val scheduler = FakeScheduler()
-    private var now = NOW
-    private val store by lazy {
-        ReputationStore(File(folder.root, "reputation"), null, { NOW }, directorySync = {}, acceptTestKeys = true)
-    }
+    private var now = TEST_NOW
+    private val store by lazy { ListStore(File(folder.root, "reputation"), listOf(source), { TEST_NOW }, {}) }
     private val runner by lazy {
         ListUpdateRunner(
-            ListDownloader(server, server.endpoint, store, pause = {
-            }),
+            PublisherDownloader(server, listOf(source), store, emptySet(), publicSuffixList = { TEST_PSL }),
             preferences,
             Dispatchers.IO,
         ) { now }
@@ -44,8 +43,7 @@ class ListUpdateControlTest {
         ) { now }
     }
 
-    private val day10 =
-        BundleSpec(generatedAt = "2026-10-10T03:12:00Z", phishingKeys = BundleBuilder.syntheticKeys(100, 1))
+    private fun publish() = server.put(source.url, domainLines(100))
 
     private fun waitFor(condition: () -> Boolean) {
         val deadline = System.nanoTime() + 5_000_000_000L
@@ -67,10 +65,13 @@ class ListUpdateControlTest {
 
     @Test
     fun firstLaunchWithTheToggleOnSchedulesTheDailyJob() {
+        publish()
         control.completeFirstLaunch(autoUpdate = true)
         assertTrue(preferences.firstLaunch)
         assertTrue(preferences.auto)
         assertEquals(1, scheduler.scheduled)
+        assertEquals(UpdateOutcome.UPDATED, waitForAttempt())
+        assertEquals(1, server.requests.size)
     }
 
     @Test
@@ -78,6 +79,7 @@ class ListUpdateControlTest {
         control.completeFirstLaunch(autoUpdate = false)
         assertFalse(preferences.auto)
         assertEquals(0, scheduler.scheduled)
+        assertTrue(server.requests.isEmpty())
         assertEquals(1, scheduler.cancelled)
     }
 
@@ -93,18 +95,18 @@ class ListUpdateControlTest {
 
     @Test
     fun updateNowRunsOnceAndShowsTheResult() {
-        server.publish(BundleBuilder.build(File(folder.root, "pub"), day10))
+        publish()
         control.updateNow()
         assertEquals(UpdateOutcome.UPDATED, waitForAttempt())
-        waitFor { control.status.value.version != null }
-        assertEquals(BundleBuilder.version(day10.generatedAt), control.status.value.version)
+        waitFor { control.status.value.entries != null }
+        assertEquals(100L, control.status.value.entries)
         assertEquals(UpdateOutcome.UPDATED, control.status.value.lastAttempt?.outcome)
         assertFalse(control.status.value.updating)
     }
 
     @Test
     fun aSecondTapWithinFifteenMinutesOfASuccessDoesNotAskTheServerAgain() {
-        server.publish(BundleBuilder.build(File(folder.root, "pub"), day10))
+        publish()
         control.updateNow()
         waitForAttempt()
         val before = server.requests.size
@@ -130,7 +132,7 @@ class ListUpdateControlTest {
     @Test
     fun statusIsEmptyWhileNothingIsLoaded() {
         control.refresh()
-        assertNull(control.status.value.version)
+        assertNull(control.status.value.entries)
         assertNull(control.status.value.ageDays)
         assertNotNull(control.status.value.autoUpdate)
     }

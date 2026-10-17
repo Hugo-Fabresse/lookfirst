@@ -19,10 +19,16 @@ const val LISTS_STALE_AFTER_DAYS = 14
 class ReputationAnalyzer(private val lookup: ReputationLookup) : SignalAnalyzer {
     override fun analyze(result: ParseResult.Ok, context: AnalysisContext): List<Signal> {
         // A one-word text shaped like an address is not opened, but pasted in a browser it would be: same key (LF-42).
-        val payload = result.payload as? ScanPayload.Url ?: (result.payload as? ScanPayload.Text)?.addressLikeUrl()
+        val payload = result.payload as? ScanPayload.Url ?: (result.payload as? ScanPayload.Text)?.addressLikeUrl
         if (payload == null || payload.effectiveWebScheme() == null) return emptyList()
         val host = payload.openedHost() ?: return emptyList()
-        return signalsFor(safeLookup(host))
+        val signals = signalsFor(safeLookup(host))
+        // A bare name (`readme.md`) gets no list-status noise: the lists only vouch for what was looked up (LF-42).
+        return if (result.payload is ScanPayload.Text && !payload.hasMoreThanHost()) {
+            signals.filterNot { it.code == SignalCode.LISTS_MISSING || it.code == SignalCode.LISTS_STALE }
+        } else {
+            signals
+        }
     }
 
     private fun safeLookup(host: NormalizedHost): ReputationResult? = try {

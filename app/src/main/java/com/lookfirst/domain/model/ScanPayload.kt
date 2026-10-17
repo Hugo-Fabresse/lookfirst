@@ -1,5 +1,6 @@
 package com.lookfirst.domain.model
 
+import com.lookfirst.domain.analysis.computeAddressLikeUrl
 import com.lookfirst.domain.host.HostNormalizer
 import com.lookfirst.domain.host.HostResult
 import java.math.BigDecimal
@@ -117,7 +118,13 @@ sealed interface ScanPayload {
     /** `javascript:`, `intent:`, `file:`, `content:`, `data:`, `vbscript:`... Copy only. */
     data class DangerousScheme(override val raw: Untrusted, val scheme: String) : ScanPayload
 
-    data class Text(override val raw: Untrusted) : ScanPayload
+    data class Text(override val raw: Untrusted) : ScanPayload {
+        /**
+         * The address this one-word text looks like (a scheme-less [Url], never opened), or null. Computed once,
+         * shared by every analyzer; not part of equals (LF-42).
+         */
+        internal val addressLikeUrl: Url? by lazy(LazyThreadSafetyMode.NONE) { computeAddressLikeUrl() }
+    }
 
     /** Claims a known format ([declaredType]) but is malformed, ambiguous, or otherwise unusable. */
     data class Unknown(override val raw: Untrusted, val declaredType: String?) : ScanPayload

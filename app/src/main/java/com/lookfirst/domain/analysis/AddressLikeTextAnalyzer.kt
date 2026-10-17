@@ -12,7 +12,7 @@ import com.lookfirst.domain.model.Signal
  */
 object AddressLikeTextAnalyzer : SignalAnalyzer {
     override fun analyze(result: ParseResult.Ok, context: AnalysisContext): List<Signal> {
-        val url = (result.payload as? ScanPayload.Text)?.addressLikeUrl() ?: return emptyList()
+        val url = (result.payload as? ScanPayload.Text)?.addressLikeUrl ?: return emptyList()
         val asUrl = result.copy(payload = url)
         return (UrlStructureAnalyzer.hostSignals(url, url.normalizedHost()) + LookalikeAnalyzer.analyze(asUrl, context))
             .distinctBy { it.code }

@@ -77,10 +77,13 @@ class ManifestNetworkTest {
     @Test
     fun cleartextIsForbiddenEverywhereWithNoException() {
         assertTrue(manifest.contains("""android:usesCleartextTraffic="false""""))
-        assertTrue(networkConfig.contains("""<base-config cleartextTrafficPermitted="false" />"""))
+        assertTrue(networkConfig.contains("""<base-config cleartextTrafficPermitted="false">"""))
         assertFalse(networkConfig.contains("domain-config"))
         assertFalse(networkConfig.contains("""cleartextTrafficPermitted="true""""))
-        assertFalse(networkConfig.contains("trust-anchors"))
+        // System authorities only (API 24+); API 23 is covered by SystemTrust.
+        val sources = Regex("""<certificates\s+src="([^"]+)"""").findAll(networkConfig).map { it.groupValues[1] }
+        assertEquals(listOf("system"), sources.toList())
+        assertFalse(networkConfig.contains("""src="user""""))
     }
 
     @Test

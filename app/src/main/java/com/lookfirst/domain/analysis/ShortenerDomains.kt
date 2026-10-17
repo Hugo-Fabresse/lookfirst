@@ -2,7 +2,7 @@ package com.lookfirst.domain.analysis
 
 /**
  * Common link shorteners, embedded (no network). A host matches when it equals an entry or is a subdomain of one.
- * Best effort and short on purpose: services appear and die, the list is refreshed with the reputation bundle later.
+ * Best effort and short on purpose: services appear and die, the list is refreshed with app releases.
  */
 internal object ShortenerDomains {
     private val DOMAINS: Set<String> =

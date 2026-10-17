@@ -1,6 +1,6 @@
 # 0005 - Initial signed bundle embedded in the APK
 
-Status: accepted (decision D16); signature algorithm amended by ADR-0007 (ECDSA P-256 instead of Ed25519)
+Status: REPLACED by ADR-0008 (LF-28, decision D20): no bundle is published or embedded any more. The 14-day staleness rule of D16 stands. Text below kept for history.
 
 ## Context
 Reputation lists are downloaded in the background (ADR-0002). On first launch, offline or before the first download, the app would have no list and every verdict would carry LISTS_MISSING, which weakens the product exactly when a user is most likely to try it.

@@ -35,7 +35,7 @@ internal class Brand(val keywords: List<BrandKeyword>, val domains: List<String>
  * `[!]keyword1/keyword2 domain1 domain2` (any number of each). Prefixes: `!` on the line = strict brand; on a
  * keyword `~` everyday word, `^` no typo rule, `+` typo rule even for a short name. An exact name on another
  * TLD is NOT flagged for a non-strict brand (google.de is fine); that leaves a residual risk (paypal.xyz), covered
- * later by reputation lists. The list is refreshed with the reputation bundle later.
+ * later by reputation lists. The list is refreshed with app releases.
  */
 internal object BrandList {
     val brands: List<Brand> by lazy { parse(DATA) }

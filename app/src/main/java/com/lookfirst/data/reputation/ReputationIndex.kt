@@ -26,7 +26,7 @@ internal object SourceIds {
 
 internal class LfixHeader(val sourceId: Int, val entryCount: Long, val pslSha256: String)
 
-/** Hashing of index keys and one-pass validation of the LFIX layout (design document, section 5). */
+/** Hashing of index keys and one-pass validation of the LFIX layout (`docs/design/reputation-lists.md`, section 6). */
 internal object Lfix {
     const val KIND_HOST = 'h'
     const val KIND_DOMAIN = 'd'

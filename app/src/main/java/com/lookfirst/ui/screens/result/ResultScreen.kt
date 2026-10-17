@@ -25,6 +25,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lookfirst.R
 import com.lookfirst.ui.components.guarded
+import kotlinx.coroutines.launch
 
 private val MinTarget = 48.dp
 
@@ -52,6 +54,14 @@ fun ResultScreen(
     onDismissSecretCopy: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scope = rememberCoroutineScope()
+    val overlayMessage = stringResource(R.string.overlay_blocked)
+    val notifyOverlay: () -> Unit = {
+        scope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(overlayMessage)
+        }
+    }
     Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Scaffold(
             modifier = Modifier.safeDrawingPadding(),
@@ -63,6 +73,7 @@ fun ResultScreen(
                 ActionStack(
                     copy = (state as? ResultUiState.Content)?.content?.let { CopyAction(it.copyOnly, onCopy) },
                     onCancel = onCancel,
+                    onBlocked = notifyOverlay,
                 )
             },
         ) { padding ->
@@ -75,7 +86,11 @@ fun ResultScreen(
             }
         }
         if (state is ResultUiState.Content && state.confirmingSecretCopy) {
-            CopySecretDialog(onConfirm = onConfirmSecretCopy, onDismiss = onDismissSecretCopy)
+            CopySecretDialog(
+                onConfirm = onConfirmSecretCopy,
+                onDismiss = onDismissSecretCopy,
+                onBlocked = notifyOverlay,
+            )
         }
     }
 }
@@ -86,7 +101,7 @@ private fun ResultTopBar(unreadable: Boolean, onBack: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = guarded(onBack)) {
+        IconButton(onClick = onBack) {
             Icon(
                 painter = painterResource(R.drawable.ic_arrow_back),
                 contentDescription = stringResource(R.string.a11y_back),
@@ -118,7 +133,7 @@ private fun ContentBody(content: ResultContent) {
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        content.host?.let { UrlHost(it.value) }
+        content.host?.let { UrlHost(it.value, nonLatin = content.nonLatinHost) }
         content.fields.forEach { FieldRow(it) }
         if (content.copyOnly) {
             Text(
@@ -167,10 +182,11 @@ private class CopyAction(val copyOnly: Boolean, val onClick: () -> Unit)
 
 /**
  * Pinned actions, in the fixed order Cancel (filled), Copy (outlined). [copy] is null when there is nothing
- * trustworthy to copy. Clicks arriving while another window covers ours are ignored (T-UI-3).
+ * trustworthy to copy. Only Copy is guarded: a click arriving while another window covers ours is ignored and
+ * explained (T-UI-3); Cancel stays available.
  */
 @Composable
-private fun ActionStack(copy: CopyAction?, onCancel: () -> Unit) {
+private fun ActionStack(copy: CopyAction?, onCancel: () -> Unit, onBlocked: () -> Unit) {
     val cancelSpoken = stringResource(R.string.a11y_cancel_resume)
     val copySpoken = stringResource(R.string.a11y_copy_exact)
     Column(
@@ -178,7 +194,7 @@ private fun ActionStack(copy: CopyAction?, onCancel: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Button(
-            onClick = guarded(onCancel),
+            onClick = onCancel,
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = MinTarget)
@@ -186,7 +202,7 @@ private fun ActionStack(copy: CopyAction?, onCancel: () -> Unit) {
         ) { Text(stringResource(R.string.action_cancel)) }
         if (copy != null) {
             OutlinedButton(
-                onClick = guarded(copy.onClick),
+                onClick = guarded(onBlocked = onBlocked, action = copy.onClick),
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = MinTarget)

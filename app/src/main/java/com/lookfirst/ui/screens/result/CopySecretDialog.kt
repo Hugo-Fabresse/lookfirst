@@ -19,7 +19,7 @@ import com.lookfirst.ui.components.guarded
  * Initial focus on Cancel; the dialog window itself is protected against overlays (T-UI-3).
  */
 @Composable
-fun CopySecretDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun CopySecretDialog(onConfirm: () -> Unit, onDismiss: () -> Unit, onBlocked: () -> Unit) {
     val cancelFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { cancelFocus.requestFocus() } }
     AlertDialog(
@@ -31,12 +31,14 @@ fun CopySecretDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
         },
         dismissButton = {
             TextButton(
-                onClick = guarded(onDismiss),
+                onClick = onDismiss,
                 modifier = Modifier.focusRequester(cancelFocus),
             ) { Text(stringResource(R.string.action_cancel)) }
         },
         confirmButton = {
-            TextButton(onClick = guarded(onConfirm)) { Text(stringResource(R.string.action_copy)) }
+            TextButton(onClick = guarded(onBlocked = onBlocked, action = onConfirm)) {
+                Text(stringResource(R.string.action_copy))
+            }
         },
     )
 }

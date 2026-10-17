@@ -15,6 +15,19 @@ class TouchGuardTest {
     }
 
     @Test
+    fun aBlockedClickIsReportedInsteadOfRun() {
+        var clicks = 0
+        var blocked = 0
+        val onClick = guarded(onBlocked = { blocked++ }) { clicks++ }
+        TouchGuard.track(partiallyObscured = true) { onClick() }
+        assertEquals(0, clicks)
+        assertEquals(1, blocked)
+        TouchGuard.track(partiallyObscured = false) { onClick() }
+        assertEquals(1, clicks)
+        assertEquals(1, blocked)
+    }
+
+    @Test
     fun aClickDuringAnUnobscuredTouchGoesThrough() {
         var clicks = 0
         val onClick = guarded { clicks++ }

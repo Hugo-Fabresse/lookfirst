@@ -1,8 +1,13 @@
 package com.lookfirst.ui.components
 
 import android.os.Build
+import android.view.ActionMode
+import android.view.KeyboardShortcutGroup
+import android.view.Menu
 import android.view.MotionEvent
+import android.view.SearchEvent
 import android.view.Window
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalView
@@ -37,14 +42,34 @@ object TouchGuard {
 /** True when another window covers part of ours at the moment of the touch. */
 fun MotionEvent.isPartiallyObscured(): Boolean = flags and MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED != 0
 
-/** [action] as a click handler that does nothing for a touch that arrives while an overlay covers the window. */
-fun guarded(action: () -> Unit): () -> Unit = {
-    if (!TouchGuard.isObscured) action()
+/**
+ * [action] as a click handler that does nothing for a touch that arrives while an overlay covers the window, and
+ * calls [onBlocked] instead so that the user is told why. Only for actions that are not safe to hijack (Copy):
+ * Cancel and Back stay unguarded, a hijacked tap on them costs nothing.
+ */
+fun guarded(onBlocked: () -> Unit = {}, action: () -> Unit): () -> Unit = {
+    if (TouchGuard.isObscured) onBlocked() else action()
 }
 
+/** Forwards everything; the `default` methods of [Window.Callback] are overridden on purpose, not left to chance. */
 private class GuardedWindowCallback(private val delegate: Window.Callback) : Window.Callback by delegate {
     override fun dispatchTouchEvent(event: MotionEvent): Boolean =
         TouchGuard.track(event.isPartiallyObscured()) { delegate.dispatchTouchEvent(event) }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    override fun onPointerCaptureChanged(hasCapture: Boolean) {
+        delegate.onPointerCaptureChanged(hasCapture)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.N)
+    override fun onProvideKeyboardShortcuts(data: MutableList<KeyboardShortcutGroup>?, menu: Menu?, deviceId: Int) {
+        delegate.onProvideKeyboardShortcuts(data, menu, deviceId)
+    }
+
+    override fun onSearchRequested(searchEvent: SearchEvent?): Boolean = delegate.onSearchRequested(searchEvent)
+
+    override fun onWindowStartingActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? =
+        delegate.onWindowStartingActionMode(callback, type)
 }
 
 /**

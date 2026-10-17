@@ -17,7 +17,7 @@ Gradle modules are suggested; they can start as packages and be split later. Dep
 |---|---|---|
 | Presentation | `ui` (Compose, ViewModels) | Camera screen, verdict screen, action buttons, settings, history screen |
 | Domain | `domain` (pure Kotlin, no Android) | Models (`ScanPayload`, `Verdict`, `Reason`), use cases (`AnalyzeScan`, `ResolveRedirects`, `LookupDomainAge`), analyser interfaces |
-| Domain | `domain.parser` | `PayloadParser`: raw string -> sealed `ScanPayload` (Url, Wifi, Sms, Tel, Mail, Geo, Otpauth, Epc, Crypto, AppLink, Text, Unknown). Strict size and charset limits |
+| Domain | `domain.decoder` | `PayloadParser`: raw string -> sealed `ScanPayload` (Url, Wifi, Sms, Tel, Mail, Geo, Otpauth, Epc, Crypto, AppLink, Text, Unknown). Strict size and charset limits |
 | Domain | `domain.analysis` | Analysers, each `ScanPayload -> List<Signal>`: `UrlStructure` (userinfo `@` tricks, IP host, odd ports, shorteners), `HomoglyphIdn` (punycode, mixed scripts, confusables, bidi), `Typosquatting` (edit distance vs an embedded brand list), `Reputation` (local list lookup), per-type rules (`WifiRules`, `OtpauthRules`, `PaymentRules`, `SchemeRules`, `SmsRules`) |
 | Domain | `domain.verdict` | `VerdictEngine`: merges signals into a level and ordered reasons |
 | Data | `data.scan.camera` | CameraX + `BarcodeDecoder`, frame analysis, torch |

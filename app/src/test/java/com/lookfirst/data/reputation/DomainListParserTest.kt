@@ -1,5 +1,6 @@
 package com.lookfirst.data.reputation
 
+import com.lookfirst.domain.analysis.BrandList
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -94,6 +95,32 @@ class DomainListParserTest {
         assertEquals(3, out.keys.size)
         assertEquals(3, out.droppedOfficial)
         assertFalse(out.has(Lfix.KIND_HOST, "accounts.paypal.com"))
+    }
+
+    @Test
+    fun tenantsOfAnOpenPlatformAreIndexedByLabelAndPlatformNotDropped() {
+        // The real CERT Polska entries of 2026-10-17 that the app used to lose.
+        val out = parsedOf(
+            "office365emailverification1.wordpress.com\nofficeemailverification3653.wordpress.com\n" +
+                "a.deep.wordpress.com\nwordpress.com\nwww.wordpress.com\naccounts.google.com\nother.com\n",
+            officials = BrandList.officialDomains,
+        )
+        assertTrue(out.has(Lfix.KIND_DOMAIN, "office365emailverification1.wordpress.com"))
+        assertTrue(out.has(Lfix.KIND_DOMAIN, "officeemailverification3653.wordpress.com"))
+        assertTrue(out.has(Lfix.KIND_HOST, "a.deep.wordpress.com"))
+        assertFalse(out.has(Lfix.KIND_DOMAIN, "wordpress.com"))
+        assertFalse(out.has(Lfix.KIND_HOST, "www.wordpress.com"))
+        assertFalse(out.has(Lfix.KIND_HOST, "accounts.google.com"))
+        assertEquals(4, out.keys.size) // 3 tenants + other.com
+        assertEquals(3, out.droppedOfficial) // wordpress.com, www.wordpress.com, accounts.google.com
+    }
+
+    @Test
+    fun manyTenantsOfAnOpenPlatformAreNotPoison() {
+        val hosts = (1..150).joinToString("\n") { "x$it.wordpress.com" }
+        val out = parse(hosts + "\nok.com\nok2.com\n", officials = BrandList.officialDomains)
+        assertEquals(152, (out as ParseOutcome.Parsed).keys.size)
+        assertEquals(0, out.droppedOfficial)
     }
 
     @Test

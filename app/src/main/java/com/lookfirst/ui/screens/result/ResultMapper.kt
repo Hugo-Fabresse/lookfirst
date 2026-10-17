@@ -1,6 +1,7 @@
 package com.lookfirst.ui.screens.result
 
 import com.lookfirst.R
+import com.lookfirst.domain.analysis.UserContentPlatforms
 import com.lookfirst.domain.host.HostResult
 import com.lookfirst.domain.host.Ipv4Check
 import com.lookfirst.domain.host.PublicSuffixList
@@ -38,7 +39,20 @@ internal fun ScanPayload.Url.hostDisplay(): HostDisplay? {
     val host = (normalizedHostResult as? HostResult.Normalized)?.host
         ?: return HostDisplay(rawHost, technical = null, strongFrom = 0, normalized = false)
     val suffixes = if (host.kind == HostKind.DOMAIN) PublicSuffixList.instance else null
-    val suffixCount = suffixes?.suffixLabelCount(host.asciiLabels) ?: 0
+    val pslCount = suffixes?.suffixLabelCount(host.asciiLabels) ?: 0
+    // A tenant of an open platform (paypal-login.wordpress.com) is bold from its own label, like on blogspot.com.
+    val tenantName = if (suffixes == null) {
+        null
+    } else {
+        suffixes.registrableDomain(host.ascii)?.let {
+            UserContentPlatforms.registrableFor(host.ascii, it)
+        }
+    }
+    val suffixCount = if (tenantName != null && tenantName.count { it == '.' } > pslCount) {
+        tenantName.count { it == '.' }
+    } else {
+        pslCount
+    }
     val nameIndex = host.unicodeLabels.size - suffixCount - 1
     val strongFrom = if (suffixes == null ||
         nameIndex < 0

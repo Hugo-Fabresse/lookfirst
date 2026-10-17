@@ -17,3 +17,5 @@ DECISION [deep-links] : D12 — deep links : copie seule — sécurité
 DECISION [réputation] : D13 — bundle de listes signé Ed25519, anti-rollback — intégrité
 DECISION [ci] : règles semgrep du registre non figées — acceptable en mode rapport (à figer avant de rendre semgrep bloquant)
 DECISION [ci] : vérification Gradle sha256 seule, pas de PGP — beaucoup d'artefacts Google non signés
+DECISION [tests] : Robolectric hors ligne, sdk 34 seulement — un autre sdk = nouvelle coordonnée android-all + métadonnées à cache froid
+DECISION [deps] : Renovate désactivé pour android-all-instrumented — suit la version de Robolectric

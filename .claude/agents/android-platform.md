@@ -27,5 +27,5 @@ Règles techniques :
 Expertise :
 - CameraX (Preview, ImageAnalysis, lifecycle binding), lecteur de codes-barres sur l'appareil (ZXing, D11 : sans Google), orientation et rotation, torche, zoom.
 - Modèle de permissions Android 6+ (runtime), Package visibility (API 30), restrictions de démarrage d'activités en arrière-plan, FLAG_IMMUTABLE pour PendingIntent.
-- Compatibilité API 23 à la dernière : gardes `Build.VERSION.SDK_INT`, comportements par version, tests Robolectric `@Config(sdk=…)` quand utile.
+- Compatibilité API 23 à la dernière : gardes `Build.VERSION.SDK_INT`, comportements par version, tests Robolectric `@Config(sdk=…)` quand utile. Robolectric est hors ligne, sdk 34 seulement : un autre sdk = nouvelle coordonnée `android-all-instrumented` + métadonnées à cache froid.
 - Presse-papiers : copier sans déclencher d'action, marquer le contenu sensible quand l'API le permet (API 33+).

@@ -28,6 +28,7 @@ Règles techniques :
 
 Expertise :
 - JUnit4, Mockk (peu de mocks : préférer des fakes), Turbine pour les Flow, `runTest` + `StandardTestDispatcher`, Robolectric pour le code qui touche Android sans appareil.
+- Robolectric tourne hors ligne, sdk 34 seulement : un autre sdk (`@Config(sdk=…)`) exige une nouvelle coordonnée `android-all-instrumented` dans le catalogue + métadonnées de vérification régénérées à cache froid (CLAUDE.md, Gradle).
 - Tests paramétrés et property-based simples (générer des entrées aléatoires bornées, vérifier « ne plante pas » et les invariants).
 - Pyramide : beaucoup de tests unitaires purs sur domain/, peu de tests UI ; pas d'émulateur dans les PR.
 - Lisibilité : un test = un comportement, nom en phrase, arrange / act / assert.

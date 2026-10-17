@@ -99,3 +99,10 @@ DECISION [open] : pas de Custom Tabs (androidx.browser = nouvelle dépendance) ;
 DECISION [open] : mailto sans cc ni bcc (seul « À » est affiché, un destinataire caché serait une fuite) ; pas de createChooser (l'app par défaut de l'utilisateur reste respectée)
 DECISION [open] : Wi-Fi sans dialogue système (API < 30, WEP, mot de passe invalide) = réglages Wi-Fi ouverts mais on reste sur l'écran pour garder les identifiants visibles
 DECISION [open] : NON_BROWSER_HANDLER calculé à l'affichage du verdict (avant tout clic) ; Open désactivé tant que le niveau est inconnu
+DECISION [lists] : « Mettre à jour maintenant » tourne dans le scope de l'appli via le même ListUpdateRunner que le job quotidien, pas dans un OneTimeWork contraint — un job CONNECTED reste « en attente » hors connexion au lieu de dire « Hors connexion » ; un seul téléchargement à la fois (Mutex), délai de 15 min après un succès
+DECISION [lists] : backoff WorkManager 1 h exponentiel (plafond plate-forme 5 h, pas 8 h) et 4 essais max par période via runAttemptCount ; refus de sécurité = success, rejet mémorisé par (hash du manifeste) donc pas de retéléchargement
+DECISION [lists] : signature illisible sur le manifeste = une seule nouvelle tentative après 60 s dans la même exécution (paire manifeste/signature remplacée en deux temps), puis refus
+DECISION [lists] : ListDownloader reste dans data/reputation (HttpURLConnection, pas d'OkHttp) ; l'hôte codeberg.org est compilé, le propriétaire/dépôt Hugo-Fabresse/lookfirst-lists est PROVISOIRE jusqu'à LF-25
+DECISION [lists] : la mise à jour automatique n'est planifiée qu'après l'écran de premier lancement (case cochée par défaut) ; elle se coupe depuis Réglages
+DECISION [settings] : licences = texte statique dans À propos (ZXing, AndroidX, PSL, Phishing.Database), sans écran de licences dédié ; keyset.json pas encore téléchargé (rotation par versions de l'appli)
+DECISION [build] : WorkManager 2.10.0 ajoute WAKE_LOCK, ACCESS_NETWORK_STATE, RECEIVE_BOOT_COMPLETED et FOREGROUND_SERVICE au manifeste fusionné (permissions normales, venant de la bibliothèque) — à réexaminer avec Hugo

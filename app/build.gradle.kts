@@ -153,6 +153,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(composeBom)
     testImplementation(libs.robolectric)
+    testImplementation(libs.turbine)
     robolectricAndroidAll(libs.robolectric.android.all)
     testImplementation(libs.androidx.compose.ui.test.junit4)
 

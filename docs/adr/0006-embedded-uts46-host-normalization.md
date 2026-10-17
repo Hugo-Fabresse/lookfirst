@@ -29,3 +29,8 @@ The size of the chosen option is measured on the release APK by the full gate (`
 - The confusables table keeps only sources that IDNA allows, so it stays small; it is a skeleton for comparing with brand names, never a proof on its own (T-CNT-6).
 - The brand list is a local, hand-maintained list of about 270 entries (`BrandList`); it is refreshed with the reputation bundle later.
 - Displaying the normalized form (Unicode and punycode) to the user is done by the verdict screen (LF-18); the Result screen (LF-11) does not show it yet and only warns about non-Latin characters.
+
+## Data provenance (LF-20)
+- `scripts/gen-host-data.py` holds `SOURCES`: the exact versioned URL (unicode.org `Public/18.0.0/...`; publicsuffix/list at commit `2dbfce14c57bcea83fef2be3bdcb560667d7ef93`, 2026-10-16) and the expected SHA-256 of every source, test vectors included. Each generated file names its sources (URL, version, SHA-256) in its header, and `SHA256SUMS` lists the SHA-256 of the generated files (`HostDataIntegrityTest` checks them).
+- `scripts/gen-host-data.py --verify` downloads the sources, checks their SHA-256, regenerates in a temporary directory and compares byte for byte with the committed files (exit code 1 on any difference). Workflow `data-provenance.yml` runs it weekly and by hand, not on pull requests.
+- Update Unicode or the PSL: change the URLs, versions and SHA-256 in `SOURCES`; `scripts/gen-host-data.py --download DIR` (checks the hashes); `scripts/gen-host-data.py DIR app/src/main/resources/lookfirst/host`; copy `IdnaTestV2.txt` and `test_psl.txt` to `app/src/test/resources/lookfirst/host/`; read the diff of the data files (a version bump changes data, not only headers); run `--verify` and the tests; one PR.

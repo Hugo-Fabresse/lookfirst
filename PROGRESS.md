@@ -16,3 +16,4 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-11 — écran Résultat : contenu exact + Copier / Annuler, navigation Scan → Résultat (fusionné, PR #17)
 - [✅ DONE] LF-10 — scan d'un QR depuis une image (Photo Picker, lecture bornée, écran d'échec)
 - [✅ DONE] LF-16 — normalisation des hôtes (UTS #46 embarqué, PSL), homographes, imitations de marques — PR #18 — tests: 252 de domaine
+- [🔄 WIP]  LF-20 — provenance vérifiable des données Unicode / PSL embarquées (URL + SHA-256 figés, --verify, workflow hebdomadaire)

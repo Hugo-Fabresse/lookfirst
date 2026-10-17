@@ -27,7 +27,7 @@ class AddressLikeTextTest {
     private fun payload(raw: String) = ok(raw).payload
 
     private fun addressOf(raw: String) =
-        ((PayloadParser.parse(raw) as? ParseResult.Ok)?.payload as? ScanPayload.Text)?.addressLikeUrl()
+        ((PayloadParser.parse(raw) as? ParseResult.Ok)?.payload as? ScanPayload.Text)?.addressLikeUrl
 
     private fun codesOf(raw: String) = AddressLikeTextAnalyzer.on(raw).codes()
 
@@ -126,11 +126,11 @@ class AddressLikeTextTest {
             "ABC-123-XYZ",
             "A1B2C3",
             "example.invalidtld/x",
-            "listed.example/x",
             "example..com/x",
             ".com",
             "com",
             "example.com.",
+            "\u6771\u4eac\u3002\u65e5\u672c",
             "github.io",
             "co.uk",
             "256.1.1.1:80",
@@ -144,14 +144,76 @@ class AddressLikeTextTest {
 
     @Test
     fun `file names that are also tlds are analysed, documented choice`() {
-        // .zip and .mov are real TLDs and zip sites are a real lure: analysed. Nothing new when not listed.
+        // .zip and .mov are real TLDs and zip sites are a real lure: analysed, quietly when nothing is listed.
         listOf("rapport.zip", "film.mov", "readme.md").forEach {
             assertNotNull(it, addressOf(it))
             val verdict = withLists()(it, "id")
             assertEquals(it, VerdictLevel.CAUTION, verdict.level)
             assertEquals(it, listOf(SignalCode.UNPARSABLE), verdict.reasons.map { r -> r.code })
+            val none = withLists(result = ReputationResult.ListsMissing)(it, "id")
+            assertEquals(it, listOf(SignalCode.UNPARSABLE), none.reasons.map { r -> r.code })
+            val stale = withLists(result = ReputationResult.ListsStale(30))(it, "id")
+            assertEquals(it, listOf(SignalCode.UNPARSABLE), stale.reasons.map { r -> r.code })
         }
         assertEquals(VerdictLevel.DANGEROUS, withLists(setOf("invoice-paypal.zip"))("invoice-paypal.zip", "id").level)
+        // With a path the lists status is reported again.
+        val withPath = withLists(result = ReputationResult.ListsMissing)("readme.md/x", "id")
+        assertTrue(withPath.reasons.any { it.code == SignalCode.LISTS_MISSING })
+    }
+
+    @Test
+    fun `spaces and line breaks around the address are ignored`() {
+        listOf("listed.com/x\n", "listed.com/x ", "\tlisted.com/x\r\n").forEach {
+            val verdict = withLists(setOf("listed.com"))(it, "id")
+            assertEquals(it, VerdictLevel.DANGEROUS, verdict.level)
+            assertNull(it, payload(it).openKind())
+        }
+        assertNull(addressOf("listed.com /x"))
+    }
+
+    @Test
+    fun `host shape is judged on the normalized host`() {
+        val lookup = withLists(setOf("listed.com"))
+        listOf(
+            "listed\u3002com/x",
+            "listed\uFF0Ecom/x",
+            "listed\uFF61com/x",
+            "listed.com./x",
+            "listed.com.:443",
+        ).forEach {
+            assertEquals(it, VerdictLevel.DANGEROUS, lookup(it, "id").level)
+        }
+        assertTrue(SignalCode.BRAND_LOOKALIKE in codesOf("paypal\u3002com/x").plus(codesOf("paypa1\u3002com/x")))
+        // Mathematical bold letters map to plain ones under UTS #46.
+        val bold = "\uD835\uDC29\uD835\uDC1A\uD835\uDC32\uD835\uDC29\uD835\uDC1A\uD835\uDC25-login.com/x"
+        assertNotNull(addressOf(bold))
+        assertTrue(SignalCode.BRAND_LOOKALIKE in codesOf(bold))
+        assertNull(addressOf("example.com."))
+        assertNull(addressOf("\u6771\u4eac\u3002\u65e5\u672c"))
+        assertNotNull(addressOf("\u6771\u4eac\u3002com/x"))
+        assertNull(addressOf("\u6771\u4eac\u3002com"))
+        assertNull(addressOf("listed%2Ecom/x"))
+        assertNull(addressOf("lis%74ed.com/x"))
+    }
+
+    @Test
+    fun `reserved and private-use suffixes count when a port or path follows`() {
+        // `host:port` is already a url for the decoder; `host/path` is the text case.
+        listOf("nas.local:5000/", "router.lan/admin", "printer.internal:631", "box.home.arpa/x").forEach {
+            assertTrue(it, SignalCode.LOCAL_HOST in RiskAnalyzer.analyze(ok(it)).codes())
+        }
+        assertNotNull(addressOf("router.lan/admin"))
+        assertNotNull(addressOf("box.home.arpa/x"))
+        listOf("nas.local", "router.lan", "listed.example", "router/admin", "a.invalidtld/x").forEach {
+            assertNull(it, addressOf(it))
+        }
+    }
+
+    @Test
+    fun `obfuscated ipv4 and userinfo are left alone, residual`() {
+        listOf("0x7f.1/x", "2130706433/x", "127.1:80/x", "user@listed.com/x").forEach {
+            assertNull(it, addressOf(it))
+        }
     }
 
     @Test

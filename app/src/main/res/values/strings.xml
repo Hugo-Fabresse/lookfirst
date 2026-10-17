@@ -83,6 +83,17 @@
     <string name="warn_continue">Continue</string>
     <string name="check_loading">Checking…</string>
     <string name="check_failed">Check not possible (timed out or network unavailable). The verdict remains the local analysis.</string>
+    <string name="age_check">Check domain age</string>
+    <string name="warn_rdap_title">Check domain age?</string>
+    <string name="warn_rdap_body">LookFirst asks a public registry (RDAP, %2$s) how long this domain name has existed. Only the domain name (%1$s) is sent, not the full address. The registry sees your IP address. The site itself is not contacted.</string>
+    <string name="age_note_no_registry_list">Unavailable: the list of registries is not installed.</string>
+    <string name="age_note_no_domain">Only available for links with a domain name.</string>
+    <string name="age_note_no_server">No known registry for this kind of domain.</string>
+    <string name="age_result_unknown">The registry does not know this domain.</string>
+    <plurals name="age_result_registered">
+        <item quantity="one">Domain registered on %1$s (%2$d day ago).</item>
+        <item quantity="other">Domain registered on %1$s (%2$d days ago).</item>
+    </plurals>
     <string name="a11y_level_changed">Level changed to %1$s</string>
     <plurals name="chars_more">
         <item quantity="one">… (%1$d more character not shown)</item>

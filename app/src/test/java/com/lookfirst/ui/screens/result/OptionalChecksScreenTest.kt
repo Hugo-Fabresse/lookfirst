@@ -16,6 +16,8 @@ import androidx.compose.ui.test.performScrollTo
 import com.lookfirst.R
 import com.lookfirst.data.reputation.NoReputationLists
 import com.lookfirst.domain.decoder.PayloadParser
+import com.lookfirst.domain.rdap.RdapOutcome
+import com.lookfirst.domain.rdap.RdapUnavailable
 import com.lookfirst.domain.usecase.AnalyzeScan
 import com.lookfirst.domain.verdict.VerdictLevel
 import com.lookfirst.ui.components.TouchGuard
@@ -36,6 +38,9 @@ class OptionalChecksScreenTest {
     private var confirms = 0
     private var cancels = 0
     private var opens = 0
+    private var ages = 0
+    private var ageConfirms = 0
+    private var ageCancels = 0
 
     private fun text(id: Int, vararg args: Any): String = RuntimeEnvironment.getApplication().getString(id, *args)
 
@@ -57,13 +62,24 @@ class OptionalChecksScreenTest {
                     onOpen = { opens++ },
                     onConfirmOpen = {},
                     onDismissOpen = {},
-                    checkActions = ChecksActions({ traces++ }, { confirms++ }, { cancels++ }),
+                    checkActions = ChecksActions(
+                        { traces++ },
+                        { confirms++ },
+                        { cancels++ },
+                        { ages++ },
+                        { ageConfirms++ },
+                        { ageCancels++ },
+                    ),
                 )
             }
         }
     }
 
     private val traceButton get() = composeRule.onNodeWithText(text(R.string.trace_redirects))
+
+    private val ageButton get() = composeRule.onNodeWithText(text(R.string.age_check))
+
+    private val target = AgeTarget("a.example", "rdap.registry.example")
 
     private val dialogCancel
         get() = hasText(text(R.string.action_cancel)) and !hasContentDescription(text(R.string.a11y_cancel_resume))
@@ -120,8 +136,8 @@ class OptionalChecksScreenTest {
     @Test
     fun `a done check is not offered again`() {
         show(checks = OptionalChecks(trace = CheckState.DONE))
-        composeRule.onAllNodesWithText(text(R.string.optional_checks)).assertCountEquals(0)
         composeRule.onAllNodesWithText(text(R.string.trace_redirects)).assertCountEquals(0)
+        composeRule.onNodeWithText(text(R.string.age_check)).performScrollTo().assertExists()
     }
 
     @Test
@@ -173,5 +189,106 @@ class OptionalChecksScreenTest {
         composeRule.onNodeWithText(text(R.string.link_will_open)).assertExists()
         composeRule.onNodeWithText("a.example").assertExists()
         composeRule.onNodeWithContentDescription(text(R.string.open_in_browser)).assertExists()
+    }
+
+    @Test
+    fun `the domain age button is enabled when a registry can be asked and asks for the warning`() {
+        show(checks = OptionalChecks(ageTarget = target))
+        ageButton.performScrollTo().assertIsEnabled().performClick()
+        assertEquals(1, ages)
+        assertEquals(0, ageConfirms)
+        assertEquals(0, traces)
+    }
+
+    private fun assertUnavailable(reason: RdapUnavailable, note: Int) {
+        show(checks = OptionalChecks(ageUnavailable = reason))
+        ageButton.performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText(text(note)).assertExists()
+    }
+
+    @Test
+    fun `without the list of registries the domain age button says so`() =
+        assertUnavailable(RdapUnavailable.NO_BOOTSTRAP, R.string.age_note_no_registry_list)
+
+    @Test
+    fun `for an address that is not a domain name the domain age button says so`() =
+        assertUnavailable(RdapUnavailable.NOT_A_DOMAIN, R.string.age_note_no_domain)
+
+    @Test
+    fun `for a tld without a registry the domain age button says so`() =
+        assertUnavailable(RdapUnavailable.NO_SERVER, R.string.age_note_no_server)
+
+    @Test
+    fun `offline the domain age button is disabled with the offline note`() {
+        show(checks = OptionalChecks(ageTarget = target, online = false))
+        ageButton.performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText(text(R.string.check_offline_note)).assertExists()
+    }
+
+    @Test
+    fun `a failed domain age check keeps the button and says the verdict is the local analysis`() {
+        show(checks = OptionalChecks(ageTarget = target, age = CheckState.FAILED, trace = CheckState.DONE))
+        ageButton.performScrollTo().assertIsEnabled()
+        composeRule.onNodeWithText(text(R.string.check_failed)).assertExists()
+    }
+
+    @Test
+    fun `the domain age warning names the registry and the only thing that is sent`() {
+        show(checks = OptionalChecks(ageTarget = target, age = CheckState.WARNING))
+        composeRule.onNodeWithText(text(R.string.warn_rdap_title)).assertExists()
+        composeRule.onNodeWithText(text(R.string.warn_rdap_body, "a.example", "rdap.registry.example")).assertExists()
+        composeRule.onNode(dialogCancel).assertIsFocused()
+        TouchGuard.track(partiallyObscured = true) {
+            composeRule.onNodeWithText(text(R.string.warn_continue)).performClick()
+        }
+        assertEquals(0, ageConfirms)
+        composeRule.onNodeWithText(text(R.string.warn_continue)).performClick()
+        assertEquals(1, ageConfirms)
+        assertEquals(0, confirms)
+        composeRule.onNode(dialogCancel).performClick()
+        assertEquals(1, ageCancels)
+        assertEquals(0, cancels)
+    }
+
+    @Test
+    fun `while the domain age request runs the sheet shows progress and keeps Cancel`() {
+        show(checks = OptionalChecks(ageTarget = target, age = CheckState.RUNNING))
+        composeRule.onNodeWithText(text(R.string.check_loading)).assertExists()
+        composeRule.onAllNodesWithText(text(R.string.warn_continue)).assertCountEquals(0)
+        composeRule.onNode(dialogCancel).assertIsFocused().performClick()
+        assertEquals(1, ageCancels)
+    }
+
+    @Test
+    fun `no domain age sheet when idle or done`() {
+        show(checks = OptionalChecks(ageTarget = target))
+        composeRule.onAllNodesWithText(text(R.string.warn_rdap_title)).assertCountEquals(0)
+    }
+
+    @Test
+    fun `a registration date and age stay on screen once the check is done, without the button`() {
+        val registered = RdapOutcome.Registered(registeredAtMillis = 1_791_590_400_000L, ageDays = 12)
+        show(checks = OptionalChecks(ageTarget = target, age = CheckState.DONE, ageOutcome = registered))
+        composeRule.onAllNodesWithText(text(R.string.age_check)).assertCountEquals(0)
+        composeRule.onNodeWithText("12 days ago", substring = true).performScrollTo().assertExists()
+        composeRule.onNodeWithText("2026", substring = true).assertExists()
+    }
+
+    @Test
+    fun `a domain unknown to the registry is said plainly`() {
+        show(checks = OptionalChecks(ageTarget = target, age = CheckState.DONE, ageOutcome = RdapOutcome.NotFound))
+        composeRule.onNodeWithText(text(R.string.age_result_unknown)).performScrollTo().assertExists()
+    }
+
+    @Test
+    fun `a level raised by the domain age is announced once`() {
+        show(
+            checks = OptionalChecks(
+                age = CheckState.DONE,
+                ageOutcome = RdapOutcome.Registered(1L, 3),
+                levelChangedTo = VerdictLevel.SUSPICIOUS,
+            ),
+        )
+        composeRule.onNodeWithText(text(R.string.a11y_level_changed, text(R.string.level_suspicious))).assertExists()
     }
 }

@@ -19,8 +19,15 @@ import com.lookfirst.domain.model.Signal
 import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
 import com.lookfirst.domain.open.CanonicalUrl
+import com.lookfirst.domain.rdap.RdapClient
+import com.lookfirst.domain.rdap.RdapOutcome
+import com.lookfirst.domain.rdap.RdapPlan
+import com.lookfirst.domain.rdap.RdapPlanner
+import com.lookfirst.domain.rdap.RdapTarget
+import com.lookfirst.domain.rdap.RdapUnavailable
 import com.lookfirst.domain.redirect.TraceOutcome
 import com.lookfirst.domain.usecase.AnalyzeScan
+import com.lookfirst.domain.usecase.ApplyDomainAge
 import com.lookfirst.domain.usecase.ApplyRedirectTrace
 import com.lookfirst.domain.verdict.Verdict
 import com.lookfirst.domain.verdict.VerdictEngine
@@ -59,6 +66,7 @@ sealed interface ResultEvent {
  * camera can never replace the content under the user's finger (threat model T-UI-4).
  */
 @HiltViewModel
+@Suppress("TooManyFunctions") // one entry per user action of the screen: the contract with the composables
 class ResultViewModel @Inject constructor(
     private val clipboard: ClipboardWriter,
     private val actions: ActionExecutor,
@@ -67,6 +75,9 @@ class ResultViewModel @Inject constructor(
     private val payloadIds: PayloadIdGenerator,
     private val redirectTracer: RedirectTracer,
     private val applyRedirectTrace: ApplyRedirectTrace,
+    private val rdapPlanner: RdapPlanner,
+    private val rdapClient: RdapClient,
+    private val applyDomainAge: ApplyDomainAge,
     private val networkStatus: NetworkStatus,
     @DefaultDispatcher private val workDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
@@ -81,10 +92,14 @@ class ResultViewModel @Inject constructor(
     private var copyIsSecret = false
     private var parsing: Job? = null
     private var tracing: Job? = null
+    private var ageChecking: Job? = null
 
     /** What the optional redirect check works on: the scanned address in canonical form and the local verdict. */
     private var traceStart: CanonicalUrl? = null
     private var localVerdict: Verdict? = null
+
+    /** What the optional domain-age check asks: the registrable domain and its registry, from the installed lists. */
+    private var ageTarget: RdapTarget? = null
 
     /**
      * Starts showing [content]. Ignored while another content is displayed. [multipleCodes]: the image it comes
@@ -107,11 +122,15 @@ class ResultViewModel @Inject constructor(
                 val start = (payload as? ScanPayload.Url)?.let { CanonicalUrl.of(it) }
                 traceStart = start
                 localVerdict = verdict
+                val plan = start?.let { withContext(workDispatcher) { planAge(it) } }
+                ageTarget = (plan as? RdapPlan.Ready)?.target
                 val checks = start?.let {
                     OptionalChecks(
                         httpsOnly = it.scheme != HTTPS,
                         unusualPort = it.port != null && it.port != HTTPS_PORT,
                         online = networkStatus.isOnline(),
+                        ageTarget = ageTarget?.let { t -> AgeTarget(t.domain, t.server.host) },
+                        ageUnavailable = (plan as? RdapPlan.Unavailable)?.reason,
                     )
                 }
                 mutableState.update {
@@ -119,6 +138,16 @@ class ResultViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /** Never throws: a plan that fails means no registry to ask. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun planAge(start: CanonicalUrl): RdapPlan = try {
+        rdapPlanner.plan(start.host)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (ignored: Exception) {
+        RdapPlan.Unavailable(RdapUnavailable.NO_BOOTSTRAP)
     }
 
     /** Never throws: an analysis that fails is reported as incomplete (CAUTION), not as "no risk signal". */
@@ -236,8 +265,7 @@ class ResultViewModel @Inject constructor(
     fun onTraceConfirmed() {
         val checks = (mutableState.value as? ResultUiState.Content)?.checks ?: return
         val start = traceStart
-        val base = localVerdict
-        if (checks.trace != CheckState.WARNING || start == null || base == null) return
+        if (checks.trace != CheckState.WARNING || start == null) return
         updateChecks { it.copy(trace = CheckState.RUNNING) }
         tracing = viewModelScope.launch {
             val outcome = redirectTracer.trace(start)
@@ -245,14 +273,74 @@ class ResultViewModel @Inject constructor(
                 updateChecks { it.copy(trace = CheckState.FAILED) }
                 return@launch
             }
+            // The verdict of the moment, not the local one: a domain-age result already in it must survive.
+            val base = (mutableState.value as? ResultUiState.Content)?.verdict ?: localVerdict ?: return@launch
             val updated = withContext(workDispatcher) { merge(base, outcome) }
             mutableState.update {
                 if (it !is ResultUiState.Content || it.checks == null) return@update it
-                val before = it.verdict?.level
-                val changed = if (before != null && updated.level != before) updated.level else null
-                it.copy(verdict = updated, checks = it.checks.copy(trace = CheckState.DONE, levelChangedTo = changed))
+                it.copy(verdict = updated, checks = it.checks.copy(trace = CheckState.DONE).announcing(it, updated))
             }
         }
+    }
+
+    /** "Check domain age": opens the warning sheet (every time). Offline, or no registry to ask: nothing opens. */
+    fun onAgeRequested() {
+        val current = mutableState.value as? ResultUiState.Content ?: return
+        val checks = current.checks ?: return
+        val busy = checks.age == CheckState.RUNNING || checks.age == CheckState.DONE
+        if (checks.ageTarget == null || ageTarget == null || busy) return
+        val online = networkStatus.isOnline()
+        updateChecks { it.copy(online = online, age = if (online) CheckState.WARNING else it.age) }
+    }
+
+    /** "Continue" in the warning: the one place where a request about the scanned domain is made. */
+    fun onAgeConfirmed() {
+        val checks = (mutableState.value as? ResultUiState.Content)?.checks ?: return
+        val target = ageTarget
+        if (checks.age != CheckState.WARNING || target == null) return
+        updateChecks { it.copy(age = CheckState.RUNNING) }
+        ageChecking = viewModelScope.launch {
+            val outcome = rdapClient.lookup(target)
+            if (outcome is RdapOutcome.Failed) {
+                updateChecks { it.copy(age = CheckState.FAILED) }
+                return@launch
+            }
+            val base = (mutableState.value as? ResultUiState.Content)?.verdict ?: return@launch
+            val updated = withContext(workDispatcher) { mergeAge(base, outcome) }
+            mutableState.update {
+                if (it !is ResultUiState.Content || it.checks == null) return@update it
+                val done = it.checks.copy(age = CheckState.DONE, ageOutcome = outcome)
+                it.copy(verdict = updated, checks = done.announcing(it, updated))
+            }
+        }
+    }
+
+    /** Cancel in the warning or while loading: nothing is kept, no verdict changes. */
+    fun onAgeCancelled() {
+        ageChecking?.cancel()
+        ageChecking = null
+        updateChecks {
+            if (it.age == CheckState.WARNING || it.age == CheckState.RUNNING) it.copy(age = CheckState.IDLE) else it
+        }
+    }
+
+    /**
+     * Sets the level announcement when [updated] is not at the level [shown] had; otherwise an earlier announcement
+     * stays as it is (TalkBack reads a changed text once, an unchanged one is not read again).
+     */
+    private fun OptionalChecks.announcing(shown: ResultUiState.Content, updated: Verdict): OptionalChecks {
+        val before = shown.verdict?.level
+        return if (before != null && updated.level != before) copy(levelChangedTo = updated.level) else this
+    }
+
+    /** Never throws: a merge that fails keeps the verdict as it was. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun mergeAge(base: Verdict, outcome: RdapOutcome): Verdict = try {
+        applyDomainAge(base, outcome)
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (ignored: Exception) {
+        base
     }
 
     /** Cancel in the warning or while loading: nothing is kept, no verdict changes. */
@@ -292,6 +380,9 @@ class ResultViewModel @Inject constructor(
         parsing = null
         tracing?.cancel()
         tracing = null
+        ageChecking?.cancel()
+        ageChecking = null
+        ageTarget = null
         traceStart = null
         localVerdict = null
         scanned = null

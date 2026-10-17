@@ -83,6 +83,17 @@
     <string name="warn_continue">Continuer</string>
     <string name="check_loading">Vérification en cours…</string>
     <string name="check_failed">Vérification impossible (délai dépassé ou réseau indisponible). Le verdict reste celui de l\'analyse locale.</string>
+    <string name="age_check">Vérifier l\'âge du domaine</string>
+    <string name="warn_rdap_title">Vérifier l\'âge du domaine ?</string>
+    <string name="warn_rdap_body">LookFirst demande à un registre public (RDAP, %2$s) depuis quand ce nom de domaine existe. Seul le nom de domaine (%1$s) est envoyé, pas l\'adresse complète. Le registre voit votre adresse IP. Le site lui-même n\'est pas contacté.</string>
+    <string name="age_note_no_registry_list">Indisponible : la liste des registres n\'est pas installée.</string>
+    <string name="age_note_no_domain">Disponible pour les liens avec un nom de domaine uniquement.</string>
+    <string name="age_note_no_server">Aucun registre connu pour ce type de domaine.</string>
+    <string name="age_result_unknown">Ce domaine est inconnu du registre.</string>
+    <plurals name="age_result_registered">
+        <item quantity="one">Domaine enregistré le %1$s (il y a %2$d jour).</item>
+        <item quantity="other">Domaine enregistré le %1$s (il y a %2$d jours).</item>
+    </plurals>
     <string name="a11y_level_changed">Niveau passé à %1$s</string>
     <plurals name="chars_more">
         <item quantity="one">… (%1$d caractère de plus non affiché)</item>

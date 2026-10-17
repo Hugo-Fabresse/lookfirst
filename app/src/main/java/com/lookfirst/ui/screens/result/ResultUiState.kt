@@ -3,6 +3,8 @@ package com.lookfirst.ui.screens.result
 import androidx.annotation.StringRes
 import com.lookfirst.R
 import com.lookfirst.domain.model.Untrusted
+import com.lookfirst.domain.rdap.RdapOutcome
+import com.lookfirst.domain.rdap.RdapUnavailable
 import com.lookfirst.domain.verdict.Verdict
 import com.lookfirst.domain.verdict.VerdictLevel
 
@@ -100,6 +102,9 @@ enum class CheckState {
     DONE,
 }
 
+/** What a domain-age check would send and to whom: the registrable domain (ASCII, as sent) and the registry host. */
+data class AgeTarget(val domain: String, val server: String)
+
 /**
  * The optional, network-using checks of a web link (ux.md 3.7). [httpsOnly]: the link is plain `http://`, which the
  * app never contacts. [online] false disables the button. [levelChangedTo] is set once when a check moved the level
@@ -112,6 +117,13 @@ data class OptionalChecks(
     val unusualPort: Boolean = false,
     val online: Boolean = true,
     val levelChangedTo: VerdictLevel? = null,
+    /** The domain-age check (RDAP). It needs the registry named by the installed lists, not the link's scheme or port. */
+    val age: CheckState = CheckState.IDLE,
+    /** Set when a registry can be asked; null with [ageUnavailable] set (or both null before the plan is known). */
+    val ageTarget: AgeTarget? = null,
+    val ageUnavailable: RdapUnavailable? = null,
+    /** The registry's answer once [age] is DONE: [RdapOutcome.Registered] or [RdapOutcome.NotFound]. */
+    val ageOutcome: RdapOutcome? = null,
 ) {
     /** The link itself allows a trace (https, port 443). */
     val traceable: Boolean get() = !httpsOnly && !unusualPort

@@ -61,6 +61,8 @@ Les alertes de sécurité de la CI (semgrep, gitleaks, osv-scanner, en mode rapp
 ### Gradle
 Toujours sous le verrou partagé avec les autres projets du PC : `flock /tmp/memlearn-gradle-test.lock ./gradlew … --max-workers=4`. `./gradlew --stop` aussi sous ce verrou.
 
+**Vérification des dépendances** : `gradle/verification-metadata.xml` (sha256, plugins de build compris) est vérifié à chaque build, en local comme en CI. À régénérer quand une dépendance ou un plugin change (catalogue de versions, Renovate), si le build échoue sur « Dependency verification failed » après contrôle que le changement est voulu , **à cache froid** (cache Gradle chaud = entrées manquantes), idéalement sur un runner GitHub vide comme le workflow temporaire de LF-12 (un workflow jetable sur la branche, supprimé ensuite) : `./gradlew --write-verification-metadata sha256 --refresh-dependencies --no-build-cache help assembleDebug assembleRelease testDebugUnitTest ktlintCheck detekt cpdCheck lintDebug lintRelease :app:dependencies --configuration releaseRuntimeClasspath --max-workers=2` (en local : sous `flock`, après avoir vidé `~/.gradle/caches/modules-2`). Un diff acceptable ne contient QUE des coordonnées nouvelles correspondant au changement de catalogue. Tout `<also-trust>`, tout hash modifié sur une coordonnée existante, ou toute coordonnée sans rapport : on s'arrête et on escalade à Hugo. Une PR Renovate Gradle rouge pour « Dependency verification failed » est attendue : régénérer les métadonnées sur la branche Renovate à cache froid, appliquer la règle ci-dessus, commiter, puis relancer la CI.
+
 ### Refactoring
 Seulement quand une relecture signale un problème structurel. Jamais mélangé à un commit de feature.
 

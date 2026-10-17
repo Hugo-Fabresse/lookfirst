@@ -1,5 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "scripts/security/semgrep-requirements.txt is hash-pinned and NOT managed by Renovate (ignorePaths); SEMGREP_VERSION in security.yml is not tracked either (the install uses that file): bump both by hand, regenerating it with pip-compile --generate-hashes (pip-tools) on a requirements.in containing only semgrep==<version>, then review the diff.",
+    "security.yml tool versions are bumped for gitleaks and osv-scanner by the customManagers below, which only change the version: update GITLEAKS_SHA256 / OSV_SHA256 in the same PR from the release checksums before merging.",
+    "Gradle Renovate PRs are expected to fail CI with 'Dependency verification failed' until gradle/verification-metadata.xml is regenerated on the Renovate branch with a cold cache; apply the diff rule in CLAUDE.md (Gradle section) before merging."
+  ],
   "extends": [
     "config:recommended",
     ":dependencyDashboard",
@@ -14,6 +19,37 @@
   ],
   "prConcurrentLimit": 5,
   "minimumReleaseAge": "7 days",
+  "ignorePaths": [
+    "scripts/security/semgrep-requirements.txt"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "gitleaks version in security.yml (GITLEAKS_SHA256 to update by hand with it)",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/security\\.yml$/"
+      ],
+      "matchStrings": [
+        "GITLEAKS_VERSION: \"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "gitleaks/gitleaks",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "osv-scanner version in security.yml (OSV_SHA256 to update by hand with it)",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/security\\.yml$/"
+      ],
+      "matchStrings": [
+        "OSV_VERSION: \"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "google/osv-scanner",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    }
+  ],
   "packageRules": [
     {
       "description": "GitHub Actions: one PR per action, never grouped with libraries (each pin is reviewed on its own)",
@@ -22,9 +58,10 @@
       ]
     },
     {
-      "description": "Batch non-major library updates into one PR to keep the noise down",
+      "description": "Batch non-major library updates into one PR to keep the noise down (scanner versions excluded: their sha256 is bumped by hand)",
       "matchManagers": [
-        "!github-actions"
+        "!github-actions",
+        "!custom.regex"
       ],
       "matchUpdateTypes": [
         "minor",

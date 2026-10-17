@@ -58,10 +58,10 @@ internal object BundleVerifier {
     }
 
     /**
-     * Full install-time verification of [directory]. [floor] is the highest accepted `(epoch, version)` (null for
-     * the embedded bundle), [baseline] the installed bundle (null if none).
+     * Steps 1 to 4 of the design document: signature, manifest shape, clock rules, anti-rollback and "up to date".
+     * No file is read. `Accepted` means the manifest may be acted on (its files can be fetched).
      */
-    fun verify(
+    fun precheck(
         directory: File,
         ring: KeyRing,
         nowMillis: Long,
@@ -72,22 +72,29 @@ internal object BundleVerifier {
         if (signed !is SignedManifest.Ok) return rejected((signed as SignedManifest.Failed).reason, null)
         val manifest = signed.manifest
         val reason = ruleViolation(manifest, ring, nowMillis)
-            ?: return orderOutcome(manifest, signed.sha256, floor, baseline, directory, nowMillis)
-        return rejected(reason, signed.sha256)
+        return when {
+            reason != null -> rejected(reason, signed.sha256)
+            baseline != null && manifest.version == baseline.version -> VerifyOutcome.UpToDate
+            floor != null && manifest.version <= floor -> rejected(RejectReason.ROLLBACK, signed.sha256)
+            else -> VerifyOutcome.Accepted(manifest, signed.sha256)
+        }
     }
 
-    private fun orderOutcome(
-        manifest: BundleManifest,
-        manifestSha: String,
+    /**
+     * Full install-time verification of [directory]. [floor] is the highest accepted `(epoch, version)` (null for
+     * the embedded bundle), [baseline] the installed bundle (null if none).
+     */
+    fun verify(
+        directory: File,
+        ring: KeyRing,
+        nowMillis: Long,
         floor: BundleVersion?,
         baseline: Baseline?,
-        directory: File,
-        nowMillis: Long,
     ): VerifyOutcome {
-        if (baseline != null && manifest.version == baseline.version) return VerifyOutcome.UpToDate
-        if (floor != null && manifest.version <= floor) return rejected(RejectReason.ROLLBACK, manifestSha)
-        val failure = FileChecks.check(directory, manifest, baseline, nowMillis)
-        return if (failure == null) VerifyOutcome.Accepted(manifest, manifestSha) else rejected(failure, manifestSha)
+        val outcome = precheck(directory, ring, nowMillis, floor, baseline)
+        if (outcome !is VerifyOutcome.Accepted) return outcome
+        val failure = FileChecks.check(directory, outcome.manifest, baseline, nowMillis)
+        return if (failure == null) outcome else rejected(failure, outcome.manifestSha256)
     }
 
     private fun rejected(reason: RejectReason, manifestSha: String?) = VerifyOutcome.Rejected(reason, manifestSha)

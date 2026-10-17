@@ -100,7 +100,6 @@ android {
         error += "UnusedResources"
         // Dependency/plugin freshness is not a build concern here.
         disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion")
-        checkReleaseBuilds = false
     }
 }
 

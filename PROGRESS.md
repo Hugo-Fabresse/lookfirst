@@ -30,4 +30,5 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-29 — gate complet rouge : règle R8 retirant Throwable.printStackTrace() en release (WorkManager fusionné dans une classe app) — branche fix/LF-29-release-stacktrace
 - [✅ DONE] LF-43 — budget et indice TYPO sur les lettres du mot-clé et non sur son squelette ; corpus légitime +12 hôtes, 0 faux positif, fraude inchangée — branche fix/LF-43-typo-length
 - [🔄 WIP]  LF-35 — garde anti-grille de motifs de repérage sur les deux lecteurs (caméra et import), seuil 30 — branche fix/LF-35-camera-finder-guard
+- [✅ DONE] LF-44 — TYPO sur les morceaux à tirets d'un label, indice obligatoire ; corpus légitime +9 hôtes à tirets, 0 faux positif, fraude +4 — branche fix/LF-44-typo-in-label-parts
 - [🔄 WIP]  LF-32 — limite de variation des listes sur la différence d'ensembles + ancrage de l'horloge par l'en-tête Date — branche fix/LF-32-list-set-variation

@@ -15,6 +15,7 @@ object RiskAnalyzer {
             HiddenCharAnalyzer,
             UrlStructureAnalyzer,
             LookalikeAnalyzer,
+            AddressLikeTextAnalyzer,
             WifiAnalyzer,
             OtpauthAnalyzer,
             PaymentAnalyzer,

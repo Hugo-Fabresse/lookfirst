@@ -19,10 +19,14 @@ internal object LocalHosts {
     /** Default names of home boxes under the real gTLD `.box` (vendor documentation); exact hosts, not suffixes. */
     private val BOX_HOSTS: Set<String> = setOf("fritz.box", "speedport.box", "easy.box", "mediacenter.box")
 
+    /** True for a reserved or private-use suffix, or a known box name; not for an unlisted TLD (LF-42). */
+    fun hasReservedSuffix(host: String): Boolean =
+        host in BOX_HOSTS || SUFFIXES.any { host == it || host.endsWith(".$it") }
+
     /** [host] is a DOMAIN-kind ASCII host, lowercase, without trailing dot. */
     fun matches(host: String): Boolean {
         if ('.' !in host) return true
-        if (host in BOX_HOSTS || SUFFIXES.any { host == it || host.endsWith(".$it") }) return true
+        if (hasReservedSuffix(host)) return true
         // Without the list the TLD check is skipped; the host is not accused on missing data.
         val list = PublicSuffixList.instance ?: return false
         return !list.isIcannTld(host.substringAfterLast('.'))

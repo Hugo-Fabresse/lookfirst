@@ -3,6 +3,8 @@ package com.lookfirst.data.reputation
 import com.lookfirst.domain.host.PublicSuffixList
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /** Points of [ReputationStore.install] where a test can simulate a crash. */
 internal enum class InstallStage { FILES_SYNCED, DIRECTORY_RENAMED, POINTER_WRITTEN, POINTER_SWAPPED }
@@ -16,6 +18,22 @@ internal sealed interface InstallResult {
     class Rejected(val reason: RejectReason) : InstallResult
 }
 
+/** Version number and age in whole days of the bundle lookups use (settings screen). */
+internal class ListsSnapshot(val version: Long, val ageDays: Int)
+
+/** Result of looking at a downloaded manifest before any other file is fetched. */
+internal sealed interface ManifestInspection {
+    /** Signature, shape and ordering are fine and the bundle is newer: fetch [needed], the rest is already in place. */
+    class Proceed(val manifest: BundleManifest, val needed: List<ManifestFile>) : ManifestInspection
+
+    data object UpToDate : ManifestInspection
+
+    /** This very manifest was rejected before: its files are not downloaded again. */
+    data object KnownRejected : ManifestInspection
+
+    class Rejected(val reason: RejectReason) : ManifestInspection
+}
+
 /**
  * Verified, atomically installed reputation bundles in app-private storage (design document, sections 4 and 6).
  *
@@ -27,6 +45,7 @@ internal sealed interface InstallResult {
  *
  * Nothing here logs: file names, hashes and reasons are enough for the caller, and no scanned content passes here.
  */
+@Suppress("TooManyFunctions") // one cohesive store: load, inspect, install, state queries
 class ReputationStore internal constructor(
     root: File,
     private val embedded: EmbeddedBundleSource?,
@@ -44,7 +63,10 @@ class ReputationStore internal constructor(
      * bundle at all, installed, embedded or downloaded; lookups then say "lists missing".
      */
     private val keysTrusted = PinnedKeys.KEYS_ARE_PRODUCTION || acceptTestKeys
-    private val lock = Any()
+    private val lock = ReentrantLock()
+
+    /** Candidate directories handed to a downloader and not yet installed or released: clean-up leaves them alone. */
+    private val activeCandidates = HashSet<String>()
 
     @Volatile private var loaded: LoadedBundle? = null
 
@@ -52,11 +74,31 @@ class ReputationStore internal constructor(
 
     @Volatile private var seenGeneratedAtMillis = 0L
 
-    /** The bundle to look hosts up in, loading it on first use. Null when nothing usable is installed. */
+    /**
+     * The bundle to look hosts up in. Null when nothing is usable **or when it is not loaded yet and the store is
+     * busy** (an installation holds the lock): a lookup never waits for an installation, it says "lists missing".
+     * The app preloads the bundle at start (off the main thread), so this only happens in the first moments.
+     */
     internal fun current(): LoadedBundle? {
         if (!keysTrusted) return null
         loaded?.let { return it }
-        return synchronized(lock) { ensureLoaded() }
+        if (!lock.tryLock()) return null
+        return try {
+            ensureLoaded()
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    /** Loads the installed (or embedded) bundle if that is not done yet; blocks while an installation runs. */
+    internal fun preload() {
+        if (keysTrusted) lock.withLock { ensureLoaded() }
+    }
+
+    /** What the settings screen shows. Reads the already loaded bundle only: never waits, never loads. */
+    internal fun snapshot(): ListsSnapshot? {
+        val bundle = loaded ?: return null
+        return ListsSnapshot(bundle.version.bundle, ageDays(bundle))
     }
 
     private fun ensureLoaded(): LoadedBundle? {
@@ -81,29 +123,74 @@ class ReputationStore internal constructor(
      * A fresh empty directory (inside the store, so the final rename stays on one file system). The first load,
      * which clears leftovers of a crashed update, happens before the directory exists.
      */
-    internal fun newCandidateDirectory(): File = synchronized(lock) {
+    internal fun newCandidateDirectory(): File = lock.withLock {
         ensureLoaded()
-        disk.newCandidate()
+        disk.newCandidate().also { activeCandidates += it.name }
+    }
+
+    /** Gives a candidate up (download failed or stopped): it is deleted and no longer protected from clean-up. */
+    internal fun releaseCandidate(candidate: File) = lock.withLock {
+        activeCandidates -= candidate.name
+        if (disk.isInsideTmp(candidate)) candidate.deleteRecursively()
     }
 
     /** True if a bundle with this manifest hash was rejected before (do not download its files again). */
     internal fun isKnownRejected(manifestSha256: String): Boolean =
-        synchronized(lock) { StoreState.read(disk.stateFile).rejectedManifestSha == manifestSha256 }
+        lock.withLock { StoreState.read(disk.stateFile).rejectedManifestSha == manifestSha256 }
 
-    internal fun lastFailure(): Pair<RejectReason, Long>? = synchronized(lock) {
+    internal fun lastFailure(): Pair<RejectReason, Long>? = lock.withLock {
         val state = StoreState.read(disk.stateFile)
         val reason = state.lastFailure
         val time = state.lastFailureMillis
         if (reason != null && time != null) reason to time else null
     }
 
+    /**
+     * Steps 2 to 4 on the manifest and signature just downloaded into [candidate]: nothing is read before the
+     * signature is verified. On `Proceed`, files of the installed bundle that the new manifest keeps unchanged
+     * (same name, size and SHA-256) are copied into [candidate]; `needed` lists the files still to download.
+     * A rejection is remembered (reason and manifest hash) exactly like an installation rejection.
+     */
+    internal fun inspectManifest(candidate: File): ManifestInspection = lock.withLock {
+        if (!keysTrusted) return ManifestInspection.Rejected(RejectReason.BAD_SIGNATURE)
+        if (!disk.ensureDirectories() || !disk.isInsideTmp(candidate)) {
+            return ManifestInspection.Rejected(RejectReason.STORAGE)
+        }
+        val state = StoreState.read(disk.stateFile)
+        val installed = ensureLoaded()
+        val floor = listOfNotNull(installed?.version, state.highest).maxOrNull()
+        val baseline = installed?.let {
+            Baseline(it.version, it.generatedAtMillis, it.directory, it.phishing.entryCount, it.allowlist.entryCount)
+        }
+        val outcome = BundleVerifier.precheck(candidate, ringFor(state), clock(), floor, baseline)
+        when {
+            outcome is VerifyOutcome.Rejected -> {
+                recordFailure(outcome.reason, outcome.manifestSha256)
+                ManifestInspection.Rejected(outcome.reason)
+            }
+            outcome is VerifyOutcome.UpToDate -> {
+                disk.writeState(state.copy(lastSuccessMillis = clock()))
+                ManifestInspection.UpToDate
+            }
+            outcome is VerifyOutcome.Accepted && state.rejectedManifestSha == outcome.manifestSha256 ->
+                ManifestInspection.KnownRejected
+            outcome is VerifyOutcome.Accepted ->
+                ManifestInspection.Proceed(
+                    outcome.manifest,
+                    CandidateFiles.reuseUnchanged(disk, outcome.manifest, installed, candidate),
+                )
+            else -> ManifestInspection.Rejected(RejectReason.BAD_MANIFEST)
+        }
+    }
+
     /** Verifies [candidate] and, if every check passes, installs it atomically. The candidate is consumed. */
-    internal fun install(candidate: File): InstallResult = synchronized(lock) {
+    internal fun install(candidate: File): InstallResult = lock.withLock {
         val result = try {
             if (keysTrusted) installLocked(candidate) else InstallResult.Rejected(RejectReason.BAD_SIGNATURE)
         } catch (@Suppress("SwallowedException") ignored: IOException) {
             InstallResult.Rejected(RejectReason.STORAGE)
         }
+        activeCandidates -= candidate.name
         if (result !is InstallResult.Installed && disk.isInsideTmp(candidate)) candidate.deleteRecursively()
         if (result is InstallResult.Rejected &&
             result.reason == RejectReason.STORAGE
@@ -114,7 +201,7 @@ class ReputationStore internal constructor(
     }
 
     /** Adopts a keyset signed by R that opens a newer key epoch. False (nothing changes) on any deviation. */
-    internal fun applyKeyset(json: ByteArray, signature: ByteArray): Boolean = synchronized(lock) {
+    internal fun applyKeyset(json: ByteArray, signature: ByteArray): Boolean = lock.withLock {
         val state = StoreState.read(disk.stateFile)
         val keyset = KeysetVerifier.verify(json, signature, recoveryKey, state.keysetEpoch) ?: return false
         try {
@@ -175,7 +262,7 @@ class ReputationStore internal constructor(
             ),
         )
         seenGeneratedAtMillis = maxOf(seenGeneratedAtMillis, manifest.generatedAtMillis)
-        disk.cleanUp(manifest.version.directoryName)
+        disk.cleanUp(manifest.version.directoryName, activeCandidates)
         loaded = open(target, manifest.version, manifestSha, manifest)
         loadAttempted = true
         return InstallResult.Installed(manifest.version)
@@ -212,7 +299,7 @@ class ReputationStore internal constructor(
         val installed = loadInstalled()
         val bundle = adoptEmbeddedIfNewer(installed) ?: installed
         bundle?.let { seenGeneratedAtMillis = maxOf(seenGeneratedAtMillis, it.generatedAtMillis) }
-        disk.cleanUp(bundle?.version?.directoryName)
+        disk.cleanUp(bundle?.version?.directoryName, activeCandidates)
         return bundle
     }
 
@@ -272,10 +359,10 @@ class ReputationStore internal constructor(
         val source = embedded ?: return null
         val candidate = disk.newCandidate()
         try {
-            if (!copyEmbeddedManifest(source, candidate)) return null
+            if (!CandidateFiles.copyEmbeddedManifest(disk, source, candidate)) return null
             val signed = BundleVerifier.readSigned(candidate, pinnedRing) as? SignedManifest.Ok ?: return null
             if (installed != null && signed.manifest.version <= installed.version) return null
-            if (!copyEmbeddedFiles(source, candidate, signed.manifest)) return null
+            if (!CandidateFiles.copyEmbeddedFiles(disk, source, candidate, signed.manifest)) return null
             // No floor and no baseline: the embedded bundle is the floor itself (ADR-0005).
             val outcome = BundleVerifier.verify(candidate, pinnedRing, clock(), null, null)
             if (outcome is VerifyOutcome.Accepted &&
@@ -290,30 +377,5 @@ class ReputationStore internal constructor(
         } finally {
             candidate.deleteRecursively()
         }
-    }
-
-    private fun copyEmbeddedManifest(source: EmbeddedBundleSource, into: File): Boolean {
-        val pairs = listOf(
-            BundleLimits.MANIFEST_FILE to BundleLimits.MANIFEST_MAX_BYTES,
-            BundleLimits.SIGNATURE_FILE to SIGNATURE_MAX_BYTES,
-        )
-        return pairs.all { (name, limit) ->
-            source.open(name)?.use { disk.copyBounded(it, File(into, name), limit) } ?: false
-        }
-    }
-
-    private fun copyEmbeddedFiles(source: EmbeddedBundleSource, into: File, manifest: BundleManifest): Boolean =
-        manifest.files.all { declared ->
-            val kind = BundleFile.forPath(declared.path)
-            kind == null ||
-                declared.size > kind.maxSize ||
-                (
-                    source.open(declared.path)?.use { disk.copyBounded(it, File(into, declared.path), declared.size) }
-                        ?: !kind.required
-                    )
-        }
-
-    private companion object {
-        const val SIGNATURE_MAX_BYTES = 256L
     }
 }

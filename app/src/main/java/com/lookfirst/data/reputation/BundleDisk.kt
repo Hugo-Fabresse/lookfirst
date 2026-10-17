@@ -115,10 +115,13 @@ internal class BundleDisk(val root: File, private val directorySync: DirectorySy
         directory.listFiles().orEmpty().filter { it.name !in keep || !it.isFile }.forEach { it.deleteRecursively() }
     }
 
-    /** Deletes bundle directories other than [keep] and every leftover temporary entry. */
-    fun cleanUp(keep: String?) {
+    /**
+     * Deletes bundle directories other than [keep] and every leftover temporary entry except the candidates in
+     * [activeCandidates] (a download in progress must survive the installation of another bundle).
+     */
+    fun cleanUp(keep: String?, activeCandidates: Set<String>) {
         bundles.listFiles().orEmpty().filter { it.name != keep }.forEach { it.deleteRecursively() }
-        tmp.listFiles().orEmpty().forEach { it.deleteRecursively() }
+        tmp.listFiles().orEmpty().filter { it.name !in activeCandidates }.forEach { it.deleteRecursively() }
     }
 
     /** Copies at most [limit] bytes of [input] to [target]; false if the stream is longer. */

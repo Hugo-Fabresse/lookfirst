@@ -62,7 +62,7 @@ enum class SignalCode(val severity: Severity) {
     /** New. Bidi control character in the URL outside its host (path, query, fragment). */
     BIDI_IN_URL(Severity.DANGEROUS),
 
-    /** New. Host not decidable before the UTS #46 normalizer (non-ASCII or `%`); LF-16 refines or removes it. */
+    /** New. The host could not be normalized (invalid after UTS #46) or the embedded Unicode data is missing. */
     ANALYSIS_INCOMPLETE(Severity.CAUTION),
 
     /** New. Crypto address whose Base58Check, Bech32(m) or EIP-55 checksum is wrong. */
@@ -100,6 +100,16 @@ enum class PaymentProblem : SignalDetail {
 }
 
 enum class OtpParam : SignalDetail { TYPE, ALGORITHM, DIGITS, PERIOD, ISSUER }
+
+/**
+ * How a host imitates a known brand (the evidence of BRAND_LOOKALIKE is the brand's official domain):
+ * [HOMOGLYPH] look-alike characters, [TYPO] a one or two letter difference or a separator, [COMBINED] the brand
+ * inside a longer name or in a sub-domain.
+ */
+enum class LookalikeKind : SignalDetail { HOMOGLYPH, TYPO, COMBINED }
+
+/** Alphabets mixed in one label (MIXED_SCRIPT), names from the embedded Unicode data, never scanned text. */
+data class MixedScripts(val scripts: List<String>) : SignalDetail
 
 /**
  * One finding. [evidence] is the fragment of scanned content to highlight (for example the real host), [count] the

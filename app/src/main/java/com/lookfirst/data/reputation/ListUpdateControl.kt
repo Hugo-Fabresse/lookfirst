@@ -15,9 +15,9 @@ import javax.inject.Singleton
 
 private const val MANUAL_COOLDOWN_MILLIS = 15 * 60_000L
 
-/** What the settings screen shows about the lists. [version] and [ageDays] are null while nothing is loaded. */
+/** What the settings screen shows about the lists. [entries] and [ageDays] are null while nothing is loaded. */
 data class ListsStatus(
-    val version: Long?,
+    val entries: Long?,
     val ageDays: Int?,
     val autoUpdate: Boolean,
     val lastAttempt: LastAttempt?,
@@ -45,7 +45,7 @@ interface ListUpdateControl {
 
 @Singleton
 class DefaultListUpdateControl internal constructor(
-    private val store: ReputationStore,
+    private val store: ListStore,
     private val preferences: AppPreferences,
     private val scheduler: UpdateScheduler,
     private val runner: ListUpdateRunner,
@@ -54,7 +54,7 @@ class DefaultListUpdateControl internal constructor(
 ) : ListUpdateControl {
     @Inject
     internal constructor(
-        store: ReputationStore,
+        store: ListStore,
         preferences: AppPreferences,
         scheduler: UpdateScheduler,
         runner: ListUpdateRunner,
@@ -75,7 +75,7 @@ class DefaultListUpdateControl internal constructor(
     private fun read(): ListsStatus {
         val snapshot = store.snapshot()
         return ListsStatus(
-            version = snapshot?.version,
+            entries = snapshot?.entries,
             ageDays = snapshot?.ageDays,
             autoUpdate = preferences.autoUpdate(),
             lastAttempt = preferences.lastAttempt(),

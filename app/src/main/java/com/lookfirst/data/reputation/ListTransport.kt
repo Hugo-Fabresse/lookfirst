@@ -10,11 +10,15 @@ private const val CONNECT_TIMEOUT_MILLIS = 15_000
 private const val READ_TIMEOUT_MILLIS = 30_000
 private const val STATUS_OK = 200
 
-/** One answer: the status, the raw `Location` header and, for a 200 only, the body. Closing releases the connection. */
+/**
+ * One answer: the status, the raw `Location` and `Last-Modified` headers and, for a 200 only, the body. Closing
+ * releases the connection.
+ */
 internal class TransportResponse(
     val status: Int,
     val location: String?,
     val body: InputStream?,
+    val lastModified: String? = null,
     private val onClose: () -> Unit = {},
 ) : Closeable {
     override fun close() {
@@ -37,7 +41,7 @@ internal fun interface ListTransport {
 
 /**
  * `HttpURLConnection` transport: https only, no automatic redirect, no cache, no cookie jar, system TLS validation
- * (no pinning, the manifest signature protects integrity), timeouts on connect and on every read.
+ * (no pinning), timeouts on connect and on every read.
  */
 internal class UrlConnectionTransport : ListTransport {
     override fun get(url: URI, headers: Map<String, String>): TransportResponse {
@@ -52,7 +56,12 @@ internal class UrlConnectionTransport : ListTransport {
             headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
             val status = connection.responseCode
             val body = if (status == STATUS_OK) connection.inputStream else null
-            return TransportResponse(status, connection.getHeaderField("Location"), body) { connection.disconnect() }
+            return TransportResponse(
+                status,
+                connection.getHeaderField("Location"),
+                body,
+                connection.getHeaderField("Last-Modified"),
+            ) { connection.disconnect() }
         } catch (failure: IOException) {
             connection.disconnect()
             throw failure

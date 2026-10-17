@@ -51,10 +51,13 @@ class AboutScreenTest {
     }
 
     @Test
-    fun saysThatScansAreNotRecordedAndThatCodebergSeesTheIpDuringTheUpdate() {
+    fun saysThatScansAreNotRecordedAndThatThePublisherSeesTheIpDuringTheUpdate() {
         assertTrue(text(R.string.about_local_body).contains("does not record your scans"))
-        assertTrue(text(R.string.about_net_lists_who).contains("Codeberg"))
+        assertTrue(text(R.string.about_net_lists_who).contains("CERT Polska"))
         assertTrue(text(R.string.about_net_lists_who).contains("IP"))
+        assertTrue(text(R.string.about_net_lists_who).contains("Nothing about your scans"))
+        assertTrue(text(R.string.about_licences_body).contains("CERT Polska"))
+        assertTrue(text(R.string.about_licences_body).contains("directly"))
     }
 
     @Test
@@ -76,6 +79,6 @@ class AboutScreenTest {
     fun isAvailableInFrench() {
         show()
         composeRule.onNodeWithText("LookFirst n'enregistre pas vos scans", substring = true).assertExists()
-        composeRule.onNodeWithText("Codeberg", substring = true).performScrollTo().assertExists()
+        composeRule.onNodeWithText("hole.cert.pl", substring = true).performScrollTo().assertExists()
     }
 }

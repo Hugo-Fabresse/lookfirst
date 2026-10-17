@@ -18,9 +18,9 @@ enum class LastAttemptLine { NONE, SUCCEEDED, FAILED }
 /** The one message under the lists block: an update in progress, or how the last attempt ended. */
 enum class UpdateNotice { UPDATING, FAILED, REJECTED, OFFLINE, UP_TO_DATE }
 
-/** [listsVersion] and [listsAgeDays] are null while no list is loaded. */
+/** [listsEntries] and [listsAgeDays] are null while no list is loaded. */
 data class SettingsUiState(
-    val listsVersion: Long? = null,
+    val listsEntries: Long? = null,
     val listsAgeDays: Int? = null,
     val autoUpdate: Boolean = true,
     val lastAttempt: LastAttemptLine = LastAttemptLine.NONE,
@@ -44,7 +44,7 @@ internal fun ListsStatus.toUiState(): SettingsUiState {
         UpdateOutcome.UPDATED, UpdateOutcome.UP_TO_DATE -> LastAttemptLine.SUCCEEDED
         UpdateOutcome.FAILED, UpdateOutcome.REJECTED, UpdateOutcome.OFFLINE -> LastAttemptLine.FAILED
     }
-    return SettingsUiState(version, ageDays, autoUpdate, line, notice)
+    return SettingsUiState(entries, ageDays, autoUpdate, line, notice)
 }
 
 @HiltViewModel

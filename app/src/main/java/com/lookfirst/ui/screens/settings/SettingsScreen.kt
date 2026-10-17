@@ -132,7 +132,7 @@ private fun ListsBlock(state: SettingsUiState, onUpdateNow: () -> Unit, onAutoUp
 
 @Composable
 private fun versionLine(state: SettingsUiState): String {
-    val version = state.listsVersion
+    val version = state.listsEntries
     val days = state.listsAgeDays
     if (version == null || days == null) return stringResource(R.string.lists_none)
     val age = if (days <= 0) {

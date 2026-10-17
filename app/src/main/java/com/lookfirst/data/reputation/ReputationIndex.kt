@@ -23,10 +23,12 @@ private val MAGIC = byteArrayOf('L'.code.toByte(), 'F'.code.toByte(), 'I'.code.t
 internal object SourceIds {
     const val ALLOWLIST = 0
     const val PHISHING_DATABASE = 1
+    const val CERT_PL = 2
 
-    /** Human names come from this table, never from the bundle. */
+    /** Human names come from this table, never from a downloaded file. */
     fun nameFor(id: Int): String? = when (id) {
         PHISHING_DATABASE -> "Phishing.Database"
+        CERT_PL -> "CERT Polska"
         else -> null
     }
 }

@@ -2,7 +2,7 @@ name: tmp-verification
 # LF-11: removed once the metadata is committed.
 on:
   push:
-    branches: [feat/LF-11-camera-scan]
+    branches: [feat/LF-11-result-screen]
     paths: [.github/workflows/tmp-verification.yml]
 permissions:
   contents: read

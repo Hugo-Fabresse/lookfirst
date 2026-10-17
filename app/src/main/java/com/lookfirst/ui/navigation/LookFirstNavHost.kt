@@ -13,6 +13,7 @@ import com.lookfirst.ui.screens.result.ResultViewModel
 import com.lookfirst.ui.screens.scan.ScanRoute
 import com.lookfirst.ui.screens.scan.ScanViewModel
 import com.lookfirst.ui.screens.settings.AboutScreen
+import com.lookfirst.ui.screens.settings.PrivacyPolicyScreen
 import com.lookfirst.ui.screens.settings.SettingsRoute
 import com.lookfirst.ui.screens.settings.SettingsViewModel
 
@@ -20,10 +21,11 @@ private const val ROUTE_SCAN = "scan"
 private const val ROUTE_RESULT = "result"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_ABOUT = "about"
+private const val ROUTE_PRIVACY = "privacy"
 private const val ROUTE_ONBOARDING = "onboarding"
 
 /**
- * First launch (once) -> Scan <-> Settings -> About; Scan -> Result -> (Cancel or back) Scan. The scanned text never travels in a route: the Result view model
+ * First launch (once) -> Scan <-> Settings -> About -> Privacy policy; Scan -> Result -> (Cancel or back) Scan. The scanned text never travels in a route: the Result view model
  * receives it directly, so it is not in the back stack, in saved state or in any log. No transition animation:
  * the screen changes at once, which also respects reduced motion.
  */
@@ -82,7 +84,13 @@ fun LookFirstNavHost(
             )
         }
         composable(ROUTE_ABOUT) {
-            AboutScreen(onBack = { navController.popBackStack() })
+            AboutScreen(
+                onBack = { navController.popBackStack() },
+                onOpenPrivacyPolicy = { navController.navigate(ROUTE_PRIVACY) { launchSingleTop = true } },
+            )
+        }
+        composable(ROUTE_PRIVACY) {
+            PrivacyPolicyScreen(onBack = { navController.popBackStack() })
         }
     }
 }

@@ -164,7 +164,7 @@ private fun NoticeLine(notice: UpdateNotice) {
 }
 
 @Composable
-private fun LinkRow(label: Int, onClick: () -> Unit) {
+internal fun LinkRow(label: Int, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="privacy_link">Privacy policy</string>
+    <string name="privacy_title">Privacy policy</string>
+    <string name="privacy_updated">Version of 18 October 2026</string>
+    <string name="privacy_intro">LookFirst analyses QR codes on your phone and opens nothing for you. This page says what the app does with your data, and what it does not do.</string>
+
+    <string name="privacy_never_header">What LookFirst does not do</string>
+    <string name="privacy_never_body">No account. No data collection. No history of your scans. No advertising. No analytics and no third-party service built into the app. The app\'s data is not backed up to the cloud: Android\'s automatic backup is turned off for LookFirst.</string>
+
+    <string name="privacy_where_header">Where the analysis happens</string>
+    <string name="privacy_where_body">On your phone. The content of a QR code is never sent, unless you yourself start one of the two optional checks described below, after a warning.</string>
+
+    <string name="privacy_who_header">Who sees what</string>
+    <string name="privacy_who_lists_title">List update</string>
+    <string name="privacy_who_lists_body">Every day if automatic update is on, and when you tap \"Update now\", the app downloads a list of reported sites published by CERT Polska (Poland). That service sees your phone\'s IP address and a constant app name, the same for every user. It receives nothing about your scans.</string>
+    <string name="privacy_who_redirects_title">Redirect tracing (optional)</string>
+    <string name="privacy_who_redirects_body">Only if you start it, after a warning. The app follows the link from redirect to redirect. Each site in the chain sees your phone\'s IP address and a minimal request (HEAD, or a one-byte GET) for the requested address, with no cookie and no Referer. It therefore knows that its QR code was scanned.</string>
+    <string name="privacy_who_rdap_title">Domain age (optional)</string>
+    <string name="privacy_who_rdap_body">Only if you start it, after a warning. The domain\'s official registry (the RDAP server named by the IANA list embedded in the app) sees your phone\'s IP address and the domain name only, with no path and no parameters.</string>
+
+    <string name="privacy_clipboard_header">Clipboard</string>
+    <string name="privacy_clipboard_body">Copying is always your choice. For a secret (Wi-Fi password, otpauth authentication key), the app asks for confirmation, marks the copy as sensitive and clears it when you come back to LookFirst. Known limit: before Android 13, the marking depends on the keyboard, which may show or keep the copy; before Android 9, the copy is replaced by an empty one instead of being cleared. An app or keyboard in the foreground can read the clipboard.</string>
+
+    <string name="privacy_permissions_header">Permissions</string>
+    <string name="privacy_permissions_body">Camera: scan a QR code, asked when the camera is first shown (importing an image works without it). Internet: download the lists and run the two optional checks. Network state: know whether the phone is offline. Hide overlay windows: stop another app from covering the buttons. Keep awake: required by the WorkManager library during a list update. No other permission: no contacts, no location, no microphone, no SMS.</string>
+
+    <string name="privacy_local_header">Data kept on the phone</string>
+    <string name="privacy_local_body">The downloaded lists and your settings are in the app\'s private storage, which other apps cannot reach. They are deleted when you uninstall LookFirst.</string>
+
+    <string name="privacy_contact_header">Contact</string>
+    <string name="privacy_contact_body">For any question, use the app\'s page, where you got it.</string>
+</resources>

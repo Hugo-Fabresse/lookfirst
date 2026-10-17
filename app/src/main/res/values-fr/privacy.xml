@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="privacy_link">Politique de confidentialité</string>
+    <string name="privacy_title">Politique de confidentialité</string>
+    <string name="privacy_updated">Version du 18 octobre 2026</string>
+    <string name="privacy_intro">LookFirst analyse les QR codes sur votre téléphone et n\'ouvre rien à votre place. Cette page dit ce que l\'application fait de vos données, et ce qu\'elle ne fait pas.</string>
+
+    <string name="privacy_never_header">Ce que LookFirst ne fait pas</string>
+    <string name="privacy_never_body">Pas de compte. Pas de collecte de données. Pas d\'historique de vos scans. Pas de publicité. Pas d\'outil de mesure d\'audience ni de service tiers intégré à l\'application. Les données de l\'application ne sont pas sauvegardées dans le cloud : la sauvegarde automatique d\'Android est désactivée pour LookFirst.</string>
+
+    <string name="privacy_where_header">Où se fait l\'analyse</string>
+    <string name="privacy_where_body">Sur votre téléphone. Le contenu d\'un QR code n\'est jamais envoyé, sauf si vous lancez vous-même l\'une des deux vérifications facultatives décrites ci-dessous, après un avertissement.</string>
+
+    <string name="privacy_who_header">Qui voit quoi</string>
+    <string name="privacy_who_lists_title">Mise à jour des listes</string>
+    <string name="privacy_who_lists_body">Chaque jour si la mise à jour automatique est activée, et quand vous touchez « Mettre à jour maintenant », l\'application télécharge une liste de sites signalés publiée par le CERT Polska (Pologne). Ce service voit l\'adresse IP de votre téléphone et un nom d\'application constant, le même pour tous les utilisateurs. Il ne reçoit rien sur vos scans.</string>
+    <string name="privacy_who_redirects_title">Suivi des redirections (facultatif)</string>
+    <string name="privacy_who_redirects_body">Seulement si vous le lancez, après un avertissement. L\'application suit le lien de redirection en redirection. Chaque site de la chaîne voit l\'adresse IP de votre téléphone et une requête minimale (HEAD, ou GET d\'un seul octet) pour l\'adresse demandée, sans cookie ni Referer. Il sait donc que son QR code a été scanné.</string>
+    <string name="privacy_who_rdap_title">Âge du domaine (facultatif)</string>
+    <string name="privacy_who_rdap_body">Seulement si vous le lancez, après un avertissement. Le registre officiel du domaine (le serveur RDAP désigné par la liste de l\'IANA embarquée dans l\'application) voit l\'adresse IP de votre téléphone et le seul nom de domaine, sans chemin ni paramètres.</string>
+
+    <string name="privacy_clipboard_header">Presse-papiers</string>
+    <string name="privacy_clipboard_body">Copier est toujours votre choix. Pour un secret (mot de passe Wi-Fi, clé d\'authentification otpauth), l\'application demande une confirmation, marque la copie comme sensible et l\'efface quand vous revenez dans LookFirst. Limite connue : avant Android 13, le marquage dépend du clavier, qui peut afficher ou garder la copie ; avant Android 9, la copie est remplacée par un contenu vide au lieu d\'être effacée. Une application ou un clavier au premier plan peut lire le presse-papiers.</string>
+
+    <string name="privacy_permissions_header">Permissions</string>
+    <string name="privacy_permissions_body">Caméra : scanner un QR code, demandée au premier affichage de la caméra (l\'import d\'une image fonctionne sans). Internet : télécharger les listes et faire les deux vérifications facultatives. État du réseau : savoir si le téléphone est hors connexion. Éviter la superposition d\'écrans : empêcher une autre application de recouvrir les boutons. Empêcher la mise en veille : exigée par la bibliothèque WorkManager pendant la mise à jour des listes. Aucune autre permission : ni contacts, ni position, ni micro, ni SMS.</string>
+
+    <string name="privacy_local_header">Données gardées sur le téléphone</string>
+    <string name="privacy_local_body">Les listes téléchargées et vos réglages sont dans le stockage privé de l\'application, inaccessible aux autres applications. Ils sont supprimés quand vous désinstallez LookFirst.</string>
+
+    <string name="privacy_contact_header">Contact</string>
+    <string name="privacy_contact_body">Pour toute question, passez par la page de l\'application, là où vous l\'avez obtenue.</string>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Eye (almond) whose iris is a QR-like block of 5 modules. Everything stays inside the 66 dp safe zone (21..87). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,54 C38,36 70,36 84,54 C70,72 38,72 24,54 Z" />
+    <path
+        android:fillColor="#1F4E79"
+        android:pathData="M54,40 A14,14 0 1,1 54,68 A14,14 0 1,1 54,40 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46.5,46.5h5v5h-5z M56.5,46.5h5v5h-5z M51.5,51.5h5v5h-5z M46.5,56.5h5v5h-5z M56.5,56.5h5v5h-5z" />
+</vector>

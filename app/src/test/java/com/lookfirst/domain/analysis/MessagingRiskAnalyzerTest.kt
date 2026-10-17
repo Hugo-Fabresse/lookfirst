@@ -150,7 +150,7 @@ class MessagingRiskAnalyzerTest {
 
     @Test
     fun fakeParkingQrCombinesSignals() {
-        val raw = "http://parking-pay.example:8080/?zone=12&p=" + "x".repeat(300)
+        val raw = "http://parking-pay.example.com:8080/?zone=12&p=" + "x".repeat(300)
         assertEquals(
             setOf(SignalCode.UNUSUAL_PORT, SignalCode.PLAIN_HTTP, SignalCode.LONG_URL),
             RiskAnalyzer.analyze(PayloadParser.parse(raw)).codes(),

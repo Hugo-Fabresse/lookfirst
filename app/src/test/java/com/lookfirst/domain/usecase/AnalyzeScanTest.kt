@@ -142,7 +142,7 @@ class AnalyzeScanTest {
             assertEquals(it, VerdictLevel.DANGEROUS, verdict.level)
             assertEquals(it, SignalCode.REPUTATION_LISTED, verdict.reasons.first().code)
         }
-        assertEquals(VerdictLevel.CAUTION, withLists.level("other.example:8443/x"))
+        assertEquals(VerdictLevel.CAUTION, withLists.level("other.example.com:8443/x"))
     }
 
     @Test

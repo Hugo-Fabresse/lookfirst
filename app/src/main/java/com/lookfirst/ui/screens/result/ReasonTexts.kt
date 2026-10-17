@@ -113,6 +113,7 @@ private val REASON_TABLE: Map<SignalCode, ReasonRes> = mapOf(
     ),
     SignalCode.REDIRECT_FINAL to counted(R.string.reason_redirect_final_short, R.plurals.reason_redirect_final),
     SignalCode.DOMAIN_RECENT to counted(R.string.reason_domain_recent_short, R.plurals.reason_domain_recent),
+    SignalCode.DOMAIN_UNKNOWN to reason(R.string.reason_domain_unknown_short, R.string.reason_domain_unknown),
 )
 
 /** The three sentences of a brand look-alike, by how the host imitates the brand. */

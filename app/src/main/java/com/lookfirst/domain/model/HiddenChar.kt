@@ -6,6 +6,7 @@ enum class HiddenCharKind {
     BIDI,
     ZERO_WIDTH,
     FORMAT,
+    INVISIBLE,
     LINE_SEPARATOR,
     UNUSUAL_SPACE,
     PRIVATE_USE,

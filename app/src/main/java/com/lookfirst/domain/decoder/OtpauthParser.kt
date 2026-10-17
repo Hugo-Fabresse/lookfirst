@@ -1,12 +1,16 @@
 package com.lookfirst.domain.decoder
 
 import com.lookfirst.domain.model.ScanPayload
+import com.lookfirst.domain.model.Untrusted
 import java.util.Locale
 
 private const val MAX_LABEL = 256
 
 /** `otpauth://totp|hotp/Issuer:account?secret=BASE32&issuer=...`. The secret is kept, never logged. */
 internal object OtpauthParser {
+    /** A repeated one of these is ambiguous (which value will the authenticator app use?). */
+    private val SINGLE_PARAMS = setOf("secret", "issuer", "algorithm", "digits", "period")
+
     private fun isValid(type: String, label: String): Boolean =
         (type == "totp" || type == "hotp") && label.length <= MAX_LABEL
 
@@ -18,20 +22,20 @@ internal object OtpauthParser {
         val q = afterType.indexOf('?')
         val label = PercentCodec.decode(if (q < 0) afterType else afterType.substring(0, q))
         val params = if (q < 0) emptyList() else PercentCodec.parseQuery(afterType.substring(q + 1))
-        val secret = params?.firstValue("secret")
-        if (!isValid(type, label) || params == null || secret.isNullOrEmpty()) {
-            return ScanPayload.Unknown(text, "OTPAUTH")
-        }
+        val secret = params?.firstValue("secret")?.value
+        val unknown = ScanPayload.Unknown(Untrusted(text), "OTPAUTH")
+        if (!isValid(type, label) || params == null || secret.isNullOrEmpty()) return unknown
+        if (params.hasDuplicate(SINGLE_PARAMS)) return unknown
         val colon = label.indexOf(':')
         val labelIssuer = if (colon < 0) null else label.substring(0, colon).trim().ifEmpty { null }
         val account = (if (colon < 0) label else label.substring(colon + 1)).trim()
         return ScanPayload.Otpauth(
-            raw = text,
+            raw = Untrusted(text),
             type = type,
-            issuer = params.firstValue("issuer") ?: labelIssuer,
-            labelIssuer = labelIssuer,
-            account = account,
-            secret = secret,
+            issuer = params.firstValue("issuer") ?: labelIssuer?.let { Untrusted(it) },
+            labelIssuer = labelIssuer?.let { Untrusted(it) },
+            account = Untrusted(account),
+            secret = Untrusted(secret),
             params = params.filter { it.name != "secret" },
         )
     }

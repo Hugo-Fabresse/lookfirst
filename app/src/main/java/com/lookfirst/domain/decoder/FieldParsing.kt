@@ -1,6 +1,7 @@
 package com.lookfirst.domain.decoder
 
 import com.lookfirst.domain.model.QueryParam
+import com.lookfirst.domain.model.Untrusted
 import java.io.ByteArrayOutputStream
 import java.util.Locale
 
@@ -31,7 +32,7 @@ internal object PercentCodec {
             }
         }
         flush(bytes, out)
-        return out.toString()
+        return nfc(out.toString())
     }
 
     private fun flush(bytes: ByteArrayOutputStream, out: StringBuilder) {
@@ -70,11 +71,15 @@ internal object PercentCodec {
         val eq = pair.indexOf('=')
         val name = if (eq < 0) pair else pair.substring(0, eq)
         val value = if (eq < 0) "" else pair.substring(eq + 1)
-        return QueryParam(decode(name).lowercase(Locale.ROOT), decode(value))
+        return QueryParam(decode(name).lowercase(Locale.ROOT), Untrusted(decode(value)))
     }
 }
 
-internal fun List<QueryParam>.firstValue(name: String): String? = firstOrNull { it.name == name }?.value
+internal fun List<QueryParam>.firstValue(name: String): Untrusted? = firstOrNull { it.name == name }?.value
+
+/** True when any of [names] appears more than once: ambiguous (which one will the app use?), so rejected. */
+internal fun List<QueryParam>.hasDuplicate(names: Set<String>): Boolean =
+    filter { it.name in names }.groupingBy { it.name }.eachCount().any { it.value > 1 }
 
 /**
  * Scanner for `KEY:value;KEY:value;;` formats (WIFI:, MATMSG:) with `\` escapes for `\ ; , : "`.
@@ -98,7 +103,7 @@ internal object EscapedFields {
             val key = body.substring(i, keyEnd).uppercase(Locale.ROOT)
             val value = StringBuilder()
             i = readValue(body, keyEnd + 1, value)
-            fields += key to value.toString()
+            fields += key to nfc(value.toString())
         }
         return fields
     }

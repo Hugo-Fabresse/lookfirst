@@ -55,8 +55,20 @@ object ContentSanitizer {
         Character.SPACE_SEPARATOR.toInt() -> if (cp == ' '.code) null else HiddenCharKind.UNUSUAL_SPACE
         Character.PRIVATE_USE.toInt() -> HiddenCharKind.PRIVATE_USE
         Character.SURROGATE.toInt() -> HiddenCharKind.INVALID_SURROGATE
-        else -> null
+        else -> if (isDefaultIgnorable(cp) || cp == BRAILLE_BLANK) HiddenCharKind.INVISIBLE else null
     }
+
+    private const val BRAILLE_BLANK = 0x2800
+
+    /** Unicode Default_Ignorable_Code_Point (hard-coded ranges): rendered as nothing by most fonts. */
+    internal fun isDefaultIgnorable(cp: Int): Boolean = DEFAULT_IGNORABLE.any { cp in it }
+
+    private val DEFAULT_IGNORABLE: List<IntRange> =
+        listOf(
+            0x00AD..0x00AD, 0x034F..0x034F, 0x061C..0x061C, 0x115F..0x1160, 0x17B4..0x17B5, 0x180B..0x180F,
+            0x200B..0x200F, 0x202A..0x202E, 0x2060..0x206F, 0x3164..0x3164, 0xFE00..0xFE0F, 0xFEFF..0xFEFF,
+            0xFFA0..0xFFA0, 0xFFF0..0xFFF8, 0x1BCA0..0x1BCA3, 0x1D173..0x1D17A, 0xE0000..0xE0FFF,
+        )
 
     private val BIDI_CONTROLS: Set<Int> =
         buildSet {
@@ -69,3 +81,7 @@ object ContentSanitizer {
 
     private val ZERO_WIDTH: Set<Int> = setOf(0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF, 0x180E)
 }
+
+/** NFC form of [s], unchanged (same instance) when already normalized. */
+internal fun nfc(s: String): String =
+    if (Normalizer.isNormalized(s, Normalizer.Form.NFC)) s else Normalizer.normalize(s, Normalizer.Form.NFC)

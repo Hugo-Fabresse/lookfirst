@@ -1,6 +1,7 @@
 package com.lookfirst.domain.decoder
 
 import com.lookfirst.domain.model.ScanPayload
+import com.lookfirst.domain.model.Untrusted
 import com.lookfirst.domain.model.WifiSecurity
 import java.util.Locale
 
@@ -19,15 +20,15 @@ internal object WifiParser {
         val hidden = parseHidden(byKey["H"])
         if (ssid.isNullOrEmpty() || hidden == null) return unknown(text)
         return ScanPayload.Wifi(
-            raw = text,
-            ssid = ssid,
+            raw = Untrusted(text),
+            ssid = Untrusted(ssid),
             security = parseSecurity(byKey["T"]),
-            password = byKey["P"]?.takeIf { it.isNotEmpty() },
+            password = byKey["P"]?.takeIf { it.isNotEmpty() }?.let { Untrusted(it) },
             hidden = hidden,
         )
     }
 
-    private fun unknown(text: String) = ScanPayload.Unknown(text, "WIFI")
+    private fun unknown(text: String) = ScanPayload.Unknown(Untrusted(text), "WIFI")
 
     private fun parseHidden(value: String?): Boolean? = when (value?.lowercase(Locale.ROOT)) {
         null, "", "false" -> false

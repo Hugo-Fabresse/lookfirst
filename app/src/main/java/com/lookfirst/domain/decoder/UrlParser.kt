@@ -2,17 +2,13 @@ package com.lookfirst.domain.decoder
 
 import com.lookfirst.domain.model.HostKind
 import com.lookfirst.domain.model.ScanPayload
+import com.lookfirst.domain.model.Untrusted
 import com.lookfirst.domain.model.UrlIssue
 
-private const val HEX_RADIX = 16
 private const val MAX_HOST_LENGTH = 253
 private const val MAX_PORT = 65_535
 private const val MAX_PORT_DIGITS = 5
-private const val IPV4_LABELS = 4
-private const val MAX_IPV4_OCTET = 255
-private const val MAX_OCTET_DIGITS = 3
 private const val ASCII_MAX = 0x7F
-private const val HEX_PREFIX_LENGTH = 2
 private const val FORBIDDEN_HOST_CHARS = "\"<>\\^`{|}@[]:#/?"
 
 /**
@@ -22,11 +18,12 @@ private const val FORBIDDEN_HOST_CHARS = "\"<>\\^`{|}@[]:#/?"
  */
 internal object UrlParser {
     /** [text] is the whole sanitized content (kept as raw); [afterScheme] is what follows `scheme:`. */
-    fun parse(text: String, scheme: String, afterScheme: String): ScanPayload.Url {
-        val rest = afterScheme.trimEnd { it <= ' ' }
+    fun parse(text: String, scheme: String, afterScheme: String, missingScheme: Boolean = false): ScanPayload.Url {
+        // WHATWG pre-processing: tab, CR and LF are dropped everywhere, C0 controls and spaces at both ends.
+        val rest = afterScheme.filterNot { it == '\t' || it == '\r' || it == '\n' }.trim { it <= ' ' }
         val issues = LinkedHashSet<UrlIssue>()
-        var i = 0
-        while (i < rest.length && (rest[i] == '/' || rest[i] == '\\')) i++
+        if (missingScheme) issues += UrlIssue.MISSING_SCHEME
+        val i = rest.takeWhile { it == '/' || it == '\\' }.length
         if (i < 2) issues += UrlIssue.MISSING_SLASHES
         if (i > 2) issues += UrlIssue.EXTRA_SLASHES
 
@@ -35,28 +32,39 @@ internal object UrlParser {
         val tail = rest.substring(authorityEnd)
         val beforeQuery = rest.substring(0, rest.indexOfAny(charArrayOf('?', '#')).orEnd(rest))
         if (beforeQuery.indexOf('\\') >= 0) issues += UrlIssue.BACKSLASH
-        if (text.trim { it <= ' ' }.any { it <= ' ' || it.code == ASCII_MAX }) issues += UrlIssue.CONTROL_OR_SPACE
+        if (text.trim { it <= ' ' }.any { isControlOrSpace(it) }) issues += UrlIssue.CONTROL_OR_SPACE
 
         val at = authority.lastIndexOf('@')
         val userinfo = if (at >= 0) authority.substring(0, at) else null
         val hostPort = splitHostPort(authority.substring(at + 1), issues)
         val kind = classifyHost(hostPort.host, hostPort.bracketed, issues)
 
+        val parts = splitTail(tail)
+        return ScanPayload.Url(
+            raw = Untrusted(text),
+            scheme = scheme,
+            userinfo = userinfo?.let { Untrusted(it) },
+            rawHost = Untrusted(hostPort.host),
+            port = hostPort.port,
+            hostKind = kind,
+            path = Untrusted(parts.path),
+            query = parts.query?.let { Untrusted(it) },
+            fragment = parts.fragment?.let { Untrusted(it) },
+            nonAsciiHost = hostPort.host.any { it.code > ASCII_MAX },
+            issues = issues,
+        )
+    }
+
+    private class TailParts(val path: String, val query: String?, val fragment: String?)
+
+    private fun splitTail(tail: String): TailParts {
         val fragmentStart = tail.indexOf('#')
         val beforeFragment = if (fragmentStart < 0) tail else tail.substring(0, fragmentStart)
         val queryStart = beforeFragment.indexOf('?')
-        return ScanPayload.Url(
-            raw = text,
-            scheme = scheme,
-            userinfo = userinfo,
-            host = hostPort.host,
-            port = hostPort.port,
-            hostKind = kind,
+        return TailParts(
             path = if (queryStart < 0) beforeFragment else beforeFragment.substring(0, queryStart),
             query = if (queryStart < 0) null else beforeFragment.substring(queryStart + 1),
             fragment = if (fragmentStart < 0) null else tail.substring(fragmentStart + 1),
-            nonAsciiHost = hostPort.host.any { it.code > ASCII_MAX },
-            issues = issues,
         )
     }
 
@@ -93,41 +101,22 @@ internal object UrlParser {
         if (host.isEmpty()) issues += UrlIssue.EMPTY_HOST
         if (host.length > MAX_HOST_LENGTH) issues += UrlIssue.HOST_TOO_LONG
         if (host.indexOf('%') >= 0) issues += UrlIssue.HOST_PERCENT_ENCODED
-        if (bracketed) return classifyIpv6(host, issues)
-        if (host.any { it <= ' ' || it.code == ASCII_MAX || it in FORBIDDEN_HOST_CHARS }) {
+        val kind = if (bracketed) classifyIpv6(host, issues) else HostNumbers.classify(host)
+        if (!bracketed && host.any { isForbiddenHostChar(it) }) {
             issues += UrlIssue.INVALID_HOST_CHARS
         }
-        return classifyNumeric(host)
+        return if (host.any { it.code > ASCII_MAX || it == '%' }) HostKind.UNRESOLVED else kind
     }
 
+    private fun isControlOrSpace(c: Char): Boolean = c <= ' ' || c.code == ASCII_MAX
+
+    private fun isForbiddenHostChar(c: Char): Boolean = c <= ' ' || c.code == ASCII_MAX || c in FORBIDDEN_HOST_CHARS
+
     private fun classifyIpv6(host: String, issues: MutableSet<UrlIssue>): HostKind {
-        val valid = host.contains(':') && host.all { it == ':' || it == '.' || isAsciiHex(it) }
+        val valid = host.contains(':') && host.all { it == ':' || it == '.' || HostNumbers.isAsciiHex(it) }
         if (!valid) issues += UrlIssue.INVALID_HOST_CHARS
         return HostKind.IPV6
     }
 
-    /** Dotted decimal IPv4 is IPV4; single numbers, hex, octal-looking forms and shortened forms are IPV4_OBFUSCATED. */
-    private fun classifyNumeric(host: String): HostKind {
-        val labels = host.removeSuffix(".").split('.')
-        if (labels.size > IPV4_LABELS || !labels.all { isNumericLabel(it) }) return HostKind.DOMAIN
-        val strict = labels.size == IPV4_LABELS && labels.all { isStrictOctet(it) }
-        return if (strict) HostKind.IPV4 else HostKind.IPV4_OBFUSCATED
-    }
-
     private fun Int.orEnd(s: String): Int = if (this < 0) s.length else this
-
-    private fun isAsciiHex(c: Char): Boolean = c.code <= ASCII_MAX && Character.digit(c, HEX_RADIX) >= 0
-
-    private fun isNumericLabel(label: String): Boolean {
-        if (label.isEmpty()) return false
-        if (label.length >= HEX_PREFIX_LENGTH && label.startsWith("0x", ignoreCase = true)) {
-            return label.substring(HEX_PREFIX_LENGTH).all { isAsciiHex(it) }
-        }
-        return label.all { it in '0'..'9' }
-    }
-
-    private fun isStrictOctet(label: String): Boolean {
-        val plainDigits = label.length <= MAX_OCTET_DIGITS && label.all { it in '0'..'9' }
-        return plainDigits && (label.length == 1 || label[0] != '0') && label.toInt() <= MAX_IPV4_OCTET
-    }
 }

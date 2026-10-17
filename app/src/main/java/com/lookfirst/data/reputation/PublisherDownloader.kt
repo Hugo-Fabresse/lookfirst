@@ -92,12 +92,18 @@ internal class PublisherDownloader internal constructor(
             val since = store.installedInfo(source)?.validatorMillis?.let(HttpDate::format)
             return when (val fetched = fetch(source, candidate, since, active)) {
                 is Fetched.Failure -> fetched.outcome.also { remember(source, it) }
-                Fetched.NotModified -> {
-                    store.markUpToDate(source)
+                is Fetched.NotModified -> {
+                    store.markUpToDate(source, fetched.date?.let(HttpDate::parse))
                     SourceOutcome.UpToDate
                 }
                 is Fetched.Downloaded ->
-                    parseAndInstall(source, candidate, fetched.lastModified?.let(HttpDate::parse), active)
+                    parseAndInstall(
+                        source,
+                        candidate,
+                        fetched.lastModified?.let(HttpDate::parse),
+                        fetched.date?.let(HttpDate::parse),
+                        active,
+                    )
             }
         } finally {
             store.releaseCandidate(candidate)
@@ -118,6 +124,7 @@ internal class PublisherDownloader internal constructor(
         source: ListSource,
         candidate: File,
         lastModified: Long?,
+        serverTime: Long?,
         active: () -> Boolean,
     ): SourceOutcome {
         if (!active()) return SourceOutcome.Failed(ListFailure.NETWORK, retry = true)
@@ -134,7 +141,7 @@ internal class PublisherDownloader internal constructor(
                     store.recordFailure(source, parsed.reason)
                     SourceOutcome.Rejected(parsed.reason)
                 }
-                is ParseOutcome.Parsed -> when (val result = store.install(source, parsed, lastModified)) {
+                is ParseOutcome.Parsed -> when (val result = store.install(source, parsed, lastModified, serverTime)) {
                     is ListInstallResult.Installed -> SourceOutcome.Installed(result.entries)
                     is ListInstallResult.Rejected ->
                         if (result.reason == ListFailure.STORAGE) {
@@ -150,9 +157,9 @@ internal class PublisherDownloader internal constructor(
     }
 
     private sealed interface Fetched {
-        class Downloaded(val lastModified: String?) : Fetched
+        class Downloaded(val lastModified: String?, val date: String?) : Fetched
 
-        data object NotModified : Fetched
+        class NotModified(val date: String?) : Fetched
 
         class Failure(val outcome: SourceOutcome) : Fetched
     }
@@ -196,7 +203,7 @@ internal class PublisherDownloader internal constructor(
     ): Hop = when {
         answer.status == STATUS_OK && answer.body != null ->
             Hop(stream(answer, candidate, source.maxDownloadBytes, active), null)
-        answer.status == STATUS_NOT_MODIFIED && conditional -> Hop(Fetched.NotModified, null)
+        answer.status == STATUS_NOT_MODIFIED && conditional -> Hop(Fetched.NotModified(answer.date), null)
         answer.status in REDIRECT_STATUSES -> Hop(null, redirectTarget(source, from, answer.location))
         else -> Hop(Fetched.Failure(httpFailure(answer.status)), null)
     }
@@ -227,7 +234,13 @@ internal class PublisherDownloader internal constructor(
         } catch (@Suppress("SwallowedException") ignored: IOException) {
             SourceOutcome.Failed(ListFailure.STORAGE, retry = true)
         }
-        return if (failure != null) Fetched.Failure(failure) else Fetched.Downloaded(response.lastModified)
+        return if (failure !=
+            null
+        ) {
+            Fetched.Failure(failure)
+        } else {
+            Fetched.Downloaded(response.lastModified, response.date)
+        }
     }
 
     /** Streams [body] into [target], counting bytes: more than [maxBytes] or a stalled download ends the attempt. */

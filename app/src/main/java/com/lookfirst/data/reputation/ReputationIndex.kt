@@ -22,6 +22,9 @@ internal object SourceIds {
     const val CERT_PL = 2
 }
 
+/** Entries only in the installed index (`removed`) and only in a candidate (`added`), see [MappedIndex]. */
+internal class SetDifference(val removed: Long, val added: Long)
+
 /** Bytes 32 to 63 of the file are reserved (they once held a Public Suffix List hash): written as zero, not read. */
 internal class LfixHeader(val sourceId: Int, val entryCount: Long)
 
@@ -141,6 +144,46 @@ internal class MappedIndex private constructor(
         }
         return false
     }
+
+    /**
+     * Entries of this index missing from [newKeys] (`removed`) and entries of [newKeys] missing from it (`added`),
+     * by one linear merge of two unsigned-ordered sequences. Null when this index is not strictly increasing
+     * (damaged). [newKeys] must be strictly increasing too (the list parser's output).
+     */
+    fun differenceTo(newKeys: LongArray): SetDifference? {
+        var i = 0L
+        var j = 0
+        var removed = 0L
+        var added = 0L
+        var previous = 0L
+        var checked = -1L
+        while (i < entryCount) {
+            val old = keyAt(i)
+            if (i > checked) {
+                if (checked >= 0 && java.lang.Long.compareUnsigned(old, previous) <= 0) return null
+                previous = old
+                checked = i
+            }
+            val cmp = if (j < newKeys.size) java.lang.Long.compareUnsigned(old, newKeys[j]) else -1
+            when {
+                cmp < 0 -> {
+                    removed++
+                    i++
+                }
+                cmp > 0 -> {
+                    added++
+                    j++
+                }
+                else -> {
+                    i++
+                    j++
+                }
+            }
+        }
+        return SetDifference(removed, added + (newKeys.size - j))
+    }
+
+    private fun keyAt(position: Long): Long = buffer.getLong(HEADER_SIZE + (position * ENTRY_SIZE).toInt())
 
     companion object {
         /** Maps [file]; null if its size or header do not agree. (The full ordering check is done at install.) */

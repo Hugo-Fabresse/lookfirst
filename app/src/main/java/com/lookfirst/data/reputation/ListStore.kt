@@ -44,9 +44,15 @@ internal object ListVariation {
     fun tolerancePercent(ageDays: Long): Long? =
         if (ageDays >= NO_LIMIT_AFTER_DAYS) null else BASE_VARIATION_PERCENT + VARIATION_PERCENT_PER_DAY * ageDays
 
-    fun exceedsTolerance(oldCount: Long, newCount: Long, tolerancePercent: Long?): Boolean {
+    /**
+     * True when more than [tolerancePercent] of the [oldCount] installed entries were removed, or when more than
+     * that share of them was added (LF-32: a count alone lets a full swap through at equal size). No limit when
+     * [tolerancePercent] is null or nothing is installed.
+     */
+    fun exceedsTolerance(oldCount: Long, difference: SetDifference, tolerancePercent: Long?): Boolean {
         if (tolerancePercent == null || oldCount <= 0) return false
-        return Math.abs(newCount - oldCount) * PERCENT > oldCount * tolerancePercent
+        val limit = oldCount * tolerancePercent
+        return difference.removed * PERCENT > limit || difference.added * PERCENT > limit
     }
 }
 
@@ -120,7 +126,20 @@ class ListStore internal constructor(
         InstalledInfo(entry.index.entryCount, daysBetween(entry.checkedAtMillis, now), validator)
     }
 
-    private fun referenceClock(): Long = maxOf(clock(), maxSeenMillis)
+    /**
+     * The time recorded for a successful contact: `max(clock, latest time seen)`. When the publisher's `Date` is
+     * known and the clock is more than a day ahead of it, the clock is wrong and the server's time is used instead
+     * (LF-32), with the latest time seen brought back to at most one day after it.
+     */
+    private fun referenceClock(serverTime: Long? = null): Long {
+        val c = clock()
+        val base = if (serverTime != null && c > serverTime + DAY_MILLIS) serverTime else c
+        return maxOf(base, cappedMaxSeen(serverTime))
+    }
+
+    /** A latest time seen more than a day after the server's time is a wrong clock's: brought back to the server's. */
+    private fun cappedMaxSeen(serverTime: Long?): Long =
+        if (serverTime != null && maxSeenMillis > serverTime + DAY_MILLIS) serverTime else maxSeenMillis
 
     private fun daysBetween(from: Long, to: Long): Int = ((to - from).coerceAtLeast(0L) / DAY_MILLIS).toInt()
 
@@ -177,17 +196,18 @@ class ListStore internal constructor(
     }
 
     /** The server said "not modified": the installed index is current as of now. */
-    internal fun markUpToDate(source: ListSource) = lock.withLock {
+    internal fun markUpToDate(source: ListSource, serverTimeMillis: Long? = null) = lock.withLock {
         ensureLoaded()
-        val now = referenceClock()
+        val now = referenceClock(serverTimeMillis)
+        val seen = maxOf(cappedMaxSeen(serverTimeMillis), now)
         val state = ListsState.read(stateFile)
         val fresh = state.of(source.id).copy(fetchedAtMillis = now, failure = null, failureAtMillis = null)
         try {
-            persist(state.with(source.id, fresh).copy(maxSeenMillis = maxOf(state.maxSeenMillis, now)))
+            persist(state.with(source.id, fresh).copy(maxSeenMillis = seen))
         } catch (@Suppress("SwallowedException") ignored: IOException) {
             // Only the age is not refreshed: the installed index is still the right one.
         }
-        maxSeenMillis = maxOf(maxSeenMillis, now)
+        maxSeenMillis = seen
         loaded = loaded?.let { lists ->
             LoadedLists(
                 lists.sources.map {
@@ -209,45 +229,63 @@ class ListStore internal constructor(
     }
 
     /** Applies the checks of ADR-0008 to a parsed list and, if all pass, replaces the installed index atomically. */
-    internal fun install(source: ListSource, parsed: ParseOutcome.Parsed, validatorMillis: Long?): ListInstallResult =
-        lock.withLock {
-            val result = try {
-                installLocked(source, parsed, validatorMillis)
-            } catch (@Suppress("SwallowedException") ignored: IOException) {
-                ListInstallResult.Rejected(ListFailure.STORAGE)
-            }
-            if (result is ListInstallResult.Rejected) recordFailureLocked(source, result.reason)
-            result
+    internal fun install(
+        source: ListSource,
+        parsed: ParseOutcome.Parsed,
+        validatorMillis: Long?,
+        serverTimeMillis: Long? = null,
+    ): ListInstallResult = lock.withLock {
+        val result = try {
+            installLocked(source, parsed, validatorMillis, serverTimeMillis)
+        } catch (@Suppress("SwallowedException") ignored: IOException) {
+            ListInstallResult.Rejected(ListFailure.STORAGE)
         }
+        if (result is ListInstallResult.Rejected) recordFailureLocked(source, result.reason)
+        result
+    }
 
     private fun installLocked(
         source: ListSource,
         parsed: ParseOutcome.Parsed,
         validatorMillis: Long?,
+        serverTimeMillis: Long?,
     ): ListInstallResult {
-        val refusal = refusalFor(source, parsed.keys.size.toLong()) ?: writeIndex(source, parsed)
+        val entries = parsed.keys.size.toLong()
+        val refusal = refusalFor(source, parsed, serverTimeMillis) ?: writeIndex(source, parsed)
         return if (refusal != null) {
             ListInstallResult.Rejected(refusal)
         } else {
-            adopt(source, parsed.keys.size.toLong(), validatorMillis)
+            adopt(source, entries, validatorMillis, serverTimeMillis)
         }
     }
 
     /** The entry bounds, then the variation limit against the installed index. Null when both pass. */
-    private fun refusalFor(source: ListSource, entries: Long): ListFailure? {
+    private fun refusalFor(source: ListSource, parsed: ParseOutcome.Parsed, serverTime: Long?): ListFailure? {
+        val entries = parsed.keys.size.toLong()
         val installed = ensureLoaded()?.sources?.firstOrNull { it.source.id == source.id }
-        val age = installed?.let { daysBetween(it.checkedAtMillis, referenceClock()).toLong() }
         return when {
             entries < source.minEntries -> ListFailure.TOO_FEW
             entries > source.maxEntries -> ListFailure.TOO_MANY
-            installed != null && age != null && exceeds(installed.index.entryCount, entries, age) ->
-                ListFailure.VARIATION
+            installed != null && exceedsVariation(installed, parsed.keys, serverTime) -> ListFailure.VARIATION
             else -> null
         }
     }
 
-    private fun exceeds(oldCount: Long, newCount: Long, ageDays: Long): Boolean =
-        ListVariation.exceedsTolerance(oldCount, newCount, ListVariation.tolerancePercent(ageDays))
+    /**
+     * Set difference between the installed index and the candidate (both strictly increasing, merged in one linear
+     * pass over the mapped file: no copy, no hash set). An installed index that is not strictly increasing is
+     * damaged and cannot serve as a baseline: it is replaced like a first install, the entry bounds still apply.
+     * An installed index confirmed after the publisher's `Date` (clock set ahead when it was recorded) has an
+     * unknown age: the limit is lifted so the phone cannot stay stuck.
+     */
+    private fun exceedsVariation(installed: LoadedSource, keys: LongArray, serverTime: Long?): Boolean {
+        val unknownAge = serverTime != null && installed.checkedAtMillis > serverTime + DAY_MILLIS
+        val age = daysBetween(installed.checkedAtMillis, referenceClock(serverTime)).toLong()
+        val tolerance = if (unknownAge) null else ListVariation.tolerancePercent(age)
+        if (tolerance == null) return false
+        val difference = installed.index.differenceTo(keys) ?: return false
+        return ListVariation.exceedsTolerance(installed.index.entryCount, difference, tolerance)
+    }
 
     /** Writes the index to a temporary file, validates it and renames it over the installed one. Null on success. */
     private fun writeIndex(source: ListSource, parsed: ParseOutcome.Parsed): ListFailure? {
@@ -271,15 +309,21 @@ class ListStore internal constructor(
         }
     }
 
-    private fun adopt(source: ListSource, entries: Long, validatorMillis: Long?): ListInstallResult {
-        val now = referenceClock()
+    private fun adopt(
+        source: ListSource,
+        entries: Long,
+        validatorMillis: Long?,
+        serverTime: Long?,
+    ): ListInstallResult {
+        val now = referenceClock(serverTime)
+        val seen = maxOf(cappedMaxSeen(serverTime), now)
         val state = ListsState.read(stateFile)
         val validator = validatorMillis?.takeIf { it in 1..now }
         persist(
             state.with(source.id, SourceState(fetchedAtMillis = now, fullAtMillis = now, validatorMillis = validator))
-                .copy(maxSeenMillis = maxOf(state.maxSeenMillis, now)),
+                .copy(maxSeenMillis = seen),
         )
-        maxSeenMillis = maxOf(maxSeenMillis, now)
+        maxSeenMillis = seen
         val index = MappedIndex.open(indexFile(source)) ?: return ListInstallResult.Rejected(ListFailure.STORAGE)
         val others = loaded?.sources.orEmpty().filter { it.source.id != source.id }
         loaded = LoadedLists(others + LoadedSource(source, index, now))

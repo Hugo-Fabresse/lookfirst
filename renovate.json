@@ -13,9 +13,19 @@
     "before 6am on monday"
   ],
   "prConcurrentLimit": 5,
+  "minimumReleaseAge": "7 days",
   "packageRules": [
     {
-      "description": "Batch non-major updates into one PR to keep the noise down",
+      "description": "GitHub Actions: one PR per action, never grouped with libraries (each pin is reviewed on its own)",
+      "matchManagers": [
+        "github-actions"
+      ]
+    },
+    {
+      "description": "Batch non-major library updates into one PR to keep the noise down",
+      "matchManagers": [
+        "!github-actions"
+      ],
       "matchUpdateTypes": [
         "minor",
         "patch",

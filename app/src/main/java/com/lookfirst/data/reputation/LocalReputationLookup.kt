@@ -4,6 +4,7 @@ import com.lookfirst.domain.analysis.BrandList
 import com.lookfirst.domain.analysis.LISTS_STALE_AFTER_DAYS
 import com.lookfirst.domain.analysis.ReputationLookup
 import com.lookfirst.domain.analysis.ReputationResult
+import com.lookfirst.domain.analysis.UserContentPlatforms
 import com.lookfirst.domain.host.NormalizedHost
 import com.lookfirst.domain.host.PublicSuffixList
 import com.lookfirst.domain.model.HostKind
@@ -40,7 +41,11 @@ class LocalReputationLookup internal constructor(
     internal fun lookupIn(lists: LoadedLists, ageDays: Int, host: NormalizedHost): ReputationResult {
         val suffixes = publicSuffixList() ?: return ReputationResult.ListsMissing
         val ascii = host.ascii
-        val registrable = if (host.kind == HostKind.DOMAIN) suffixes.registrableDomain(ascii) else null
+        val registrable = if (host.kind == HostKind.DOMAIN) {
+            suffixes.registrableDomain(ascii)?.let { UserContentPlatforms.registrableFor(ascii, it) }
+        } else {
+            null
+        }
         val official = registrable != null && registrable in officialDomains
         val domains = if (!official && registrable != null) domainCandidates(ascii, registrable) else emptyList()
         val hostKey = Lfix.keyOf(Lfix.KIND_HOST, ascii)

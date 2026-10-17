@@ -37,7 +37,12 @@ class BrandFraudCorpusTest {
     fun everyOfficialDomainAndKeywordIsClean() {
         for (brand in BrandList.brands) {
             for (domain in brand.domains) {
-                val hosts = listOf(domain, "www.$domain", "login.$domain") + brand.keywords.map { "${it.text}.$domain" }
+                // Tenants of an open platform (wordpress.com) are registrable names: see UserContentPlatforms.
+                val hosts = if (domain in UserContentPlatforms.domains) {
+                    listOf(domain, "www.$domain")
+                } else {
+                    listOf(domain, "www.$domain", "login.$domain") + brand.keywords.map { "${it.text}.$domain" }
+                }
                 for (host in hosts) assertTrue(host, brandCodes(host).isEmpty())
             }
         }
@@ -102,13 +107,15 @@ class BrandFraudCorpusTest {
         deutsche-bank.de sparkasse.de barclays.co.uk hsbc.co.uk lloydsbank.com monzo.com revolut.com wise.com
         stripe.com shopify.com godaddy.com ovhcloud.com gandi.net ionos.fr proton.me doctolib.fr
         ameli-sante.example.org cafe-de-paris.fr applepie.example pommes-apple.example orangerie.fr
+        support.wordpress.com developer.wordpress.com www.wordpress.com adsl.free.fr assistance.free.fr www.free.fr
+        www.slack.com status.slack.com api.slack.com www.ovh.net
         """.trimIndent().split(Regex("\\s+")).filter {
             it.isNotEmpty()
         }
 
     @Test
     fun legitimateCorpusHasNoBrandSignal() {
-        assertTrue("corpus too small: ${legitimate.size}", legitimate.size >= 150)
+        assertTrue("corpus too small: ${legitimate.size}", legitimate.size >= 208)
         val flagged = legitimate.filter { brandCodes(it).isNotEmpty() }
         assertTrue("false positives ${flagged.size}/${legitimate.size}: $flagged", flagged.isEmpty())
     }

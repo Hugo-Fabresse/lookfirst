@@ -46,11 +46,16 @@ private const val RANK_COMBINED = 3
 internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
     private val ascii = host.asciiLabels
     private val unicode = host.unicodeLabels
-    private val suffixCount = suffixes.suffixLabelCount(ascii)
+    private val pslCount = suffixes.suffixLabelCount(ascii)
+    private val pslRegistrable = ascii.takeLast(pslCount + 1).joinToString(".")
+
+    /** A tenant of an open platform (`x.wordpress.com`) counts the platform as a suffix, like `x.blogspot.com`. */
+    private val isTenant = UserContentPlatforms.registrableFor(host.ascii, pslRegistrable) != pslRegistrable
+    private val suffixCount = if (isTenant) pslCount + 1 else pslCount
 
     /** Index of the label just left of the public suffix; negative when the host is a public suffix itself. */
     private val nameIndex = ascii.size - suffixCount - 1
-    private val onPlatform = suffixes.isPrivateSuffix(ascii, suffixCount)
+    private val onPlatform = isTenant || suffixes.isPrivateSuffix(ascii, suffixCount)
     private val skeletons: List<String> =
         if (nameIndex < 0) emptyList() else unicode.take(nameIndex + 1).map { Confusables.skeleton(it) ?: it }
     private val hasLure = (0..nameIndex).any { isLure(ascii[it]) || isLure(skeletons[it]) }

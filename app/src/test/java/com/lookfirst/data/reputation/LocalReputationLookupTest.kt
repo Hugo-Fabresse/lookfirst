@@ -1,5 +1,6 @@
 package com.lookfirst.data.reputation
 
+import com.lookfirst.domain.analysis.BrandList
 import com.lookfirst.domain.analysis.ReputationResult
 import com.lookfirst.domain.host.HostNormalizer
 import com.lookfirst.domain.host.HostResult
@@ -89,6 +90,26 @@ class LocalReputationLookupTest {
         assertEquals(ReputationResult.NotListed, lookup.result("www.good.com"))
         assertEquals(ReputationResult.NotListed, lookup.result("x.other.good.com"))
         assertEquals(ReputationResult.NotListed, lookup.result("cdn.good.com"))
+    }
+
+    @Test
+    fun tenantsOfAnOpenPlatformAreLookedUpByLabelAndPlatformButTheOwnerIsNot() {
+        val lookup = lookupWith(
+            keyed(
+                "d:office365emailverification1.wordpress.com",
+                "d:officeemailverification3653.wordpress.com",
+                "d:wordpress.com",
+                "h:www.wordpress.com",
+                "d:accounts.google.com",
+            ),
+            officials = BrandList.officialDomains,
+        )
+        assertEquals(listed, lookup.result("office365emailverification1.wordpress.com"))
+        assertEquals(listed, lookup.result("x.y.officeemailverification3653.wordpress.com"))
+        assertEquals(ReputationResult.NotListed, lookup.result("other.wordpress.com"))
+        assertEquals(ReputationResult.NotListed, lookup.result("wordpress.com"))
+        assertEquals(ReputationResult.NotListed, lookup.result("www.wordpress.com"))
+        assertEquals(ReputationResult.NotListed, lookup.result("accounts.google.com"))
     }
 
     @Test

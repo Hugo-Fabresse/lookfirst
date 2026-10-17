@@ -23,7 +23,7 @@ class ScanScreenTest {
 
     private var permissionRequests = 0
     private var settingsOpened = 0
-    private var cancels = 0
+    private var retries = 0
     private var torchToggles = 0
 
     private fun text(id: Int, vararg args: Any): String = RuntimeEnvironment.getApplication().getString(id, *args)
@@ -38,7 +38,7 @@ class ScanScreenTest {
                     onOpenAndroidSettings = { settingsOpened++ },
                     onTorchToggle = { torchToggles++ },
                     onOpenSettings = {},
-                    onCancel = { cancels++ },
+                    onCameraRetry = { retries++ },
                 )
             }
         }
@@ -84,16 +84,18 @@ class ScanScreenTest {
     }
 
     @Test
-    fun capturedShowsOnlyTheLengthAndCancelResumes() {
-        show(ScanUiState.Captured(contentLength = 42))
-        val length = RuntimeEnvironment.getApplication().resources.getQuantityString(
-            R.plurals.scan_result_length,
-            42,
-            42,
-        )
-        composeRule.onNodeWithText(length).assertExists()
+    fun capturedDrawsNothingBecauseTheResultScreenIsOnTop() {
+        show(ScanUiState.Captured)
         composeRule.onNodeWithText("camera-slot").assertDoesNotExist()
-        composeRule.onNodeWithText(text(R.string.action_cancel)).performClick()
-        assertEquals(1, cancels)
+        composeRule.onNodeWithText(text(R.string.scan_hint)).assertDoesNotExist()
+    }
+
+    @Test
+    fun missingOrBusyCameraIsExplainedAndCanBeRetried() {
+        show(ScanUiState.CameraUnavailable)
+        composeRule.onNodeWithText(text(R.string.camera_unavailable)).assertExists()
+        composeRule.onNodeWithText(text(R.string.pick_image)).assertExists()
+        composeRule.onNodeWithText(text(R.string.camera_retry)).performClick()
+        assertEquals(1, retries)
     }
 }

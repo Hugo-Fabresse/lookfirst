@@ -47,12 +47,14 @@ fun CameraPreview(
     torchOn: Boolean,
     onCodeRead: (String) -> Unit,
     onTorchAvailable: (Boolean) -> Unit,
+    onCameraUnavailable: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentOnCodeRead by rememberUpdatedState(onCodeRead)
     val currentOnTorchAvailable by rememberUpdatedState(onTorchAvailable)
+    val currentOnCameraUnavailable by rememberUpdatedState(onCameraUnavailable)
     val previewView = remember {
         PreviewView(context).apply {
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
@@ -74,10 +76,14 @@ fun CameraPreview(
                     } catch (ignored: ExecutionException) {
                         null
                     }
-                    provider?.let { p ->
-                        camera = bindCamera(p, lifecycleOwner, previewView, analysisExecutor, analyzerFactory) {
+                    camera = provider?.let { p ->
+                        bindCamera(p, lifecycleOwner, previewView, analysisExecutor, analyzerFactory) {
                             currentOnCodeRead(it)
                         }
+                    }
+                    if (camera == null) {
+                        currentOnCameraUnavailable()
+                    } else {
                         currentOnTorchAvailable(camera?.cameraInfo?.hasFlashUnit() == true)
                     }
                 }
@@ -128,10 +134,10 @@ private fun bindCamera(
         provider.unbindAll()
         provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
     } catch (ignored: IllegalArgumentException) {
-        // No back camera on this device: the viewfinder stays empty; the image scan remains available.
+        // No back camera on this device: reported to the screen, the image scan remains available.
         null
     } catch (ignored: IllegalStateException) {
-        // Camera in use by another app or cannot be opened.
+        // Camera in use by another app or cannot be opened: reported to the screen, which offers a retry.
         null
     }
 }

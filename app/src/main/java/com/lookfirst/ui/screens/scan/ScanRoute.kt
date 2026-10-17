@@ -12,10 +12,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lookfirst.data.scan.camera.QrAnalyzerFactory
+import com.lookfirst.domain.model.Untrusted
 
-/** Wires [ScanViewModel] to [ScanScreen]: permission dialog, one-shot haptic tick, camera slot. */
+/**
+ * Wires [ScanViewModel] to [ScanScreen]: permission dialog, one-shot haptic tick, camera slot. [onCodeRead]
+ * receives the scanned text once, to show it on the Result screen.
+ */
 @Composable
-fun ScanRoute(viewModel: ScanViewModel, analyzerFactory: QrAnalyzerFactory) {
+fun ScanRoute(viewModel: ScanViewModel, analyzerFactory: QrAnalyzerFactory, onCodeRead: (Untrusted) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -27,7 +31,10 @@ fun ScanRoute(viewModel: ScanViewModel, analyzerFactory: QrAnalyzerFactory) {
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
-                ScanEvent.CodeRead -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                is ScanEvent.CodeRead -> {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onCodeRead(event.content)
+                }
             }
         }
     }
@@ -40,6 +47,7 @@ fun ScanRoute(viewModel: ScanViewModel, analyzerFactory: QrAnalyzerFactory) {
                 torchOn = scanning.torchOn,
                 onCodeRead = viewModel::onCodeRead,
                 onTorchAvailable = viewModel::onTorchAvailable,
+                onCameraUnavailable = viewModel::onCameraUnavailable,
                 modifier = modifier,
             )
         },
@@ -47,6 +55,6 @@ fun ScanRoute(viewModel: ScanViewModel, analyzerFactory: QrAnalyzerFactory) {
         onOpenAndroidSettings = viewModel::onOpenAndroidSettings,
         onTorchToggle = viewModel::onTorchToggle,
         onOpenSettings = {},
-        onCancel = viewModel::onCancel,
+        onCameraRetry = viewModel::onCameraRetry,
     )
 }

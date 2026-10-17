@@ -3,6 +3,7 @@ package com.lookfirst.ui.screens.scan
 import app.cash.turbine.test
 import com.lookfirst.data.platform.AppSettingsOpener
 import com.lookfirst.data.platform.CameraPermission
+import com.lookfirst.domain.model.Untrusted
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -68,15 +69,16 @@ class ScanViewModelTest {
     }
 
     @Test
-    fun firstReadPausesTheCameraAndEmitsOneEvent() = runBlocking {
+    fun firstReadPausesTheCameraAndHandsTheContentOverOnce() = runBlocking {
         val vm = viewModel(FakePermission(true))
         vm.events.test {
             vm.onCodeRead("https://example.com")
-            assertEquals(ScanEvent.CodeRead, awaitItem())
-            assertEquals(ScanUiState.Captured(contentLength = 19), vm.state.value)
+            val event = awaitItem() as ScanEvent.CodeRead
+            assertEquals(Untrusted("https://example.com"), event.content)
+            assertEquals(ScanUiState.Captured, vm.state.value)
             vm.onCodeRead("another code")
             expectNoEvents()
-            assertEquals(ScanUiState.Captured(contentLength = 19), vm.state.value)
+            assertEquals(ScanUiState.Captured, vm.state.value)
         }
     }
 
@@ -91,11 +93,36 @@ class ScanViewModelTest {
     }
 
     @Test
-    fun cancelResumesScanning() {
+    fun closingTheResultResumesScanning() {
         val vm = viewModel(FakePermission(true))
         vm.onCodeRead("abc")
-        vm.onCancel()
+        vm.onResultClosed()
         assertEquals(ScanUiState.Scanning(), vm.state.value)
+    }
+
+    @Test
+    fun closingTheResultWhileScanningChangesNothing() {
+        val vm = viewModel(FakePermission(true))
+        vm.onTorchAvailable(true)
+        vm.onResultClosed()
+        assertEquals(ScanUiState.Scanning(torchAvailable = true), vm.state.value)
+    }
+
+    @Test
+    fun aCameraThatCannotOpenLeadsToAnErrorStateWithRetry() {
+        val vm = viewModel(FakePermission(true))
+        vm.onCameraUnavailable()
+        assertEquals(ScanUiState.CameraUnavailable, vm.state.value)
+        vm.onCameraRetry()
+        assertEquals(ScanUiState.Scanning(), vm.state.value)
+    }
+
+    @Test
+    fun cameraErrorIsIgnoredOutsideScanning() {
+        val vm = viewModel(FakePermission(true))
+        vm.onCodeRead("abc")
+        vm.onCameraUnavailable()
+        assertEquals(ScanUiState.Captured, vm.state.value)
     }
 
     @Test

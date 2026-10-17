@@ -3,6 +3,7 @@ package com.lookfirst.ui.screens.scan
 import androidx.lifecycle.ViewModel
 import com.lookfirst.data.platform.AppSettingsOpener
 import com.lookfirst.data.platform.CameraPermission
+import com.lookfirst.domain.model.Untrusted
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,13 +23,16 @@ sealed interface ScanUiState {
     /** The viewfinder is live and the analysis is running. */
     data class Scanning(val torchAvailable: Boolean = false, val torchOn: Boolean = false) : ScanUiState
 
-    /** A code was read: the camera is paused. Only its length is known here (LF-11 shows the result). */
-    data class Captured(val contentLength: Int) : ScanUiState
+    /** A code was read: the camera is paused and the Result screen has the content. A later read is ignored. */
+    data object Captured : ScanUiState
+
+    /** No back camera, or it is used by another app: explained, with a retry. The image scan stays available. */
+    data object CameraUnavailable : ScanUiState
 }
 
 sealed interface ScanEvent {
-    /** A code was read: light haptic tick, no sound, nothing opens. */
-    data object CodeRead : ScanEvent
+    /** A code was read: light haptic tick, no sound, nothing opens. The content goes to the Result screen. */
+    data class CodeRead(val content: Untrusted) : ScanEvent
 }
 
 @HiltViewModel
@@ -52,7 +56,7 @@ class ScanViewModel @Inject constructor(
             when {
                 granted && (current is ScanUiState.PermissionRationale || current is ScanUiState.PermissionDenied) ->
                     ScanUiState.Scanning()
-                !granted && (current is ScanUiState.Scanning || current is ScanUiState.Captured) ->
+                !granted && current !is ScanUiState.PermissionRationale && current !is ScanUiState.PermissionDenied ->
                     ScanUiState.PermissionDenied
                 else -> current
             }
@@ -72,15 +76,16 @@ class ScanViewModel @Inject constructor(
 
     /**
      * The analyzer read a code (called from the analysis thread). Only the first read while scanning counts:
-     * the camera is paused and a later read can never replace it. The raw text is not kept here yet.
+     * the camera is paused and a later read can never replace it. The text is handed to the Result screen in the
+     * event and is not kept here.
      */
     fun onCodeRead(raw: String) {
         var accepted = false
         mutableState.update { current ->
             accepted = current is ScanUiState.Scanning
-            if (accepted) ScanUiState.Captured(raw.length) else current
+            if (accepted) ScanUiState.Captured else current
         }
-        if (accepted) eventChannel.trySend(ScanEvent.CodeRead)
+        if (accepted) eventChannel.trySend(ScanEvent.CodeRead(Untrusted(raw)))
     }
 
     fun onTorchAvailable(available: Boolean) {
@@ -99,8 +104,21 @@ class ScanViewModel @Inject constructor(
         }
     }
 
-    /** Cancel on the result: back to the viewfinder. Never an action. */
-    fun onCancel() {
+    /** The camera could not be opened (absent or busy). */
+    fun onCameraUnavailable() {
+        mutableState.update { current ->
+            if (current is ScanUiState.Scanning) ScanUiState.CameraUnavailable else current
+        }
+    }
+
+    fun onCameraRetry() {
+        mutableState.update { current ->
+            if (current is ScanUiState.CameraUnavailable) ScanUiState.Scanning() else current
+        }
+    }
+
+    /** The Result screen was closed (Cancel or back): back to the viewfinder. Never an action. */
+    fun onResultClosed() {
         mutableState.update { current ->
             if (current is ScanUiState.Captured) ScanUiState.Scanning() else current
         }

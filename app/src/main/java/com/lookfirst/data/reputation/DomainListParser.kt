@@ -16,7 +16,7 @@ private const val INITIAL_KEYS = 1024
 private const val ASCII_DEL = 0x7F
 private const val BYTE_MASK = 0xFF
 private const val SPACE = 0x20
-private const val BYTE_ORDER_MARK = '﻿'
+private const val BYTE_ORDER_MARK_CODE = 0xFEFF
 
 internal sealed interface ParseOutcome {
     /** [keys] are sorted (unsigned) and unique; [droppedOfficial] counts entries naming an official domain. */
@@ -107,7 +107,7 @@ internal object DomainListParser {
             while (start < end && isBlank(line[start])) start++
             while (end > start && isBlank(line[end - 1])) end--
             var text = String(line, start, end - start, Charsets.UTF_8)
-            if (firstLine) text = text.removePrefix(BYTE_ORDER_MARK.toString())
+            if (firstLine) text = text.removePrefix(Char(BYTE_ORDER_MARK_CODE).toString())
             firstLine = false
             if (text.isEmpty() || text[0] == '#') return
             lines++

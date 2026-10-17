@@ -13,10 +13,19 @@ import javax.inject.Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class DefaultDispatcher
 
+/** Blocking reads (a picked image) off the UI thread. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class IoDispatcher
+
 @Module
 @InstallIn(SingletonComponent::class)
 object DispatchersModule {
     @Provides
     @DefaultDispatcher
     fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
+
+    @Provides
+    @IoDispatcher
+    fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
 }

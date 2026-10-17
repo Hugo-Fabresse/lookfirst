@@ -100,4 +100,23 @@ class CanonicalUrlTest {
     fun theAddressNeverShowsInToString() {
         assertEquals("CanonicalUrl(len=21)", canonical("https://example.com/a")?.toString())
     }
+
+    @Test
+    fun everyIpv4SpellingBecomesDottedDecimal() {
+        assertEquals("127.0.0.1", checkNotNull(canonical("http://0x7f.1/")).host)
+        assertEquals("127.0.0.1", checkNotNull(canonical("http://2130706433/")).host)
+        assertEquals("127.0.0.1", checkNotNull(canonical("http://0177.0.0.1/")).host)
+        assertEquals("192.0.2.1", checkNotNull(canonical("http://192.0.2.1:81/")).host)
+        assertEquals("http://10.0.0.1/", value("http://10.1/"))
+    }
+
+    @Test
+    fun aMalformedIpv6HasNoCanonicalForm() {
+        for (host in listOf("1:2:3", "1::2::3", "1:2:3:4:5:6:7:8:9", "::g", ":1:2", "1:2:3:4:5:6:7::8:9")) {
+            assertNull(host, canonical("https://[$host]/"))
+        }
+        assertNotNull(canonical("https://[::]/"))
+        assertNotNull(canonical("https://[::ffff:192.0.2.1]/"))
+        assertNotNull(canonical("https://[1:2:3:4:5:6:7:8]/"))
+    }
 }

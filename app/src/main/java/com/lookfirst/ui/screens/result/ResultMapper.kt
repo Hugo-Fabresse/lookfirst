@@ -2,6 +2,7 @@ package com.lookfirst.ui.screens.result
 
 import com.lookfirst.R
 import com.lookfirst.domain.host.HostResult
+import com.lookfirst.domain.host.Ipv4Check
 import com.lookfirst.domain.host.PublicSuffixList
 import com.lookfirst.domain.model.HostKind
 import com.lookfirst.domain.model.ParseResult
@@ -45,6 +46,13 @@ internal fun ScanPayload.Url.hostDisplay(): HostDisplay? {
     } else {
         host.unicodeLabels.take(nameIndex).sumOf { it.length + 1 }
     }
+    // An IPv4 written in hex, octal or short form is shown as the dotted decimal address a browser connects to.
+    val dotted = if (host.kind == HostKind.IPV4 || host.kind == HostKind.IPV4_OBFUSCATED) {
+        Ipv4Check.toDotted(host.ascii)
+    } else {
+        null
+    }
+    if (dotted != null) return HostDisplay(Untrusted(dotted), technical = null, strongFrom = 0, normalized = true)
     return HostDisplay(
         shown = Untrusted(host.unicode),
         technical = host.ascii.takeIf { host.isInternational },

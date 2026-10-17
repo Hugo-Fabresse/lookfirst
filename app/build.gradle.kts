@@ -178,6 +178,9 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.zxing.core)
 
+    // Daily reputation-list update (LF-24): constraints, retries and unique work, no foreground service.
+    implementation(libs.androidx.work.runtime.ktx)
+
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
     implementation(libs.androidx.compose.ui)

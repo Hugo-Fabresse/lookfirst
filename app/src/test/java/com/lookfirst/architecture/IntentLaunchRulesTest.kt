@@ -37,18 +37,41 @@ class IntentLaunchRulesTest {
         Rule(
             "launches an activity result contract",
             Regex("""\b(?:rememberLauncherForActivityResult|registerForActivityResult)\b"""),
-            // Camera permission and the Photo Picker: no data from a scan, the user picks an image.
-            setOf("ui/screens/scan/ScanRoute.kt"),
+            // ScanRoute: camera permission and Photo Picker (no scan data). ResultRoute: the Wi-Fi add-network system dialog.
+            setOf("ui/screens/scan/ScanRoute.kt", "ui/screens/result/ResultRoute.kt"),
         ),
+        Rule(
+            "uses another way to reach an app or a link",
+            Regex(
+                """\b(?:LocalUriHandler|UriHandler|openUri|LinkAnnotation|withLink|autoLink|Linkify|""" +
+                    """TaskStackBuilder|ShareCompat|sendBroadcast|startService|startForegroundService|""" +
+                    """bindService|startActivities)\b""",
+            ),
+            emptySet(),
+        ),
+        Rule(
+            "builds the browser probe",
+            Regex("""\bmakeMainSelectorActivity\b"""),
+            setOf("data/platform/OpenIntents.kt"),
+        ),
+        Rule(
+            "imports Android content wholesale or renames Intent",
+            Regex("""import android\.content\.(?:\*|Intent\s+as)"""),
+            emptySet(),
+        ),
+        Rule("loads a class by name", Regex("""\bClass\.forName\b"""), emptySet()),
         Rule("opens a WebView", Regex("""\bWebView\b"""), emptySet()),
     )
 
     private fun mainSources(): Map<String, String> {
-        val root = File("src/main/java")
-        check(root.isDirectory) { "run from the app module: ${File(".").absolutePath}" }
-        return root.walkTopDown().filter { it.isFile && it.extension == "kt" }.associate { file ->
-            file.relativeTo(File(root, "com/lookfirst")).invariantSeparatorsPath to withoutComments(file.readText())
-        }
+        val roots = listOf(File("src/main/java"), File("src/main/kotlin"))
+        check(roots[0].isDirectory) { "run from the app module: ${File(".").absolutePath}" }
+        return roots.filter { it.isDirectory }.flatMap { root ->
+            root.walkTopDown().filter { it.isFile && it.extension == "kt" }.map { file ->
+                file.relativeTo(File(root, "com/lookfirst")).invariantSeparatorsPath to
+                    withoutComments(file.readText())
+            }.toList()
+        }.toMap()
     }
 
     private fun withoutComments(text: String): String =

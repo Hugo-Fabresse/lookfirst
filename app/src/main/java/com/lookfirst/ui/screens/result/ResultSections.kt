@@ -1,7 +1,6 @@
 package com.lookfirst.ui.screens.result
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,114 +17,115 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.lookfirst.R
 
 private val MinTarget = 48.dp
+private const val ASCII_LIMIT = 0x7F
 private val ExpandedContentMaxHeight = 240.dp
 
 /**
- * The neutral "not analysed" banner (ux.md 3.4). Grey, with a "?" icon: it can never be taken for the
- * "no risk signal" level. Announced once when the screen appears and given the initial focus.
+ * Host of a web link: the only large text (ux.md 4.4). The Unicode form as a browser would show it, the registrable
+ * domain in bold, non-ASCII letters underlined; when it differs, the technical (punycode) form under it with its
+ * one-line explanation. For `user@host` it is the real host, the one a browser connects to.
  */
 @Composable
-internal fun NotAnalysedBanner(modifier: Modifier = Modifier) {
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    val title = stringResource(R.string.not_analysed_banner)
-    val body = stringResource(R.string.not_analysed_body)
-    val spoken = stringResource(R.string.a11y_banner, title, body)
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .focusRequester(focus)
-                .focusable()
-                .semantics(mergeDescendants = true) {
-                    heading()
-                    liveRegion = LiveRegionMode.Polite
-                    contentDescription = spoken
-                },
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_help),
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(text = title, style = MaterialTheme.typography.titleMedium)
-                Text(text = body, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-    }
-}
-
-/** Host of a web link: the only large text. For `user@host` it is the real host, the one a browser connects to. */
-@Composable
-internal fun UrlHost(host: String, nonLatin: Boolean, modifier: Modifier = Modifier) {
+internal fun UrlHost(host: HostDisplay, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = stringResource(R.string.link_will_open),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        TokenizedText(
-            text = host,
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        if (nonLatin) NonLatinHostWarning()
+        if (host.normalized) {
+            Text(
+                text = hostAnnotated(host),
+                style = MaterialTheme.typography.headlineSmall.copy(textDirection = TextDirection.Ltr),
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+        } else {
+            TokenizedText(
+                text = host.shown.value,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+        }
+        host.technical?.let { TechnicalForm(it) }
     }
 }
 
-/** Marker under a host with non-ASCII characters: it may imitate another site. Bold text and icon, not colour alone. */
+/** The host with its registrable domain in bold and every non-ASCII letter underlined (not colour alone). */
+internal fun hostAnnotated(host: HostDisplay): AnnotatedString = buildAnnotatedString {
+    val text = host.shown.value
+    var index = 0
+    while (index < text.length) {
+        val codePoint = text.codePointAt(index)
+        val style = SpanStyle(
+            fontWeight = if (index >= host.strongFrom) FontWeight.Bold else FontWeight.Normal,
+            textDecoration = if (codePoint > ASCII_LIMIT) TextDecoration.Underline else null,
+        )
+        withStyle(style) { append(String(Character.toChars(codePoint))) }
+        index += Character.charCount(codePoint)
+    }
+}
+
+/** "Technical form: xn--..." with the sentence that tells why it matters. Spelled out for screen readers. */
 @Composable
-private fun NonLatinHostWarning() {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.errorContainer,
-        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+private fun TechnicalForm(technical: String) {
+    val dash = stringResource(R.string.a11y_dash)
+    val dot = stringResource(R.string.a11y_dot)
+    val spoken = stringResource(R.string.a11y_technical_form, spell(technical, dash, dot))
+    Column(
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = spoken },
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(modifier = Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.technical_form, technical),
+            style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Ltr),
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
             Icon(
-                painter = painterResource(R.drawable.ic_warning),
+                painter = painterResource(R.drawable.ic_help),
                 contentDescription = null,
                 modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onBackground,
             )
             Text(
-                text = stringResource(R.string.host_non_latin_warning),
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                text = stringResource(R.string.technical_form_help),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground,
             )
         }
     }
 }
+
+private fun spell(text: String, dash: String, dot: String): String = text.map {
+    when (it) {
+        '-' -> dash
+        '.' -> dot
+        else -> it.toString()
+    }
+}.joinToString(" ")
 
 /** A labelled value. Secrets are masked and need an explicit "show"; warnings carry their own container. */
 @Composable

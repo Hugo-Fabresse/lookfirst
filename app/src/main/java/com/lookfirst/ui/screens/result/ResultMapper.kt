@@ -1,6 +1,9 @@
 package com.lookfirst.ui.screens.result
 
 import com.lookfirst.R
+import com.lookfirst.domain.host.HostResult
+import com.lookfirst.domain.host.PublicSuffixList
+import com.lookfirst.domain.model.HostKind
 import com.lookfirst.domain.model.ParseResult
 import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.Untrusted
@@ -14,8 +17,9 @@ internal fun ParseResult.toUiState(multipleCodes: Boolean = false): ResultUiStat
     is ParseResult.Ok -> ResultUiState.Content(
         ResultContent(
             typeLabel = payload.typeLabel(),
-            host = (payload as? ScanPayload.Url)?.rawHost?.takeIf { it.value.isNotEmpty() },
-            nonLatinHost = (payload as? ScanPayload.Url)?.nonAsciiHost == true,
+            host = (payload as? ScanPayload.Url)?.hostDisplay(),
+            isWebLink = payload is ScanPayload.Url,
+            openKind = payload.openKind(),
             fields = payload.fields(),
             exact = payload.raw,
             hiddenCharCount = hiddenChars.size + fieldHiddenChars.sumOf { it.chars.size },
@@ -24,6 +28,39 @@ internal fun ParseResult.toUiState(multipleCodes: Boolean = false): ResultUiStat
             multipleCodes = multipleCodes,
         ),
     )
+}
+
+/** The host after UTS #46 (Unicode and technical forms) with its registrable domain; the typed host if invalid. */
+internal fun ScanPayload.Url.hostDisplay(): HostDisplay? {
+    if (rawHost.value.isEmpty()) return null
+    val host = (normalizedHostResult as? HostResult.Normalized)?.host
+        ?: return HostDisplay(rawHost, technical = null, strongFrom = 0, normalized = false)
+    val suffixes = if (host.kind == HostKind.DOMAIN) PublicSuffixList.instance else null
+    val suffixCount = suffixes?.suffixLabelCount(host.asciiLabels) ?: 0
+    val nameIndex = host.unicodeLabels.size - suffixCount - 1
+    val strongFrom = if (suffixes == null ||
+        nameIndex < 0
+    ) {
+        0
+    } else {
+        host.unicodeLabels.take(nameIndex).sumOf { it.length + 1 }
+    }
+    return HostDisplay(
+        shown = Untrusted(host.unicode),
+        technical = host.ascii.takeIf { host.isInternational },
+        strongFrom = strongFrom,
+        normalized = true,
+    )
+}
+
+internal fun ScanPayload.openKind(): OpenKind? = when (this) {
+    is ScanPayload.Url -> if (scheme == "http" || scheme == "https" || scheme.isEmpty()) OpenKind.BROWSER else null
+    is ScanPayload.Tel -> OpenKind.DIALER
+    is ScanPayload.Sms -> OpenKind.SMS
+    is ScanPayload.Mail -> OpenKind.MAIL
+    is ScanPayload.Geo -> OpenKind.MAPS
+    is ScanPayload.Wifi -> OpenKind.WIFI
+    else -> null
 }
 
 internal fun ScanPayload.containsSecret(): Boolean = this is ScanPayload.Otpauth ||

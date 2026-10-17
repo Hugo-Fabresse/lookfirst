@@ -1,9 +1,18 @@
 package com.lookfirst.ui.screens.result
 
+import android.os.Looper
 import app.cash.turbine.test
 import com.lookfirst.R
 import com.lookfirst.data.platform.ClipboardWriter
+import com.lookfirst.data.platform.PayloadIdGenerator
+import com.lookfirst.data.platform.RegionHintProvider
+import com.lookfirst.data.reputation.NoReputationLists
+import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
+import com.lookfirst.domain.usecase.AnalyzeScan
+import com.lookfirst.domain.verdict.Verdict
+import com.lookfirst.domain.verdict.VerdictLevel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -13,6 +22,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import kotlin.coroutines.CoroutineContext
 
 /** Robolectric only for the main looper behind `viewModelScope`; parsing runs on `Dispatchers.Unconfined`. */
 @RunWith(RobolectricTestRunner::class)
@@ -30,8 +41,20 @@ class ResultViewModelTest {
     }
 
     private val clipboard = FakeClipboard()
+    private var region: String? = null
+    private var nextId = 0
 
-    private fun viewModel() = ResultViewModel(clipboard, Dispatchers.Unconfined)
+    private fun viewModel() = ResultViewModel(
+        clipboard = clipboard,
+        analyzeScan = AnalyzeScan(NoReputationLists()),
+        regionHints = RegionHintProvider { region },
+        payloadIds = PayloadIdGenerator { "id-${++nextId}" },
+        workDispatcher = Dispatchers.Unconfined,
+    )
+
+    private fun ResultViewModel.verdict(): Verdict = checkNotNull((state.value as ResultUiState.Content).verdict)
+
+    private fun verdictOf(raw: String): Verdict = viewModel().also { it.show(Untrusted(raw)) }.verdict()
 
     private fun ResultViewModel.content(): ResultContent = (state.value as ResultUiState.Content).content
 
@@ -48,12 +71,11 @@ class ResultViewModelTest {
             vm.show(Untrusted("https://paypal.com@evil.example:8443/login"))
             val content = (expectMostRecentItem() as ResultUiState.Content).content
             assertEquals(R.string.type_url_https, content.typeLabel)
-            assertEquals("evil.example", content.host?.value)
+            assertEquals("evil.example", content.host?.shown?.value)
             assertEquals(listOf(R.string.field_userinfo, R.string.field_port), content.fields.map { it.label })
             assertEquals(FieldKind.WARNING, content.fields[0].kind)
             assertEquals("paypal.com", content.fields[0].value.value)
             assertFalse(content.containsSecret)
-            assertFalse(content.nonLatinHost)
         }
     }
 
@@ -174,10 +196,137 @@ class ResultViewModelTest {
     }
 
     @Test
-    fun aNonAsciiHostIsFlagged() {
+    fun anInternationalHostKeepsItsUnicodeFormItsTechnicalFormAndItsRegistrableDomain() {
         val vm = viewModel()
-        vm.show(Untrusted("https://p\u0430ypal.com/login"))
-        assertTrue(vm.content().nonLatinHost)
+        vm.show(Untrusted("https://www.p\u0430ypal.com/login"))
+        val host = checkNotNull(vm.content().host)
+        assertEquals("www.p\u0430ypal.com", host.shown.value)
+        assertEquals("www.xn--pypal-4ve.com", host.technical)
+        assertEquals("www.".length, host.strongFrom)
+        assertTrue(host.normalized)
+    }
+
+    @Test
+    fun anAsciiHostHasNoTechnicalForm() {
+        val vm = viewModel()
+        vm.show(Untrusted("https://Paypal.com@Evil.Example/login"))
+        val host = checkNotNull(vm.content().host)
+        assertEquals("evil.example", host.shown.value)
+        assertNull(host.technical)
+        assertEquals(0, host.strongFrom)
+    }
+
+    @Test
+    fun theContentShowsFirstWithoutVerdictThenTheVerdictArrives() = runBlocking {
+        val vm = viewModel()
+        vm.state.test {
+            assertEquals(ResultUiState.NoContent, awaitItem())
+            vm.show(Untrusted("https://example.com"))
+            assertEquals(ResultUiState.Parsing, awaitItem())
+            val analysing = awaitItem() as ResultUiState.Content
+            assertNull(analysing.verdict)
+            val done = awaitItem() as ResultUiState.Content
+            assertEquals(analysing.content, done.content)
+            assertEquals(VerdictLevel.CAUTION, done.verdict?.level)
+        }
+    }
+
+    @Test
+    fun theVerdictLevelFollowsTheSignals() {
+        assertEquals(VerdictLevel.DANGEROUS, verdictOf("javascript:alert(1)").level)
+        assertEquals(VerdictLevel.SUSPICIOUS, verdictOf("https://192.0.2.1/login").level)
+        assertEquals(VerdictLevel.CAUTION, verdictOf("https://example.com/").level)
+        assertEquals(VerdictLevel.NO_RISK_SIGNAL, verdictOf("WIFI:T:WPA;S:HomeNet;P:hunter2;;").level)
+    }
+
+    @Test
+    fun anUnderstoodUrlWithoutListsIsAtLeastCautionAndSaysWhy() {
+        val verdict = verdictOf("https://example.com/")
+        assertTrue(verdict.reasons.any { it.code == SignalCode.LISTS_MISSING })
+        assertEquals(ListsInfo.None, verdict.listsInfo())
+    }
+
+    @Test
+    fun eachShownContentGetsItsOwnPayloadId() {
+        val vm = viewModel()
+        vm.show(Untrusted("https://one.example/"))
+        val first = vm.verdict().payloadId
+        vm.clear()
+        vm.show(Untrusted("https://one.example/"))
+        assertEquals("id-1", first)
+        assertEquals("id-2", vm.verdict().payloadId)
+    }
+
+    @Test
+    fun theRegionHintReachesTheAnalysis() {
+        region = "FR"
+        assertTrue(verdictOf("tel:0899123456").reasons.any { it.code == SignalCode.PREMIUM_NUMBER })
+        region = null
+        assertTrue(verdictOf("tel:0899123456").reasons.none { it.code == SignalCode.PREMIUM_NUMBER })
+    }
+
+    /** A dispatcher that only runs what it queued when the test says so. */
+    private class QueueDispatcher : CoroutineDispatcher() {
+        private val queue = ArrayDeque<Runnable>()
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            queue.addLast(block)
+        }
+
+        fun runAll() {
+            repeat(5) {
+                while (queue.isNotEmpty()) queue.removeFirst().run()
+                shadowOf(Looper.getMainLooper()).idle()
+            }
+        }
+    }
+
+    @Test
+    fun aFailingAnalysisIsCautionAndIncompleteNeverNoRisk() {
+        val vm = ResultViewModel(
+            clipboard = clipboard,
+            analyzeScan = AnalyzeScan(NoReputationLists()),
+            regionHints = RegionHintProvider { error("boom") },
+            payloadIds = PayloadIdGenerator { "id-x" },
+            workDispatcher = Dispatchers.Unconfined,
+        )
+        vm.show(Untrusted("https://example.com/"))
+        val verdict = vm.verdict()
+        assertEquals(VerdictLevel.CAUTION, verdict.level)
+        assertEquals(listOf(SignalCode.ANALYSIS_INCOMPLETE), verdict.reasons.map { it.code })
+        assertEquals("id-x", verdict.payloadId)
+    }
+
+    @Test
+    fun onlyTheLastShownContentGetsItsVerdictWhenTheFirstWasCleared() {
+        val queue = QueueDispatcher()
+        val vm = ResultViewModel(
+            clipboard = clipboard,
+            analyzeScan = AnalyzeScan(NoReputationLists()),
+            regionHints = RegionHintProvider { null },
+            payloadIds = PayloadIdGenerator { "id-${++nextId}" },
+            workDispatcher = queue,
+        )
+        vm.show(Untrusted("https://first.example/"))
+        vm.clear()
+        vm.show(Untrusted("https://second.example/"))
+        queue.runAll()
+        val state = vm.state.value as ResultUiState.Content
+        assertEquals("https://second.example/", state.content.exact.value)
+        assertEquals("id-2", state.verdict?.payloadId)
+    }
+
+    @Test
+    fun openKindFollowsTheContentType() {
+        assertEquals(
+            OpenKind.BROWSER,
+            viewModel().also {
+                it.show(Untrusted("https://example.com"))
+            }.content().openKind,
+        )
+        assertEquals(OpenKind.DIALER, viewModel().also { it.show(Untrusted("tel:+33123456789")) }.content().openKind)
+        assertNull(viewModel().also { it.show(Untrusted("monappli://pay")) }.content().openKind)
+        assertNull(viewModel().also { it.show(Untrusted("hello")) }.content().openKind)
     }
 
     @Test

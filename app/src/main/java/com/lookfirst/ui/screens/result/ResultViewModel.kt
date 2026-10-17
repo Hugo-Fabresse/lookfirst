@@ -3,11 +3,20 @@ package com.lookfirst.ui.screens.result
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lookfirst.data.platform.ClipboardWriter
+import com.lookfirst.data.platform.PayloadIdGenerator
+import com.lookfirst.data.platform.RegionHintProvider
 import com.lookfirst.di.DefaultDispatcher
+import com.lookfirst.domain.analysis.AnalysisContext
 import com.lookfirst.domain.decoder.PayloadParser
 import com.lookfirst.domain.model.ParseResult
+import com.lookfirst.domain.model.Signal
+import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
+import com.lookfirst.domain.usecase.AnalyzeScan
+import com.lookfirst.domain.verdict.Verdict
+import com.lookfirst.domain.verdict.VerdictLevel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -33,7 +42,10 @@ sealed interface ResultEvent {
 @HiltViewModel
 class ResultViewModel @Inject constructor(
     private val clipboard: ClipboardWriter,
-    @DefaultDispatcher private val parseDispatcher: CoroutineDispatcher,
+    private val analyzeScan: AnalyzeScan,
+    private val regionHints: RegionHintProvider,
+    private val payloadIds: PayloadIdGenerator,
+    @DefaultDispatcher private val workDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow<ResultUiState>(ResultUiState.NoContent)
     val state: StateFlow<ResultUiState> = mutableState.asStateFlow()
@@ -53,11 +65,28 @@ class ResultViewModel @Inject constructor(
         if (scanned != null) return
         scanned = content
         mutableState.value = ResultUiState.Parsing
+        val payloadId = payloadIds.newId()
         parsing = viewModelScope.launch {
-            val parsed = withContext(parseDispatcher) { PayloadParser.parse(content.value) }
+            val (parsed, ui) = withContext(workDispatcher) {
+                PayloadParser.parse(content.value).let { it to it.toUiState(multipleCodes) }
+            }
             copyIsSecret = (parsed as? ParseResult.Ok)?.payload?.containsSecret() == true
-            mutableState.value = parsed.toUiState(multipleCodes)
+            mutableState.value = ui
+            if (parsed is ParseResult.Ok) {
+                val verdict = withContext(workDispatcher) { analyze(content.value, payloadId) }
+                mutableState.update { if (it is ResultUiState.Content) it.copy(verdict = verdict) else it }
+            }
         }
+    }
+
+    /** Never throws: an analysis that fails is reported as incomplete (CAUTION), not as "no risk signal". */
+    @Suppress("TooGenericExceptionCaught")
+    private fun analyze(raw: String, payloadId: String): Verdict = try {
+        analyzeScan(raw, payloadId, AnalysisContext(regionHints.regionHint()))
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (ignored: Exception) {
+        Verdict(VerdictLevel.CAUTION, listOf(Signal(SignalCode.ANALYSIS_INCOMPLETE)), payloadId)
     }
 
     /** Copy: straight away, or after the confirmation dialog when the text contains a secret (ux.md 4.6). */

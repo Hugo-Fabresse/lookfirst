@@ -5,6 +5,7 @@ import com.lookfirst.domain.model.ParseResult
 import com.lookfirst.domain.model.Severity
 import com.lookfirst.domain.model.Signal
 import com.lookfirst.domain.model.SignalCode
+import com.lookfirst.domain.model.Untrusted
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -88,5 +89,15 @@ class VerdictEngineTest {
         val a = VerdictEngine.combine(listOf(Signal(SignalCode.IP_HOST)), url, "p1")
         assertEquals("p1", a.payloadId)
         assertEquals(a, VerdictEngine.combine(listOf(Signal(SignalCode.IP_HOST)), url, "p1"))
+    }
+
+    @Test
+    fun `same code with different evidence is kept twice`() {
+        val signals = listOf(
+            Signal(SignalCode.BRAND_LOOKALIKE, evidence = Untrusted("a.example")),
+            Signal(SignalCode.BRAND_LOOKALIKE, evidence = Untrusted("b.example")),
+            Signal(SignalCode.BRAND_LOOKALIKE, evidence = Untrusted("a.example")),
+        )
+        assertEquals(2, VerdictEngine.combine(signals, url, "id").reasons.size)
     }
 }

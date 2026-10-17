@@ -81,3 +81,4 @@ DECISION [image-scan] : pas d'aperçu de l'image sur l'écran d'échec — l'ima
 DECISION [image-scan] : textes err_image_too_big et err_image_corrupt ajoutés (absents d'ux.md §7) — « trop volumineuse » et « format illisible » ne se confondent pas avec « aucun QR »
 DECISION [image-scan] : lecture multi-QR seulement si ≤ 30 motifs de repérage candidats, un seul thread dédié, nouvelle lecture refusée (BUSY) tant qu'il est occupé — QRCodeMultiReader est cubique et non annulable
 DECISION [verdict] : sans listes de réputation (NoReputationLists), toute URL http(s) est au moins CAUTION (LISTS_MISSING) — voulu tant que l'epic Listes n'existe pas
+DECISION [verdict] : le CAUTION systématique sans listes (NoReputationLists) est provisoire — à revoir par l'epic Listes

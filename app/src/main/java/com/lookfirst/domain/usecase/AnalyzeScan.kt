@@ -17,7 +17,7 @@ import javax.inject.Inject
 class AnalyzeScan @Inject constructor(lookup: ReputationLookup) {
     private val reputation = ReputationAnalyzer(lookup)
 
-    operator fun invoke(raw: String, context: AnalysisContext = AnalysisContext(), payloadId: String = ""): Verdict {
+    operator fun invoke(raw: String, payloadId: String, context: AnalysisContext = AnalysisContext()): Verdict {
         val parsed = PayloadParser.parse(raw)
         val signals = RiskAnalyzer.analyze(parsed, context) +
             if (parsed is ParseResult.Ok) reputation.analyze(parsed, context) else emptyList()

@@ -9,7 +9,8 @@ import com.lookfirst.domain.model.Signal
 object VerdictEngine {
     /**
      * Level = heaviest severity, [Severity.INFO] excluded. Reasons: heaviest first, then the order the analyzers
-     * produced them (stable), one per code (the first, so the heaviest, wins). Content that was not understood
+     * produced them (stable), one per (code, evidence) pair (the first, so the heaviest, wins): the same code on two different pieces of
+     * evidence (two hosts) stays twice. Content that was not understood
      * (text, unknown format, too large, empty) is never [VerdictLevel.NO_RISK_SIGNAL].
      */
     fun combine(signals: List<Signal>, result: ParseResult, payloadId: String): Verdict {
@@ -17,7 +18,7 @@ object VerdictEngine {
             .withIndex()
             .sortedWith(compareBy({ it.value.severity.ordinal }, { it.index }))
             .map { it.value }
-            .distinctBy { it.code }
+            .distinctBy { it.code to it.evidence }
         val level = reasons.firstOrNull()?.let { levelOf(it.severity) } ?: VerdictLevel.NO_RISK_SIGNAL
         val floor = if (isUnderstood(result)) VerdictLevel.NO_RISK_SIGNAL else VerdictLevel.CAUTION
         // VerdictLevel is declared heaviest first, so the smaller ordinal is the heavier level.

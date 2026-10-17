@@ -49,17 +49,35 @@ class UrlStructureAnalyzerTest {
     }
 
     @Test
-    fun unresolvedHostTriggersNothingAboutIp() {
-        // Fullwidth digits: only the UTS #46 normalizer (LF-16) can say whether this is an IP.
-        assertTrue(SignalCode.IP_HOST !in codes("https://１２７.０.０.１/"))
+    fun fullwidthDigitsAreAnIpAddressOnceNormalized() {
+        val signals = UrlStructureAnalyzer.on("https://１２７.０.０.１/")
+        assertEquals("127.0.0.1", signals.of(SignalCode.IP_HOST).evidence?.value)
+        assertEquals(setOf(SignalCode.IP_HOST), signals.codes())
     }
 
     @Test
-    fun unresolvedHostIsAnalysisIncompleteUntilTheNormalizerRuns() {
-        val signal = UrlStructureAnalyzer.on("https://café.example/menu").of(SignalCode.ANALYSIS_INCOMPLETE)
-        assertEquals(Severity.CAUTION, signal.severity)
-        assertTrue(SignalCode.ANALYSIS_INCOMPLETE in codes("https://%70aypal.com/login"))
+    fun normalizedHostsAreNoLongerIncomplete() {
+        assertTrue(UrlStructureAnalyzer.on("https://café.example/menu").isEmpty())
+        assertEquals(setOf(SignalCode.URL_HOST_ENCODED), codes("https://%70aypal.com/login"))
         assertTrue(SignalCode.ANALYSIS_INCOMPLETE !in codes("https://cafe.example/menu"))
+    }
+
+    @Test
+    fun hostThatFailsNormalizationStaysIncompleteAndMalformed() {
+        val signals = UrlStructureAnalyzer.on("https://a%C3.example/menu")
+        assertEquals(Severity.CAUTION, signals.of(SignalCode.ANALYSIS_INCOMPLETE).severity)
+        assertEquals(Severity.SUSPICIOUS, signals.of(SignalCode.URL_MALFORMED).severity)
+        assertEquals(1, signals.count { it.code == SignalCode.URL_MALFORMED })
+        assertTrue(SignalCode.ANALYSIS_INCOMPLETE in codes("https://xn--a-.example/"))
+        assertEquals(1, UrlStructureAnalyzer.on("https://exa mple.com/").count { it.code == SignalCode.URL_MALFORMED })
+    }
+
+    @Test
+    fun shortenerAndUserinfoUseTheNormalizedHost() {
+        assertEquals(setOf(SignalCode.SHORTENER), codes("https://ｂｉｔ.ｌｙ/x"))
+        assertEquals(setOf(SignalCode.SHORTENER), codes("https://bit.ly\u3002/x"))
+        val signals = UrlStructureAnalyzer.on("https://paypal.com@ｅvil.example/")
+        assertEquals("evil.example", signals.of(SignalCode.USERINFO_AT).evidence?.value)
     }
 
     @Test

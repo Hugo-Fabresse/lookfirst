@@ -7,10 +7,11 @@ import com.lookfirst.domain.redirect.RedirectTrace
 import com.lookfirst.domain.redirect.TraceEnd
 import com.lookfirst.domain.redirect.TraceFailure
 import com.lookfirst.domain.redirect.TraceOutcome
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -403,13 +404,13 @@ class SocketRedirectTracerTest {
     @Test
     fun `cancelling the caller closes the connection under way`() {
         host("a.example", public1)
-        val closed = AtomicBoolean(false)
+        val closed = CountDownLatch(1)
         val entered = CountDownLatch(1)
         val blocking = HopTransport { _, _, _, abort ->
             val gate = CountDownLatch(1)
             abort.register(
                 Closeable {
-                    closed.set(true)
+                    closed.countDown()
                     gate.countDown()
                 },
             )
@@ -420,13 +421,11 @@ class SocketRedirectTracerTest {
         val real = SocketRedirectTracer(resolver, blocking, { Thread(it).apply { isDaemon = true }.start() })
         runBlocking {
             val job: Job = launch { real.trace(url("https://a.example/")) }
-            while (entered.count > 0) delay(5)
+            assertTrue(withContext(Dispatchers.IO) { entered.await(5, TimeUnit.SECONDS) })
             job.cancel()
             job.join()
         }
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
-        while (!closed.get() && System.nanoTime() < deadline) Thread.sleep(5)
-        assertTrue(closed.get())
+        assertTrue(closed.await(5, TimeUnit.SECONDS))
     }
 
     @Test

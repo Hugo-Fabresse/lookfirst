@@ -1,10 +1,12 @@
 package com.lookfirst.data.reputation
 
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -44,18 +46,18 @@ class ListsStartupTest {
     private fun store() = ListStore(root, listOf(source), { TEST_NOW }, {})
 
     @Test
-    fun startLoadsTheInstalledListsInTheBackgroundAndAppliesTheSchedule() {
+    fun startLoadsTheInstalledListsInTheBackgroundAndAppliesTheSchedule() = runTest {
         val first = store()
         first.install(source, parsed(*Array(10) { "site$it.com" }), null)
         val restarted = store()
         val control = CountingControl()
-        val startup = ListsStartup(restarted, control, CoroutineScope(SupervisorJob() + Dispatchers.IO), Dispatchers.IO)
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val startup = ListsStartup(restarted, control, CoroutineScope(SupervisorJob() + dispatcher), dispatcher)
         assertNull(restarted.snapshot())
         startup.start()
-        val deadline = System.nanoTime() + 5_000_000_000L
-        while (restarted.snapshot() == null && System.nanoTime() < deadline) Thread.sleep(10)
+        assertNull(restarted.snapshot())
+        advanceUntilIdle()
         assertNotNull(restarted.snapshot())
-        while (control.refreshes == 0 && System.nanoTime() < deadline) Thread.sleep(10)
         assertEquals(1, control.schedules)
         assertEquals(1, control.refreshes)
     }

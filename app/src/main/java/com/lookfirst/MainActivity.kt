@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import com.lookfirst.data.platform.ClipboardWriter
 import com.lookfirst.data.scan.camera.QrAnalyzerFactory
 import com.lookfirst.ui.components.TouchGuard
 import com.lookfirst.ui.components.isPartiallyObscured
@@ -26,6 +27,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var analyzerFactory: QrAnalyzerFactory
 
+    @Inject
+    lateinit var clipboard: ClipboardWriter
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -39,6 +43,17 @@ class MainActivity : ComponentActivity() {
             }
         }
         hardenAgainstOverlays()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        clipboard.onAppStopped()
+    }
+
+    /** From API 29 the clipboard is readable only with the focus: a sensitive copy is cleared here (T-SCH-11). */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) clipboard.onWindowFocused()
     }
 
     /** Reports touches that arrive under an overlay to [TouchGuard], which the action buttons consult. */

@@ -24,19 +24,19 @@ class EpcParsingTest {
     fun validEpcIsDecoded() {
         val e = epc(epcText())
         assertEquals("002", e.version)
-        assertEquals("COBADEFFXXX", e.bic)
-        assertEquals("Max Mustermann", e.name)
-        assertEquals("DE89370400440532013000", e.iban)
+        assertEquals("COBADEFFXXX", e.bic?.value)
+        assertEquals("Max Mustermann", e.name?.value)
+        assertEquals("DE89370400440532013000", e.iban.value)
         assertEquals(BigDecimal("12.34"), e.amount)
         assertEquals("EUR", e.currency)
-        assertEquals("Invoice 42", e.remittance)
+        assertEquals("Invoice 42", e.remittance?.value)
         assertTrue(e.issues.isEmpty())
     }
 
     @Test
     fun crlfLineEndingsAndSpacedLowercaseIbanAreAccepted() {
         val e = epc(epcText(iban = "de89 3704 0044 0532 0130 00", eol = "\r\n"))
-        assertEquals("DE89370400440532013000", e.iban)
+        assertEquals("DE89370400440532013000", e.iban.value)
         assertTrue(e.issues.isEmpty())
     }
 
@@ -78,9 +78,37 @@ class EpcParsingTest {
     }
 
     @Test
+    fun onlyEuroAndAtLeastOneCentAreAccepted() {
+        assertTrue(EpcIssue.BAD_CURRENCY in epc(epcText(amount = "USD10.00")).issues)
+        assertTrue(EpcIssue.BAD_AMOUNT in epc(epcText(amount = "EUR0.00")).issues)
+        assertTrue(EpcIssue.BAD_AMOUNT in epc(epcText(amount = "EUR0")).issues)
+        assertTrue(epc(epcText(amount = "EUR0.01")).issues.isEmpty())
+    }
+
+    @Test
+    fun bicIsMandatoryInVersion001Only() {
+        assertTrue(EpcIssue.BAD_BIC in epc(epcText(version = "001", bic = "")).issues)
+        assertTrue(epc(epcText(version = "001")).issues.isEmpty())
+    }
+
+    @Test
+    fun trailingNewlineIsTolerated() {
+        assertTrue(epc(epcText() + "\n").issues.isEmpty())
+        assertTrue(epc(epcText(eol = "\r\n") + "\r\n").issues.isEmpty())
+    }
+
+    @Test
+    fun structuredReferenceAndFreeTextTogetherAreAmbiguous() {
+        val both = epcText().replace("\n\n\nInvoice", "\n\nRF18539007547034\nInvoice")
+        assertEquals("EPC", (parseOk(both).payload as? ScanPayload.Unknown)?.declaredType)
+        val refOnly = epcText().replace("\n\n\nInvoice 42", "\n\nRF18539007547034\n")
+        assertEquals("RF18539007547034", epc(refOnly).remittance?.value)
+    }
+
+    @Test
     fun badBicIsFlagged() {
         assertTrue(EpcIssue.BAD_BIC in epc(epcText(bic = "123")).issues)
-        assertTrue(epc(epcText(bic = "")).bic == null)
+        assertTrue(epc(epcText(bic = "")).bic?.value == null)
     }
 
     @Test

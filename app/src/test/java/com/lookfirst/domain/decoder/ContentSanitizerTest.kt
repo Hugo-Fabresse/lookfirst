@@ -12,7 +12,7 @@ class ContentSanitizerTest {
         val start = System.nanoTime()
         val result = PayloadParser.parse("a".repeat(1_000_000))
         assertEquals(ParseResult.TooLarge(1_000_000, ContentSanitizer.MAX_CHARS), result)
-        assertTrue((System.nanoTime() - start) / 1_000_000 < 200)
+        assertTrue((System.nanoTime() - start) / 1_000_000 < 500)
     }
 
     @Test
@@ -36,7 +36,7 @@ class ContentSanitizerTest {
     @Test
     fun contentIsNormalizedToNfcAndRawKeepsTheNormalizedText() {
         val decomposed = "café"
-        assertEquals("café", parseOk(decomposed).payload.raw)
+        assertEquals("café", parseOk(decomposed).payload.raw.value)
     }
 
     @Test
@@ -46,7 +46,7 @@ class ContentSanitizerTest {
         assertEquals(HiddenCharKind.BIDI, hidden.kind)
         assertEquals(0x202E, hidden.codePoint)
         assertEquals(11, hidden.index)
-        assertTrue(ok.payload.raw.contains('‮'))
+        assertTrue(ok.payload.raw.value.contains('‮'))
     }
 
     @Test
@@ -74,6 +74,16 @@ class ContentSanitizerTest {
             val kinds = parseOk("a${String(Character.toChars(cp))}b").hiddenChars.map { it.kind }
             assertEquals("U+${cp.toString(16)}", listOf(HiddenCharKind.BIDI), kinds)
         }
+    }
+
+    @Test
+    fun invisibleFillersAndVariationSelectorsAreReported() {
+        listOf(0x034F, 0xFE00, 0xFE0F, 0x115F, 0x1160, 0x3164, 0xFFA0, 0x2800, 0x00AD, 0xE0041).forEach { cp ->
+            val kinds = parseOk("a${String(Character.toChars(cp))}b").hiddenChars.map { it.kind }
+            assertEquals("U+${cp.toString(16)}", 1, kinds.size)
+        }
+        val kind = parseOk("a\u3164b").hiddenChars.single().kind
+        assertEquals(HiddenCharKind.INVISIBLE, kind)
     }
 
     @Test

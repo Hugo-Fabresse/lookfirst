@@ -17,12 +17,12 @@ class UrlParsingTest {
     fun plainHttpsUrlIsSplit() {
         val u = url("https://example.com:8443/a/b?x=1&y=2#frag")
         assertEquals("https", u.scheme)
-        assertEquals("example.com", u.host)
+        assertEquals("example.com", u.rawHost.value)
         assertEquals(8443, u.port)
-        assertEquals("/a/b", u.path)
-        assertEquals("x=1&y=2", u.query)
-        assertEquals("frag", u.fragment)
-        assertNull(u.userinfo)
+        assertEquals("/a/b", u.path.value)
+        assertEquals("x=1&y=2", u.query?.value)
+        assertEquals("frag", u.fragment?.value)
+        assertNull(u.userinfo?.value)
         assertEquals(HostKind.DOMAIN, u.hostKind)
         assertTrue(u.issues.isEmpty())
     }
@@ -31,37 +31,37 @@ class UrlParsingTest {
     fun schemeIsCaseInsensitive() {
         val u = url("HTTPS://Example.COM/Path")
         assertEquals("https", u.scheme)
-        assertEquals("Example.COM", u.host)
-        assertEquals("/Path", u.path)
+        assertEquals("Example.COM", u.rawHost.value)
+        assertEquals("/Path", u.path.value)
     }
 
     @Test
     fun userinfoTrickRevealsTheRealHost() {
         val u = url("https://paypal.com@evil.example/login")
-        assertEquals("paypal.com", u.userinfo)
+        assertEquals("paypal.com", u.userinfo?.value)
         assertTrue(u.hasUserinfo)
-        assertEquals("evil.example", u.host)
+        assertEquals("evil.example", u.rawHost.value)
     }
 
     @Test
     fun lastAtSignWins() {
         val u = url("https://a@b@evil.example")
-        assertEquals("a@b", u.userinfo)
-        assertEquals("evil.example", u.host)
+        assertEquals("a@b", u.userinfo?.value)
+        assertEquals("evil.example", u.rawHost.value)
     }
 
     @Test
     fun userinfoWithPasswordAndPort() {
         val u = url("http://user:pa:ss@host.example:81/")
-        assertEquals("user:pa:ss", u.userinfo)
-        assertEquals("host.example", u.host)
+        assertEquals("user:pa:ss", u.userinfo?.value)
+        assertEquals("host.example", u.rawHost.value)
         assertEquals(81, u.port)
     }
 
     @Test
     fun backslashActsAsSlashAndIsFlagged() {
         val u = url("https://good.example\\@evil.example/x")
-        assertEquals("good.example", u.host)
+        assertEquals("good.example", u.rawHost.value)
         assertTrue(UrlIssue.BACKSLASH in u.issues)
     }
 
@@ -69,7 +69,7 @@ class UrlParsingTest {
     fun ipv4LiteralIsDetected() {
         val u = url("http://192.168.0.1:8080/admin")
         assertEquals(HostKind.IPV4, u.hostKind)
-        assertEquals("192.168.0.1", u.host)
+        assertEquals("192.168.0.1", u.rawHost.value)
     }
 
     @Test
@@ -92,7 +92,7 @@ class UrlParsingTest {
     @Test
     fun ipv6LiteralKeepsBracketsOutOfHost() {
         val u = url("http://[::1]:3000/x")
-        assertEquals("::1", u.host)
+        assertEquals("::1", u.rawHost.value)
         assertEquals(3000, u.port)
         assertEquals(HostKind.IPV6, u.hostKind)
         assertTrue(u.issues.isEmpty())
@@ -118,7 +118,7 @@ class UrlParsingTest {
     @Test
     fun cyrillicHomographHostIsKeptAsTypedAndFlaggedNonAscii() {
         val u = url("https://pаypal.com/")
-        assertEquals("pаypal.com", u.host)
+        assertEquals("pаypal.com", u.rawHost.value)
         assertTrue(u.nonAsciiHost)
     }
 
@@ -132,7 +132,7 @@ class UrlParsingTest {
         val ok = parseOk("https://exa‮mple.com/")
         val u = ok.payload as ScanPayload.Url
         assertTrue(u.nonAsciiHost)
-        assertEquals("exa‮mple.com", u.host)
+        assertEquals("exa‮mple.com", u.rawHost.value)
         assertEquals(listOf(HiddenCharKind.BIDI), ok.hiddenChars.map { it.kind })
     }
 
@@ -146,9 +146,9 @@ class UrlParsingTest {
     @Test
     fun missingOrExtraSlashesAreFlagged() {
         assertTrue(UrlIssue.MISSING_SLASHES in url("https:evil.example").issues)
-        assertEquals("evil.example", url("https:evil.example").host)
+        assertEquals("evil.example", url("https:evil.example").rawHost.value)
         assertTrue(UrlIssue.EXTRA_SLASHES in url("https:////evil.example").issues)
-        assertEquals("evil.example", url("https:////evil.example").host)
+        assertEquals("evil.example", url("https:////evil.example").rawHost.value)
     }
 
     @Test
@@ -160,7 +160,7 @@ class UrlParsingTest {
     @Test
     fun emptyAndOversizedHostsAreFlagged() {
         // Browsers skip extra slashes for http(s): "path" is the host here.
-        assertEquals("path", url("https:///path").host)
+        assertEquals("path", url("https:///path").rawHost.value)
         assertTrue(UrlIssue.EXTRA_SLASHES in url("https:///path").issues)
         assertTrue(UrlIssue.EMPTY_HOST in url("https://").issues)
         assertTrue(UrlIssue.HOST_TOO_LONG in url("https://" + "a".repeat(300) + ".com").issues)
@@ -175,22 +175,22 @@ class UrlParsingTest {
     @Test
     fun leadingAndTrailingWhitespaceDoesNotHideTheScheme() {
         val u = url("  https://example.com/  ")
-        assertEquals("example.com", u.host)
+        assertEquals("example.com", u.rawHost.value)
     }
 
     @Test
     fun noPathNoQueryGivesEmptyPath() {
         val u = url("https://example.com")
-        assertEquals("", u.path)
-        assertNull(u.query)
-        assertNull(u.fragment)
+        assertEquals("", u.path.value)
+        assertNull(u.query?.value)
+        assertNull(u.fragment?.value)
     }
 
     @Test
     fun queryWithoutPathAndFragmentOnly() {
-        assertEquals("a=1", url("https://example.com?a=1").query)
-        assertEquals("f", url("https://example.com#f").fragment)
-        assertNull(url("https://example.com#f?x").query)
+        assertEquals("a=1", url("https://example.com?a=1").query?.value)
+        assertEquals("f", url("https://example.com#f").fragment?.value)
+        assertNull(url("https://example.com#f?x").query?.value)
     }
 
     @Test
@@ -206,6 +206,43 @@ class UrlParsingTest {
 
     @Test
     fun rawKeepsTheFullSanitizedText() {
-        assertEquals("https://paypal.com@evil.example", url("https://paypal.com@evil.example").raw)
+        assertEquals("https://paypal.com@evil.example", url("https://paypal.com@evil.example").raw.value)
+    }
+
+    @Test
+    fun tabsAndNewlinesInsideTheUrlAreRemovedBeforeSplitting() {
+        assertEquals("evil-phish.example", url("https:/\t/evil-phish.example/login").rawHost.value)
+        val u = url("https://pay\npal-login.example")
+        assertEquals("paypal-login.example", u.rawHost.value)
+        assertTrue(UrlIssue.CONTROL_OR_SPACE in u.issues)
+        assertEquals("a.example", url("\u0001 https://a.example\r\n ").rawHost.value)
+    }
+
+    @Test
+    fun hostsWithNonAsciiOrPercentAreUnresolvedUntilTheNormalizerRuns() {
+        listOf(
+            "http://\uFF11\uFF12\uFF17.\uFF10.\uFF10.\uFF11/",
+            "http://127\u30020\u30020\u30021/",
+            "https://%70aypal.com",
+            "https://p\u0430ypal.com",
+        ).forEach { assertEquals(it, HostKind.UNRESOLVED, url(it).hostKind) }
+    }
+
+    @Test
+    fun hostAndPortWithoutSchemeIsAnUrlWithMissingScheme() {
+        val u = url("secure-paypal-login.example:8443/verify")
+        assertTrue(UrlIssue.MISSING_SCHEME in u.issues)
+        assertEquals("", u.scheme)
+        assertEquals("secure-paypal-login.example", u.rawHost.value)
+        assertEquals(8443, u.port)
+        assertEquals("/verify", u.path.value)
+        assertEquals("example.com", url("example.com:80").rawHost.value)
+    }
+
+    @Test
+    fun reverseDomainDeepLinksStayAppLinks() {
+        assertTrue(parseOk("com.app:/cb").payload is ScanPayload.AppLink)
+        assertTrue(parseOk("com.app://callback?x=1").payload is ScanPayload.AppLink)
+        assertTrue(parseOk("com.app:abc").payload is ScanPayload.AppLink)
     }
 }

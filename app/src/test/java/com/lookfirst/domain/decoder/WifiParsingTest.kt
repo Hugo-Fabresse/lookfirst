@@ -17,38 +17,38 @@ class WifiParsingTest {
     @Test
     fun standardWpaNetwork() {
         val w = wifi("WIFI:T:WPA;S:HomeNet;P:secret123;;")
-        assertEquals("HomeNet", w.ssid)
+        assertEquals("HomeNet", w.ssid.value)
         assertEquals(WifiSecurity.WPA, w.security)
-        assertEquals("secret123", w.password)
+        assertEquals("secret123", w.password?.value)
         assertFalse(w.hidden)
     }
 
     @Test
     fun fieldsInAnyOrderAndSchemeInAnyCase() {
         val w = wifi("wifi:H:true;P:pw;S:Net;T:WEP;;")
-        assertEquals("Net", w.ssid)
+        assertEquals("Net", w.ssid.value)
         assertEquals(WifiSecurity.WEP, w.security)
-        assertEquals("pw", w.password)
+        assertEquals("pw", w.password?.value)
         assertTrue(w.hidden)
     }
 
     @Test
     fun escapesAreUnescaped() {
         val w = wifi("WIFI:S:a\\;b\\,c\\:d\\\\e\\\"f;P:p\\;w;;")
-        assertEquals("a;b,c:d\\e\"f", w.ssid)
-        assertEquals("p;w", w.password)
+        assertEquals("a;b,c:d\\e\"f", w.ssid.value)
+        assertEquals("p;w", w.password?.value)
     }
 
     @Test
     fun unknownEscapeKeepsTheBackslash() {
-        assertEquals("a\\nb", wifi("WIFI:S:a\\nb;;").ssid)
+        assertEquals("a\\nb", wifi("WIFI:S:a\\nb;;").ssid.value)
     }
 
     @Test
     fun openNetworkHasNoPassword() {
         val w = wifi("WIFI:T:nopass;S:Cafe;;")
         assertEquals(WifiSecurity.NONE, w.security)
-        assertNull(w.password)
+        assertNull(w.password?.value)
         assertEquals(WifiSecurity.NONE, wifi("WIFI:S:Cafe;;").security)
     }
 
@@ -62,7 +62,7 @@ class WifiParsingTest {
 
     @Test
     fun missingTerminatorIsAccepted() {
-        assertEquals("Net", wifi("WIFI:S:Net;P:pw").ssid)
+        assertEquals("Net", wifi("WIFI:S:Net;P:pw").ssid.value)
     }
 
     @Test
@@ -92,7 +92,11 @@ class WifiParsingTest {
     }
 
     @Test
-    fun toStringNeverContainsThePassword() {
-        assertFalse(wifi("WIFI:S:Net;P:topsecret;;").toString().contains("topsecret"))
+    fun toStringNeverContainsScannedContent() {
+        assertFalse(wifi("WIFI:S:NetName;P:topsecret;;").toString().contains("topsecret"))
+        assertFalse(wifi("WIFI:S:NetName;P:topsecret;;").toString().contains("NetName"))
+        val ambiguous = parseOk("WIFI:S:x;P:pwdone;P:pwdtwo;;").payload.toString()
+        assertFalse(ambiguous.contains("pwd"))
+        assertFalse(ambiguous.contains("WIFI:S"))
     }
 }

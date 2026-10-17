@@ -23,10 +23,19 @@ class SchemeDispatchTest {
     }
 
     @Test
+    fun invisibleOrUnicodeSpaceBeforeTheSchemeDoesNotHideADangerousScheme() {
+        assertEquals("javascript", dangerous("\u200Bjavascript:alert(1)"))
+        assertEquals("intent", dangerous("\uFEFFintent://x#Intent;end"))
+        assertEquals("javascript", dangerous("\u00A0\u2003javascript:alert(1)"))
+        assertEquals("data", dangerous("\u3164\u034Fdata:text/html,x"))
+        assertEquals("file", dangerous("\u202Efile:///x"))
+    }
+
+    @Test
     fun intentUrisAreDangerousAndNeverParsed() {
         val raw = "intent://scan/#Intent;scheme=zxing;package=com.evil;S.browser_fallback_url=http%3A%2F%2Fevil;end"
         assertEquals("intent", dangerous(raw))
-        assertEquals(raw, decode<ScanPayload.DangerousScheme>(raw).raw)
+        assertEquals(raw, decode<ScanPayload.DangerousScheme>(raw).raw.value)
     }
 
     @Test

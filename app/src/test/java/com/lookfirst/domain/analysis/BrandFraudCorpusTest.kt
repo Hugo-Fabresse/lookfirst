@@ -68,9 +68,14 @@ class BrandFraudCorpusTest {
 
     @Test
     fun typoBudgetIsSizedOnTheKeywordLettersNotOnItsSkeleton() {
-        fun budget(text: String) = typoBudget(BrandKeyword(text, generic = false))
+        fun budget(text: String, sensitiveShort: Boolean = false) =
+            typoBudget(BrandKeyword(text, generic = false, sensitiveShort = sensitiveShort))
         // `m` becomes `rn` in the skeleton: these skeletons are one character longer than the name.
         assertEquals(1, budget("tmobile"))
+        assertEquals(1, budget("microsoft")) // 9 letters: was 2 on the 10-character skeleton
+        assertEquals(1, budget("colissimo"))
+        assertEquals(0, budget("venmo"))
+        assertEquals(1, budget("ameli", sensitiveShort = true)) // always with a hint, see below
         assertEquals(1, budget("telekom"))
         assertEquals(1, budget("comcast"))
         assertEquals(1, budget("cetelem"))
@@ -78,8 +83,33 @@ class BrandFraudCorpusTest {
         assertEquals(1, budget("amendes"))
         assertEquals(0, budget("macif"))
         assertEquals(0, budget("monzo"))
-        assertEquals(0, budget("ameli"))
+        assertEquals(0, budget("ameli")) // plain 5-letter keyword
         assertEquals(2, budget("mediamarkt")) // 10 letters: two edits, same as with the skeleton
+    }
+
+    @Test
+    fun sensitiveFiveLetterBrandsNeedAHintButCatchOneEdit() {
+        for (host in listOf("amelli.xyz", "ameii.xyz", "amel1.xyz", "connexion.amelli.fr", "gmial.xyz")) {
+            assertTrue(host, SignalCode.BRAND_LOOKALIKE in brandCodes(host))
+        }
+    }
+
+    @Test
+    fun droppedOrAddedMKeepsOneEdit() {
+        for (host in listOf("tobile.xyz", "twobile.xyz", "matut.xyz")) {
+            assertTrue(host, SignalCode.BRAND_LOOKALIKE in brandCodes(host))
+        }
+    }
+
+    /**
+     * Residual risk, accepted: a typo of a short name on an ordinary TLD with no lure word is not reported (the
+     * hint rule trades these misses for the false positives of real short names).
+     */
+    @Test
+    fun typoWithoutHintIsNotReported() {
+        for (host in listOf("tmobil.example", "abnamr.example", "cetelm.example", "amelli.fr", "gmial.fr")) {
+            assertTrue(host, SignalCode.BRAND_LOOKALIKE !in brandCodes(host))
+        }
     }
 
     @Test
@@ -135,7 +165,8 @@ class BrandFraudCorpusTest {
         support.wordpress.com developer.wordpress.com www.wordpress.com mobile.free.fr adsl.free.fr assistance.free.fr www.free.fr
         www.slack.com status.slack.com api.slack.com www.ovh.net
         mobile.de mobile.net mobile.fr telecom.com telecom.fr podcast.com broadcast.com comcasts.example
-        monza.it macie.example tmobil.example mediamarkt.example abnamro.example
+        monza.it macie.example
+        mediamarkt.example abnamro.example amelie.fr amelia.com antal.fr amelli.fr gmial.fr
         """.trimIndent().split(Regex("\\s+")).filter {
             it.isNotEmpty()
         }

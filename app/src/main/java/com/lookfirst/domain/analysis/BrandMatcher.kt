@@ -17,6 +17,7 @@ private val LURE_WORDS =
         "verifier", "paiement", "facture", "refund", "remboursement", "reward", "gift", "claim", "access", "portal",
         "espace", "colis", "livraison", "suivi", "tracking", "delivery", "parcel", "gouv", "amende", "amendes",
         "stationnement", "parking", "rdv", "aide", "assure", "mon", "banque", "id", "fr", "app",
+        "vitale",
     )
 
 /** Cheap or abused TLDs: a small typo of a brand next to one of them is a stronger hint. */
@@ -29,9 +30,11 @@ private val RISKY_TLDS =
 /** Lure words too common in ordinary names (`mon-amelie.fr`) to count as a hint for a typo found in a dashed part. */
 private val WEAK_LURES = setOf("mon", "id", "fr", "app")
 
+/** Common words one edit from a brand (`amelie`, `email`, `mobile`): never a typo when found as a dashed part. */
+private val PART_NEAR_MISS_WORDS = setOf("email", "amelie", "amelia", "mobile", "telecom", "tresor", "fortune")
+
 private const val MIN_TYPO_LENGTH = 6
 private const val MIN_PART_LENGTH = 5
-private const val MAX_PARTS = 16
 private const val MIN_TWO_EDITS_LENGTH = 10
 private const val MIN_DISTINCTIVE_LENGTH = 6
 private const val MIN_UNHINTED_TYPO_LENGTH = 8
@@ -140,10 +143,15 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
         if (keyword.generic || budget == 0 || '-' !in label) return false
         val strong = keyword.alwaysTypo || keyword.sensitiveShort || keyword.text.length >= MIN_UNHINTED_TYPO_LENGTH
         if (!(riskyTld || (hasStrongLure && strong))) return false
-        val parts = label.split('-', limit = MAX_PARTS).filter { it.length >= MIN_PART_LENGTH }
-        val skeletonParts = sk.split('-', limit = MAX_PARTS).filter { it.length >= MIN_PART_LENGTH }
-        return parts.any { isNearMiss(it, keyword.text, budget) } ||
-            skeletonParts.any { isNearMiss(it, keyword.skeleton, budget) }
+        val parts = label.split('-')
+        val skeletonParts = sk.split('-')
+        return parts.indices.any { i ->
+            // The skeleton keeps the hyphens, so both lists line up; the common-word list applies to the written part.
+            val skeletonPart = skeletonParts.getOrElse(i) { parts[i] }
+            parts[i].length >= MIN_PART_LENGTH &&
+                parts[i] !in PART_NEAR_MISS_WORDS &&
+                (isNearMiss(parts[i], keyword.text, budget) || isNearMiss(skeletonPart, keyword.skeleton, budget))
+        }
     }
 
     /** Within the budget but not equal: an exact part is the COMBINED rule's business. */

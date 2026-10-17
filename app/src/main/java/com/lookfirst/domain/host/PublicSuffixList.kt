@@ -65,6 +65,12 @@ internal class PublicSuffixList private constructor(
         return if (labels.size <= suffix) null else labels.takeLast(suffix + 1).joinToString(".")
     }
 
+    /** True when [tld] (one ASCII label) is a top-level domain of the ICANN section: the root zone delegates it. */
+    fun isIcannTld(tld: String): Boolean {
+        val key = tld.lowercase(Locale.ROOT)
+        return (key in rules && key !in privateRules) || (key in wildcards && key !in privateWildcards)
+    }
+
     /** True when the suffix of [labels] (its last [suffixCount] labels) is a private-section rule. */
     fun isPrivateSuffix(labels: List<String>, suffixCount: Int): Boolean {
         val suffix = labels.takeLast(suffixCount)

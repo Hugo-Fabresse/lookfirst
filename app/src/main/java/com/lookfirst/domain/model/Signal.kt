@@ -18,6 +18,13 @@ enum class SignalCode(val severity: Severity) {
     HIDDEN_CHARS(Severity.SUSPICIOUS),
     PAYMENT_MISMATCH(Severity.SUSPICIOUS),
     OTPAUTH_ENROL(Severity.SUSPICIOUS),
+
+    /**
+     * New (LF-34). Single-label host, `localhost`, a reserved name (RFC 6761, 6762, 8375), a private-use suffix
+     * (`.internal`, `.lan`, `.box`...) or a TLD the ICANN root zone does not know: the link aims at a device of the
+     * user's own network or at a name that does not exist on the Internet. Numeric hosts keep IP_HOST.
+     */
+    LOCAL_HOST(Severity.SUSPICIOUS),
     SHORTENER(Severity.CAUTION),
     PLAIN_HTTP(Severity.CAUTION),
     LONG_URL(Severity.CAUTION),

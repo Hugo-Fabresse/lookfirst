@@ -47,6 +47,8 @@
     <string name="reason_mail_prefilled">L\'e-mail contient un texte tout prêt ou un destinataire caché (cci). Lisez-le avant de l\'envoyer : LookFirst n\'envoie rien.</string>
     <string name="reason_non_ascii_digits_short">Chiffres inhabituels</string>
     <string name="reason_non_ascii_digits">Le numéro utilise des chiffres d\'un autre système d\'écriture, ce qui peut cacher le vrai numéro.</string>
+    <string name="reason_local_host_short">Adresse locale ou réservée</string>
+    <string name="reason_local_host">Adresse locale ou réservée : ce lien vise un appareil de votre réseau (box, routeur) ou un nom qui n\'existe pas sur Internet.</string>
     <string name="reason_shortener_short">Lien raccourci</string>
     <string name="reason_shortener">Ce lien raccourci cache sa vraie destination.</string>
     <string name="reason_plain_http_short">Connexion non chiffrée</string>

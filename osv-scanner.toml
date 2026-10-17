@@ -1,0 +1,11 @@
+# osv-scanner configuration (job `osv` of .github/workflows/security.yml).
+# The scanner reads app/gradle.lockfile = the libraries shipped in the APK (releaseRuntimeClasspath).
+#
+# To ignore a finding (false positive or accepted risk), add an entry below. Always give a reason
+# and an expiry date so the ignore comes back for review. A PR touching this file is flagged in the
+# PR summary.
+#
+# [[IgnoredVulns]]
+# id = "GHSA-xxxx-xxxx-xxxx"        # OSV id or CVE, as shown in the issue title
+# ignoreUntil = 2027-01-31          # review date (TOML date)
+# reason = "Why it does not apply / what is planned"

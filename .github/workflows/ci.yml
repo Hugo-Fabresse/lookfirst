@@ -1,0 +1,134 @@
+name: CI
+
+# ONE job `build` (one queue slot, one checkout, one setup), on GitHub-hosted runners (D4).
+# A PR runs the FAST gate: commit format + ktlintCheck detekt cpdCheck testDebugUnitTest assembleDebug
+# + the lockfile check. The FULL gate (+ lintDebug lintRelease assembleRelease and the R8 proof that no
+# android.util.Log call survives in the app code) runs by hand (workflow_dispatch): on main when no PR
+# is waiting, before every install on the phone, at the end of each milestone.
+# No secret is used here; no pull_request_target.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+# A newer push on the same PR cancels the run in flight. A manual full gate is never cancelled.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || format('{0}-{1}', github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # ubuntu-latest has 2 cores / 7 GB on a private repository: stay inside it.
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g -Dorg.gradle.workers.max=2 -Dkotlin.daemon.jvm.options=-Xmx1g"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 30 }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Commit subjects (non-merge) and PR title must be `type(LF-n): summary` (CLAUDE.md, "Commits and
+      # PRs"). The title goes through env (untrusted), never inlined in the script. A Renovate PR is
+      # exempt (decided on the PR author login by the script).
+      - name: Self-test of the commit-format checker
+        run: |
+          scripts/check-commit-format.sh --self-test
+          scripts/ci/check-r8-log-removal.sh --self-test
+      - name: Check commit subjects and PR title
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          git rev-parse --verify --quiet "origin/$BASE_REF" >/dev/null || { echo "origin/$BASE_REF missing: cannot check commits"; exit 1; }
+          git rev-parse --verify --quiet "$HEAD_SHA" >/dev/null || { echo "$HEAD_SHA missing: cannot check commits"; exit 1; }
+          scripts/check-commit-format.sh --range "origin/$BASE_REF" "$HEAD_SHA" --title "$PR_TITLE" --pr-author "$PR_AUTHOR"
+
+      - uses: ./.github/actions/setup-build
+
+      # Gate de PR. `:app:dependencies --configuration releaseRuntimeClasspath` resolves the locked
+      # configuration WITHOUT --write-locks: it fails when app/gradle.lockfile is stale (osv-scanner reads
+      # that file). --continue reports every failure at once. The full gate adds lint and the release build.
+      - name: Gradle
+        env:
+          FULL_GATE: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          tasks=(ktlintCheck detekt cpdCheck testDebugUnitTest assembleDebug)
+          [ "$FULL_GATE" = true ] && tasks+=(lintDebug lintRelease assembleRelease)
+          tasks+=(:app:dependencies --configuration releaseRuntimeClasspath)
+          echo "gradle tasks: ${tasks[*]}"
+          ./gradlew --continue --max-workers=2 "${tasks[@]}"
+
+      # Full gate only: proof by the shipped bytecode (method in the script).
+      - name: R8 removed android.util.Log calls from the app code
+        if: github.event_name == 'workflow_dispatch'
+        run: scripts/ci/check-r8-log-removal.sh
+
+      # CPD is blocking (`cpd` block in build.gradle.kts); this step only summarises the report.
+      - name: Duplicate code summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET, os
+          p = 'build/reports/cpd/cpdCheck.xml'
+          if not os.path.exists(p):
+              print('### Duplicate code (CPD)\n\nno report'); raise SystemExit
+          n = len([e for e in ET.parse(p).getroot() if e.tag.endswith('duplication')])
+          print(f'### Duplicate code (CPD, >= 100 tokens): {n} duplicate(s)')
+          PY
+
+      - name: Stop Gradle daemons
+        if: always()
+        run: ./gradlew --stop || true
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: reports-build
+          path: |
+            build/reports/**
+            app/build/reports/**
+            app/build/test-results/**
+            app/build/outputs/mapping/release/usage.txt
+            app/build/outputs/mapping/release/configuration.txt
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # Only a FAILED run alerts: a cancelled run never does. A red manual full gate opens ONE `ci-failure`
+  # issue for Hugo (a later red run comments on it instead of opening another). Not for PRs.
+  notify-failure:
+    needs: [build]
+    if: ${{ always() && github.event_name != 'pull_request' && needs.build.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update the ci-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          gh label create ci-failure --color B60205 --description "Gate complet rouge" 2>/dev/null || true
+          body="Gate complet rouge ($EVENT, $REF, $SHA): $RUN_URL"
+          n=$(gh issue list --label ci-failure --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --body "$body"
+          else
+            gh issue create --label ci-failure --assignee Hugo-Fabresse \
+              --title "CI rouge (gate complet)" --body "$body"
+          fi

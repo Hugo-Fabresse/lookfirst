@@ -14,3 +14,10 @@
     public static int e(...);
     public static int wtf(...);
 }
+
+# Same for stack traces printed to stderr/logcat: WorkManager's WorkTypeConverters.byteArrayToSetOfTriggers
+# calls Throwable.printStackTrace(), and R8 merges that library method into an app class (LF-29).
+# A stack trace can carry scanned content in an exception message, so no such call may survive.
+-assumenosideeffects class java.lang.Throwable {
+    public void printStackTrace();
+}

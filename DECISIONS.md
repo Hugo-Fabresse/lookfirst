@@ -46,3 +46,6 @@ DECISION [analyse] : USSD cherché (`*`, `#`) sur le numéro complet décodé av
 DECISION [analyse] : hôte HostKind.UNRESOLVED (non ASCII ou `%`) = ANALYSIS_INCOMPLETE (CAUTION) en attendant le normaliseur de LF-16, qui le retirera ou le raffinera
 DECISION [analyse] : USERINFO_AT = DANGEROUS si le userinfo contient un « . » ou un nom numérique, sinon SUSPICIOUS ; mailto avec bcc ou corps prérempli = MAIL_PREFILLED (CAUTION) ; Wi-Fi de type inconnu = WIFI_UNKNOWN_SECURITY (CAUTION)
 DECISION [analyse] : détails de signal typés (PaymentProblem, OtpParam) — Untrusted reste réservé au texte scanné
+DECISION [scan] : permission HIDE_OVERLAY_WINDOWS (normale, sans invite) ajoutée — setHideOverlayWindows(true) n'a d'effet qu'avec elle (T-UI-3)
+DECISION [scan] : tout refus de CAMERA mène à l'écran « refusée » (réglages Android) — pas de seconde invite, ni culpabilisation (ux 5.3)
+DECISION [scan] : après lecture le ViewModel ne garde que la longueur du contenu — la chaîne brute sera conservée par LF-11 avec l'écran résultat

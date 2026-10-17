@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">LookFirst</string>
-    <string name="home_tagline">Scannez des QR codes sans rien ouvrir automatiquement.</string>
+    <string name="scan_hint">Pointez un QR code. Rien ne s\'ouvrira sans votre accord.</string>
+    <string name="pick_image">Choisir une image</string>
+    <string name="camera_rationale">LookFirst a besoin de la caméra pour lire les QR codes. Les images ne sont ni enregistrées ni envoyées.</string>
+    <string name="camera_denied">La caméra est désactivée. Vous pouvez autoriser l\'accès dans les réglages Android, ou scanner une image à la place.</string>
+    <string name="allow_camera">Autoriser la caméra</string>
+    <string name="open_android_settings">Ouvrir les réglages Android</string>
+    <string name="action_cancel">Annuler</string>
+    <string name="scan_result_title">Résultat du scan</string>
+    <string name="a11y_camera_preview">Aperçu de la caméra. Pointez un QR code.</string>
+    <string name="a11y_settings">Réglages</string>
+    <string name="a11y_torch">Lampe torche</string>
+    <plurals name="scan_result_length">
+        <item quantity="one">Code lu : %1$d caractère</item>
+        <item quantity="other">Code lu : %1$d caractères</item>
+    </plurals>
 </resources>

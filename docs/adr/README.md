@@ -9,3 +9,4 @@ Le *pourquoi* des choix structurants. Un fichier par décision : `NNNN-titre-cou
 | 0003 | Explicit user action |
 | 0004 | Optional network actions (redirections et RDAP) |
 | 0005 | Initial signed bundle embedded in the APK |
+| 0006 | Embedded UTS #46 host normalization (no ICU) |

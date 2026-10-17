@@ -134,7 +134,7 @@ While a verdict is displayed, scanning is paused. A second QR in front of the ca
 
 ## IDN handling
 
-`java.net.IDN` implements IDNA2003 and `android.icu.text.IDNA` needs API 24+ (minSdk is 23). The app embeds a UTS #46 implementation (ICU4J or equivalent; choice confirmed in LF-3). The browser always receives the canonical form.
+`java.net.IDN` implements IDNA2003 and `android.icu.text.IDNA` needs API 24+ (minSdk is 23). The app embeds a UTS #46 implementation generated from the official Unicode tables (`domain.host`, ADR-0006; no ICU4J, too heavy). The analysed and displayed host is the normalized one; the browser always receives the canonical form. Showing that form (Unicode and punycode) is the job of the verdict screen (LF-18), not yet of the Result screen.
 
 ## Open points
 

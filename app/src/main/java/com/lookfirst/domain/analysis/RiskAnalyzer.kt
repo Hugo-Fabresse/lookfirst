@@ -6,7 +6,7 @@ import com.lookfirst.domain.model.SignalCode
 
 /**
  * Runs every rule set in a fixed order and concatenates the signals. No level here (LF-17), no reputation
- * or IDN / look-alike checks (LF-16). Same input, same list.
+ * lookup. Same input, same list.
  */
 object RiskAnalyzer {
     private val ANALYZERS: List<SignalAnalyzer> =
@@ -14,6 +14,7 @@ object RiskAnalyzer {
             SchemeAnalyzer,
             HiddenCharAnalyzer,
             UrlStructureAnalyzer,
+            LookalikeAnalyzer,
             WifiAnalyzer,
             OtpauthAnalyzer,
             PaymentAnalyzer,

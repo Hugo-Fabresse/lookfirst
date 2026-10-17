@@ -109,6 +109,8 @@ class LookFirstNavHostTest {
         imageReader = Image("https://example.com/path"),
     )
 
+    private val settingsViewModel = SettingsViewModel(NoControl())
+
     private val resultViewModel = ResultViewModel(
         clipboard = clipboard,
         actions = actions,
@@ -132,7 +134,7 @@ class LookFirstNavHostTest {
                 LookFirstNavHost(
                     scanViewModel = scanViewModel,
                     resultViewModel = resultViewModel,
-                    settingsViewModel = SettingsViewModel(NoControl()),
+                    settingsViewModel = settingsViewModel,
                     analyzerFactory = QrAnalyzerFactory { error("no camera in this test") },
                     showFirstLaunch = false,
                     onFirstLaunchDone = {},

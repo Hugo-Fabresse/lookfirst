@@ -53,6 +53,7 @@
   "packageRules": [
     {
       "description": "Robolectric bump: android-all must follow",
+      "minimumReleaseAge": "7 days",
       "matchPackageNames": [
         "org.robolectric:robolectric"
       ],
@@ -62,6 +63,7 @@
     },
     {
       "description": "android-all-instrumented is the jar Robolectric itself picks for its sdk: bumped by hand with robolectric (see libs.versions.toml), never alone",
+      "minimumReleaseAge": "7 days",
       "matchPackageNames": [
         "org.robolectric:android-all-instrumented"
       ],
@@ -69,12 +71,14 @@
     },
     {
       "description": "GitHub Actions: one PR per action, never grouped with libraries (each pin is reviewed on its own)",
+      "minimumReleaseAge": "7 days",
       "matchManagers": [
         "github-actions"
       ]
     },
     {
       "description": "Batch non-major library updates into one PR to keep the noise down (scanner versions excluded: their sha256 is bumped by hand)",
+      "minimumReleaseAge": "7 days",
       "matchManagers": [
         "!github-actions",
         "!custom.regex"
@@ -88,6 +92,7 @@
     },
     {
       "description": "AGP / Kotlin / KSP move together and need care — keep them separate",
+      "minimumReleaseAge": "7 days",
       "matchPackageNames": [
         "com.android.tools.build:gradle",
         "org.jetbrains.kotlin:**",

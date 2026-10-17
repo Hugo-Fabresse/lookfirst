@@ -1,7 +1,5 @@
 package com.lookfirst.domain.open
 
-import com.lookfirst.domain.host.HostResult
-import com.lookfirst.domain.host.Ipv4Check
 import com.lookfirst.domain.model.HostKind
 import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.UrlIssue
@@ -52,11 +50,7 @@ data class CanonicalUrl(val value: String, val scheme: String, val host: String,
         /** IPv6 in brackets, IPv4 (even written `0x7f.1`) as dotted decimal, a name as punycode. */
         private fun asciiHost(url: ScanPayload.Url): String? {
             if (url.hostKind == HostKind.IPV6) return "[${url.rawHost.value.lowercase()}]"
-            val host = (url.normalizedHostResult as? HostResult.Normalized)?.host ?: return null
-            return when (host.kind) {
-                HostKind.IPV4, HostKind.IPV4_OBFUSCATED -> Ipv4Check.toDotted(host.ascii)
-                else -> host.ascii
-            }
+            return url.openedHost()?.ascii
         }
 
         /** A browser reads `\` as `/` in a web path: say it once, in the canonical form. */

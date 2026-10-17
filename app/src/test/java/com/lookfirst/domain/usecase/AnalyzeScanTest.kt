@@ -8,9 +8,14 @@ import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.Severity
 import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.open.CanonicalUrl
+import com.lookfirst.domain.open.effectiveWebScheme
 import com.lookfirst.domain.verdict.VerdictLevel
+import com.lookfirst.ui.screens.result.OpenKind
+import com.lookfirst.ui.screens.result.openKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class AnalyzeScanTest {
@@ -141,10 +146,66 @@ class AnalyzeScanTest {
     }
 
     @Test
-    fun `scheme less host without port that is accepted as a url is checked too`() {
-        val verdict = listsWithListedHost()("$listedHost/x", "id")
-        val isUrl = PayloadParser.parse("$listedHost/x").let { it is ParseResult.Ok && it.payload is ScanPayload.Url }
-        if (isUrl) assertEquals(VerdictLevel.DANGEROUS, verdict.level)
+    fun `host without scheme and port is text today, and would be checked if the decoder made it a url`() {
+        val raw = "$listedHost/x"
+        val payload = (PayloadParser.parse(raw) as ParseResult.Ok).payload
+        val verdict = listsWithListedHost()(raw, "id")
+        when (payload) {
+            is ScanPayload.Text -> {
+                assertNull(payload.openKind())
+                assertEquals(VerdictLevel.CAUTION, verdict.level)
+            }
+            is ScanPayload.Url -> assertEquals(VerdictLevel.DANGEROUS, verdict.level)
+            else -> fail("unexpected payload")
+        }
+    }
+
+    @Test
+    fun `upper case scheme, missing slashes and invisible lead are judged on what is opened`() {
+        val withLists = listsWithListedHost()
+        listOf("HTTPS://$listedHost/x", "http:$listedHost/x", "https:/$listedHost/x").forEach {
+            assertEquals(it, VerdictLevel.DANGEROUS, withLists.level(it))
+        }
+        // A no-break space or an invisible character in front: whatever the decoder makes of it, if the Open action
+        // leads to a browser the host was looked up, and if it does not nothing is opened.
+        listOf("\u00a0$listedHost:443/x", "\u200b$listedHost:443/x", "\u200bhttps://$listedHost/x").forEach { raw ->
+            val payload = (PayloadParser.parse(raw) as ParseResult.Ok).payload
+            val level = withLists.level(raw)
+            if (payload is ScanPayload.Url && CanonicalUrl.of(payload) != null) {
+                assertEquals(raw, VerdictLevel.DANGEROUS, level)
+            } else {
+                assertNull(raw, payload.openKind())
+            }
+        }
+    }
+
+    @Test
+    fun `obfuscated ipv4 is looked up in dotted form, like the address that is opened`() {
+        val listed = AnalyzeScan(
+            ReputationLookup {
+                if (it.ascii ==
+                    "127.0.0.1"
+                ) {
+                    ReputationResult.Listed("list")
+                } else {
+                    ReputationResult.NotListed
+                }
+            },
+        )
+        listOf("http://0x7f.1/x", "http://2130706433/x", "http://127.0.0.1/x").forEach {
+            assertEquals(it, VerdictLevel.DANGEROUS, listed.level(it))
+        }
+    }
+
+    @Test
+    fun `effective scheme and open kind come from the canonical url`() {
+        fun url(raw: String) = (PayloadParser.parse(raw) as ParseResult.Ok).payload as ScanPayload.Url
+        assertEquals("https", url("$listedHost:443/x").effectiveWebScheme())
+        assertEquals("http", url("http://$listedHost/x").effectiveWebScheme())
+        assertEquals(OpenKind.BROWSER, url("$listedHost:443/x").openKind())
+        val broken = url("https://:443/x")
+        assertNull(CanonicalUrl.of(broken))
+        assertNull(broken.openKind())
     }
 
     @Test
@@ -177,6 +238,8 @@ class AnalyzeScanTest {
             "https://user@host.example/x",
             "http://host.example:8080/x",
             "https://\uff48ost.example/x",
+            "http://0x7f.1/x",
+            "http://2130706433/x",
         ).forEach { raw ->
             val seen = mutableListOf<String>()
             AnalyzeScan(

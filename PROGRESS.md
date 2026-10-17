@@ -9,3 +9,4 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-12 — chaîne d'approvisionnement de la CI durcie (Renovate scanners, SHA d'actions vérifiés, vérification des dépendances Gradle)
 - [✅ DONE] LF-13 — Robolectric android-all résolu et vérifié par Gradle (tests hors ligne)
 - [✅ DONE] LF-7 — parcours et écrans (docs/design/ux.md)
+- [🔄 WIP] LF-8 — décodage sûr de tous les types de contenu QR (PR ouverte, CI à confirmer) — tests: 98 passed

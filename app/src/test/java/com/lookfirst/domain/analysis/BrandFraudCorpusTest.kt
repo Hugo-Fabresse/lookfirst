@@ -67,6 +67,31 @@ class BrandFraudCorpusTest {
     }
 
     @Test
+    fun typoBudgetIsSizedOnTheKeywordLettersNotOnItsSkeleton() {
+        fun budget(text: String) = typoBudget(BrandKeyword(text, generic = false))
+        // `m` becomes `rn` in the skeleton: these skeletons are one character longer than the name.
+        assertEquals(1, budget("tmobile"))
+        assertEquals(1, budget("telekom"))
+        assertEquals(1, budget("comcast"))
+        assertEquals(1, budget("cetelem"))
+        assertEquals(1, budget("abnamro"))
+        assertEquals(1, budget("amendes"))
+        assertEquals(0, budget("macif"))
+        assertEquals(0, budget("monzo"))
+        assertEquals(0, budget("ameli"))
+        assertEquals(2, budget("mediamarkt")) // 10 letters: two edits, same as with the skeleton
+    }
+
+    @Test
+    fun skeletonLongerThanTheNameDoesNotDropTheHintRule() {
+        assertTrue(SignalCode.BRAND_LOOKALIKE !in brandCodes("mobile.de"))
+        assertTrue(SignalCode.BRAND_LOOKALIKE !in brandCodes("rnobile.example"))
+        assertTrue(SignalCode.BRAND_LOOKALIKE !in brandCodes("telecom.com"))
+        assertTrue(SignalCode.BRAND_LOOKALIKE in brandCodes("rnobile.xyz")) // hint: risky TLD
+        assertTrue(SignalCode.BRAND_LOOKALIKE in brandCodes("tmobile-login.com")) // lure word
+    }
+
+    @Test
     fun cyrillicLookalikesOfLatinWordsAreCaughtOnWholeScript() {
         for (label in listOf("сосо", "ехро", "ѕсоре")) {
             val signals = LookalikeAnalyzer.on("https://$label.com/")
@@ -109,13 +134,15 @@ class BrandFraudCorpusTest {
         ameli-sante.example.org cafe-de-paris.fr applepie.example pommes-apple.example orangerie.fr
         support.wordpress.com developer.wordpress.com www.wordpress.com mobile.free.fr adsl.free.fr assistance.free.fr www.free.fr
         www.slack.com status.slack.com api.slack.com www.ovh.net
+        mobile.de mobile.net mobile.fr telecom.com telecom.fr podcast.com broadcast.com comcasts.example
+        monza.it macie.example tmobil.example mediamarkt.example abnamro.example
         """.trimIndent().split(Regex("\\s+")).filter {
             it.isNotEmpty()
         }
 
     @Test
     fun legitimateCorpusHasNoBrandSignal() {
-        assertTrue("corpus too small: ${legitimate.size}", legitimate.size >= 208)
+        assertTrue("corpus too small: ${legitimate.size}", legitimate.size >= 220)
         val flagged = legitimate.filter { brandCodes(it).isNotEmpty() }
         assertTrue("false positives ${flagged.size}/${legitimate.size}: $flagged", flagged.isEmpty())
     }

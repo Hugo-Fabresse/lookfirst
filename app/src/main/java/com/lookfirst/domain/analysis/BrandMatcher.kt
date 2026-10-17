@@ -114,13 +114,8 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
         val keywordSk = keyword.skeleton
         if (keyword.generic) return false
         if (sk.replace("-", "") == keywordSk.replace("-", "")) return true
-        val budget = when {
-            keyword.noTypo -> 0
-            keywordSk.length >= MIN_TWO_EDITS_LENGTH -> MAX_TWO_EDITS
-            keywordSk.length >= MIN_TYPO_LENGTH -> 1
-            else -> 0
-        }
-        val needsHint = keywordSk.length < MIN_UNHINTED_TYPO_LENGTH && !keyword.alwaysTypo
+        val budget = typoBudget(keyword)
+        val needsHint = keyword.text.length < MIN_UNHINTED_TYPO_LENGTH && !keyword.alwaysTypo
         return budget > 0 && (hint || !needsHint) && editDistance(sk, keywordSk, budget) <= budget
     }
 
@@ -137,6 +132,17 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
             containsPart(ascii[it], keyword.text) || containsPart(skeletons[it], keyword.skeleton)
         }
     }
+}
+
+/**
+ * Edit budget of the typo rule, sized on the letters the brand is written with ([BrandKeyword.text]); the skeleton
+ * is only used to measure the distance (`m` becomes `rn`, so `tmobile` has an 8-character skeleton).
+ */
+internal fun typoBudget(keyword: BrandKeyword): Int = when {
+    keyword.noTypo -> 0
+    keyword.text.length >= MIN_TWO_EDITS_LENGTH -> MAX_TWO_EDITS
+    keyword.text.length >= MIN_TYPO_LENGTH -> 1
+    else -> 0
 }
 
 /** True when [part] is [label] or a hyphen-delimited piece of it (`login-paypal-fr` contains `paypal`). */

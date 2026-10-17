@@ -1,0 +1,29 @@
+name: tmp-verification
+on:
+  push:
+    branches: [ci/LF-13-robolectric-offline]
+    paths: [.github/workflows/tmp-verification.yml]
+permissions:
+  contents: read
+jobs:
+  gen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      - name: Regenerate metadata with an empty Gradle cache (existing file kept as base)
+        run: |
+          ./gradlew --write-verification-metadata sha256 --refresh-dependencies --no-build-cache --max-workers=2 \
+            help assembleDebug assembleRelease testDebugUnitTest ktlintCheck detekt cpdCheck lintDebug lintRelease \
+            :app:dependencies --configuration releaseRuntimeClasspath
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: verification-metadata
+          path: gradle/verification-metadata.xml

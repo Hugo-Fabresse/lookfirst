@@ -14,6 +14,7 @@ import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
 
 private const val ASCII_LIMIT = 0x80
+private const val PLAIN_LATIN = "abcdefghijklmnopqrstuvwxyz0123456789-"
 
 /** Unicode scripts a single label may combine without being reported (UTS #39 "highly restrictive", CJK part). */
 private val ALLOWED_SCRIPT_SETS: List<Set<String>> =
@@ -37,7 +38,11 @@ object LookalikeAnalyzer : SignalAnalyzer {
         if (suffixes == null || !Confusables.isAvailable || !ScriptData.isAvailable) {
             return listOf(Signal(SignalCode.ANALYSIS_INCOMPLETE, evidence = url.rawHost))
         }
-        return listOfNotNull(mixedScriptSignal(host), BrandMatcher(host, suffixes).signal())
+        return listOfNotNull(
+            mixedScriptSignal(host),
+            wholeScriptSignal(host, suffixes),
+            BrandMatcher(host, suffixes).signal(),
+        )
     }
 
     private fun mixedScriptSignal(host: NormalizedHost): Signal? = host.unicodeLabels.firstNotNullOfOrNull { label ->
@@ -51,6 +56,28 @@ object LookalikeAnalyzer : SignalAnalyzer {
             )
         } else {
             null
+        }
+    }
+
+    /**
+     * Chrome's spoof-checker rule: a label in a single non-Latin script whose skeleton is plain `[a-z0-9-]` is a
+     * Latin look-alike, unless the TLD is written in that script (`пример.рф`).
+     */
+    private fun wholeScriptSignal(host: NormalizedHost, suffixes: PublicSuffixList): Signal? {
+        val labels = host.unicodeLabels
+        val nameCount = maxOf(labels.size - suffixes.suffixLabelCount(host.asciiLabels), 0)
+        val tldScripts = ScriptData.scriptsOf(labels.last()).orEmpty()
+        return labels.take(nameCount).firstNotNullOfOrNull { label ->
+            val script = if (label.all { it.code < ASCII_LIMIT }) null else ScriptData.scriptsOf(label)?.singleOrNull()
+            val skeleton = Confusables.skeleton(label)
+            val plainLatin = skeleton != null && skeleton != label && skeleton.all { it in PLAIN_LATIN }
+            script?.takeIf { it != "Latin" && it !in tldScripts && plainLatin }?.let {
+                Signal(
+                    SignalCode.WHOLE_SCRIPT_CONFUSABLE,
+                    evidence = Untrusted(label),
+                    details = listOf(MixedScripts(listOf(it))),
+                )
+            }
         }
     }
 }

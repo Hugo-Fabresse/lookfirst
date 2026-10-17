@@ -68,6 +68,9 @@ enum class SignalCode(val severity: Severity) {
     /** New. Crypto address whose Base58Check, Bech32(m) or EIP-55 checksum is wrong. */
     CRYPTO_BAD_CHECKSUM(Severity.SUSPICIOUS),
 
+    /** New. A label in one non-Latin script that reads as plain Latin letters (Cyrillic `сосо`), on a TLD of another script. */
+    WHOLE_SCRIPT_CONFUSABLE(Severity.SUSPICIOUS),
+
     /** New. `tel:` to a 3 to 6 digit number that is not an emergency number. */
     SHORT_NUMBER(Severity.CAUTION),
 

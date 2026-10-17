@@ -8,18 +8,28 @@ import com.lookfirst.domain.model.Signal
 import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
 
-/** Words that dress a fake address up as a service page ("paypal-login", "secure-impots"), English and French. */
+/** Words that dress a fake address up as a service page ("paypal-login", "colis-laposte"), English and French. */
 private val LURE_WORDS =
     setOf(
         "login", "signin", "secure", "security", "verify", "verification", "account", "update", "support", "help",
         "service", "billing", "payment", "pay", "wallet", "auth", "confirm", "confirmation", "recovery", "unlock",
-        "suspended", "alert", "official", "customer", "connect", "connexion", "compte", "securite", "verifier",
-        "paiement", "facture", "refund", "remboursement", "reward", "gift", "claim", "access", "portal", "espace",
+        "suspended", "alert", "alerte", "official", "customer", "client", "connect", "connexion", "compte", "securite",
+        "verifier", "paiement", "facture", "refund", "remboursement", "reward", "gift", "claim", "access", "portal",
+        "espace", "colis", "livraison", "suivi", "tracking", "delivery", "parcel", "gouv", "amende", "amendes",
+        "stationnement", "parking", "rdv", "aide", "assure", "mon", "banque", "id", "fr", "app",
+    )
+
+/** Cheap or abused TLDs: a small typo of a brand next to one of them is a stronger hint. */
+private val RISKY_TLDS =
+    setOf(
+        "xyz", "top", "info", "click", "link", "icu", "cyou", "buzz", "online", "site", "shop", "vip", "cc", "tk",
+        "ml", "ga", "cf", "gq", "work", "live", "rest", "support", "bond", "sbs", "cfd", "lat", "club", "store",
     )
 
 private const val MIN_TYPO_LENGTH = 6
 private const val MIN_TWO_EDITS_LENGTH = 10
 private const val MIN_DISTINCTIVE_LENGTH = 6
+private const val MIN_UNHINTED_TYPO_LENGTH = 8
 private const val MAX_TWO_EDITS = 2
 
 private const val RANK_HOMOGLYPH = 0
@@ -28,8 +38,10 @@ private const val RANK_TYPO = 2
 private const val RANK_COMBINED = 3
 
 /**
- * Compares the registrable name of one host with [BrandList]. An exact name on another TLD (google.de) is not
- * reported, but the same name on a platform anyone can use (blogspot.com, github.io) is. Official domains never are.
+ * Compares the registrable name of one host with [BrandList]. Official domains are never reported. An exact name on
+ * another TLD (google.de) is not reported for an ordinary brand, but it is for a strict one (ameli.info), on a
+ * platform anyone can use (paypal.blogspot.com), and when the official domain is followed by more labels
+ * (paypal.com.cn, impots.gouv.fr.ma).
  */
 internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
     private val ascii = host.asciiLabels
@@ -41,7 +53,8 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
     private val onPlatform = suffixes.isPrivateSuffix(ascii, suffixCount)
     private val skeletons: List<String> =
         if (nameIndex < 0) emptyList() else unicode.take(nameIndex + 1).map { Confusables.skeleton(it) ?: it }
-    private val hasLure = ascii.take(nameIndex + 1).any { label -> label.split('-').any { it in LURE_WORDS } }
+    private val hasLure = (0..nameIndex).any { isLure(ascii[it]) || isLure(skeletons[it]) }
+    private val hint = hasLure || ascii.last() in RISKY_TLDS
 
     private class Match(val brand: Brand, val rank: Int, val kind: LookalikeKind)
 
@@ -56,27 +69,29 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
         )
     }
 
+    private fun isLure(label: String) = label.split('-').any { it in LURE_WORDS }
+
     private fun matchBrand(brand: Brand): Match? {
         if (brand.domains.any { isEmbedded(it) }) return Match(brand, RANK_EMBEDDED, LookalikeKind.COMBINED)
+        if (unicode[nameIndex] in brand.ownNames) {
+            // The brand's own name on an unlisted TLD: fine, unless the brand is strict or the TLD is open to all.
+            return if (onPlatform || brand.strict) Match(brand, RANK_COMBINED, LookalikeKind.COMBINED) else null
+        }
         return brand.keywords.mapNotNull { matchKeyword(brand, it) }.minByOrNull { it.rank }
     }
 
-    /** The official domain written out inside sub-domain labels: `paypal.com.secure-login.example`. */
+    /** The official domain written out before more labels: `paypal.com.secure-login.example`, `ameli.fr.ru`. */
     private fun isEmbedded(domain: String): Boolean {
         val parts = domain.split('.')
-        return (0..nameIndex - parts.size).any { start -> parts.indices.all { ascii[start + it] == parts[it] } }
+        return (0..ascii.size - parts.size - 1).any { start -> parts.indices.all { ascii[start + it] == parts[it] } }
     }
 
     private fun matchKeyword(brand: Brand, keyword: BrandKeyword): Match? {
         val name = unicode[nameIndex]
         val sk = skeletons[nameIndex]
-        val keywordSk = keyword.skeleton
-        val exact = name == keyword.text
         val rank = when {
-            exact && brand.usesName(name) -> if (onPlatform) RANK_COMBINED else null
-            exact -> RANK_TYPO
-            sk == keywordSk -> RANK_HOMOGLYPH
-            isTypo(sk, keywordSk, keyword) -> RANK_TYPO
+            sk == keyword.skeleton -> RANK_HOMOGLYPH
+            isTypo(sk, keyword) -> RANK_TYPO
             isCombinedInName(name, sk, keyword) || isInSubdomain(keyword) -> RANK_COMBINED
             else -> null
         }
@@ -88,25 +103,30 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
         return rank?.let { Match(brand, it, kind) }
     }
 
-    private fun isTypo(sk: String, keywordSk: String, keyword: BrandKeyword): Boolean {
+    /** Separator removed (`la-poste`), or a small edit: needs a hint for short names (DECISIONS: TYPO). */
+    private fun isTypo(sk: String, keyword: BrandKeyword): Boolean {
+        val keywordSk = keyword.skeleton
         if (keyword.generic) return false
         if (sk.replace("-", "") == keywordSk.replace("-", "")) return true
         val budget = when {
+            keyword.noTypo -> 0
             keywordSk.length >= MIN_TWO_EDITS_LENGTH -> MAX_TWO_EDITS
             keywordSk.length >= MIN_TYPO_LENGTH -> 1
             else -> 0
         }
-        return budget > 0 && editDistance(sk, keywordSk, budget) <= budget
+        val needsHint = keywordSk.length < MIN_UNHINTED_TYPO_LENGTH && !keyword.alwaysTypo
+        return budget > 0 && (hint || !needsHint) && editDistance(sk, keywordSk, budget) <= budget
     }
 
-    /** `paypal-login.com`, `secure-paypal.com`: the brand as a whole hyphen-separated part, with a lure word. */
+    private fun isDistinctive(keyword: BrandKeyword) = !keyword.generic && keyword.text.length >= MIN_DISTINCTIVE_LENGTH
+
+    /** `paypal-login.com`, `secure-paypal.com`: the brand as a whole hyphen-separated part, alone if distinctive. */
     private fun isCombinedInName(name: String, sk: String, keyword: BrandKeyword): Boolean =
-        hasLure && (containsPart(name, keyword.text) || containsPart(sk, keyword.skeleton))
+        (hasLure || isDistinctive(keyword)) && (containsPart(name, keyword.text) || containsPart(sk, keyword.skeleton))
 
     /** `paypal.example.com`: a distinctive brand as a whole sub-domain label, or any brand with a lure word. */
     private fun isInSubdomain(keyword: BrandKeyword): Boolean {
-        val distinctive = !keyword.generic && keyword.text.length >= MIN_DISTINCTIVE_LENGTH
-        if (!distinctive && !hasLure) return false
+        if (!isDistinctive(keyword) && !hasLure) return false
         return (0 until nameIndex).any {
             containsPart(ascii[it], keyword.text) || containsPart(skeletons[it], keyword.skeleton)
         }

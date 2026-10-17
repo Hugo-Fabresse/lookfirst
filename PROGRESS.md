@@ -21,4 +21,4 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-17 — moteur de verdict (niveau + raisons ordonnées), port de réputation, AnalyzeScan — PR #22
 - [✅ DONE] LF-18 — écran de verdict : bannière par niveau, raisons expliquées, hôte Unicode + forme technique, textes FR/EN de tous les codes — PR #24
 - [✅ DONE] LF-22 — format du bundle de listes conçu (manifeste signé ECDSA P-256, index de hachages triés) — PR #26, docs/design/reputation-bundle.md, ADR-0007
-- [🔄 WIP] LF-19 — ouvrir en sûreté : ActionExecutor (navigateur par défaut, composeur, SMS, e-mail, cartes, Wi-Fi), confirmation Suspect/Danger, test d'architecture
+- [✅ DONE] LF-19 — ouvrir en sûreté : ActionExecutor (navigateur par défaut, composeur, SMS, e-mail, cartes, Wi-Fi), confirmation Suspect/Danger, test d'architecture

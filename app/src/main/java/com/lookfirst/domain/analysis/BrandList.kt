@@ -7,12 +7,14 @@ import com.lookfirst.domain.host.Confusables
  * matches alone as a sub-domain or in a name without a lure word. [noTypo]: one edit away from a common word
  * (twitch / switch), so only look-alike characters count. [alwaysTypo]: a top target, a small typo is enough even
  * for a short name.
+ * [sensitiveShort]: a 5-letter name of a sensitive brand gets one edit anyway, but only with a hint (LF-43).
  */
 internal class BrandKeyword(
     val text: String,
     val generic: Boolean,
     val noTypo: Boolean = false,
     val alwaysTypo: Boolean = false,
+    val sensitiveShort: Boolean = false,
 ) {
     /** UTS #39 skeleton of [text], compared with the skeleton of a host label. */
     val skeleton: String by lazy { Confusables.skeleton(text) ?: text }
@@ -33,7 +35,7 @@ internal class Brand(val keywords: List<BrandKeyword>, val domains: List<String>
  * Embedded list of brands that phishing imitates most: worldwide services, banks, carriers, telecom operators and
  * public services of France and the EU. Local, no network. One line per brand:
  * `[!]keyword1/keyword2 domain1 domain2` (any number of each). Prefixes: `!` on the line = strict brand; on a
- * keyword `~` everyday word, `^` no typo rule, `+` typo rule even for a short name. An exact name on another
+ * keyword `~` everyday word, `^` no typo rule, `+` typo rule even for a short name, `*` one edit with a hint for a 5-letter name. An exact name on another
  * TLD is NOT flagged for a non-strict brand (google.de is fine); that leaves a residual risk (paypal.xyz), covered
  * later by reputation lists. The list is refreshed with app releases.
  */
@@ -49,10 +51,11 @@ internal object BrandList {
         val strict = parts[0].startsWith("!")
         val keywords = parts[0].removePrefix("!").split('/').map { raw ->
             BrandKeyword(
-                raw.trimStart('~', '^', '+'),
+                raw.trimStart('~', '^', '+', '*'),
                 '~' in raw.takeWhile { !it.isLetterOrDigit() },
                 '^' in raw.takeWhile { !it.isLetterOrDigit() },
                 '+' in raw.takeWhile { !it.isLetterOrDigit() },
+                '*' in raw.takeWhile { !it.isLetterOrDigit() },
             )
         }
         Brand(keywords, parts.drop(1), strict)
@@ -61,7 +64,7 @@ internal object BrandList {
     private val DATA =
         """
         # Web and tech
-        +google/gmail google.com gmail.com google.com.br google.com.au google.com.mx google.com.tr google.com.ar google.com.sg google.com.hk google.com.tw google.com.ua google.com.eg google.com.sa google.com.pk google.com.ph google.com.my google.com.co google.com.pe google.com.vn google.com.ng
+        +google/*gmail google.com gmail.com google.com.br google.com.au google.com.mx google.com.tr google.com.ar google.com.sg google.com.hk google.com.tw google.com.ua google.com.eg google.com.sa google.com.pk google.com.ph google.com.my google.com.co google.com.pe google.com.vn google.com.ng
         youtube youtube.com youtu.be
         microsoft/outlook/office365/onedrive/microsoftonline microsoft.com live.com office.com office365.com onedrive.com microsoftonline.com outlook.com
         ~apple/icloud/appleid apple.com icloud.com apple.com.cn
@@ -321,14 +324,14 @@ internal object BrandList {
         # Public services (France, UK, US, DE, IT)
         !impots-gouv/impotsgouv/~impots impots.gouv.fr
         !service-public/servicepublic service-public.fr service-public.gouv.fr
-        !ameli ameli.fr
+        !*ameli ameli.fr
         !~caf caf.fr
         !franceconnect franceconnect.gouv.fr
         !ants ants.gouv.fr
         !francetravail/poleemploi francetravail.fr pole-emploi.fr
         !urssaf urssaf.fr
         !amendes amendes.gouv.fr
-        !antai antai.gouv.fr
+        !*antai antai.gouv.fr
         !moncompteformation moncompteformation.gouv.fr
         doctolib doctolib.fr doctolib.com
         !securite-sociale securite-sociale.fr

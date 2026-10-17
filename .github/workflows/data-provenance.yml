@@ -3,11 +3,17 @@ name: Data provenance
 # LF-20. Proves that the embedded Unicode / PSL data (app/src/main/resources/lookfirst/host/) is exactly what
 # the pinned official sources give: scripts/gen-host-data.py --verify downloads every source from its versioned
 # URL, checks its SHA-256, regenerates the files and compares them byte for byte with the committed ones.
-# Weekly and by hand, never on a pull request. Python standard library only; no secret; read-only token.
+# Weekly, by hand, and on pull requests that touch the data, the script or this file (never pull_request_target). Python standard library only; no secret; read-only token.
 on:
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
+  pull_request:
+    paths:
+      - app/src/main/resources/lookfirst/host/**
+      - app/src/test/resources/lookfirst/host/**
+      - scripts/gen-host-data.py
+      - .github/workflows/data-provenance.yml
 
 permissions: {}
 

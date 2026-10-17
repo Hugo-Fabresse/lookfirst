@@ -18,6 +18,7 @@ import hashlib
 import sys
 import tempfile
 import unicodedata
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -70,8 +71,16 @@ def download(dest):
         if not url.startswith("https://"):
             failures.append(f"{name}: not an https URL")
             continue
-        with urllib.request.urlopen(url, timeout=120) as response:  # nosemgrep: fixed https URLs from SOURCES
-            data = response.read(MAX_BYTES + 1)
+        try:
+            with urllib.request.urlopen(url, timeout=120) as response:  # nosemgrep: fixed https URLs from SOURCES
+                data = response.read(MAX_BYTES + 1)
+                final_url = response.geturl()
+        except (urllib.error.URLError, TimeoutError, OSError) as error:  # HTTPError is a URLError
+            failures.append(f"{name}: download failed ({type(error).__name__}) {url}")
+            continue
+        if not final_url.startswith("https://"):
+            failures.append(f"{name}: redirected to a non-https URL")
+            continue
         actual = sha256_of(data)
         if len(data) > MAX_BYTES or actual != expected:
             failures.append(f"{name}: sha256 {actual}, expected {expected} ({url})")
@@ -131,6 +140,8 @@ def main():
                 failures += compare(src_dir, TEST_OUT, TEST_SOURCES)
                 extra = {p.name for p in MAIN_OUT.iterdir()} - {p.name for p in out_dir.iterdir()}
                 failures += [f"{n}: committed but not generated" for n in sorted(extra)]
+                extra_tests = {p.name for p in TEST_OUT.iterdir()} - set(TEST_SOURCES)
+                failures += [f"{n}: in test data but not a source" for n in sorted(extra_tests)]
     elif len(args) == 2 and not args[0].startswith("-"):
         failures = check_sources(Path(args[0]))
         if not failures:

@@ -17,6 +17,7 @@ import java.security.KeyStore
 import java.security.cert.CertificateException
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
+import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
@@ -118,6 +119,30 @@ class SystemTrustTest {
             } catch (expected: IOException) {
                 // Closed failure, retried on the next call.
             }
+        }
+    }
+
+    @Test
+    fun `an unexpected runtime failure of the store becomes an IOException`() {
+        val trust = SelectingSystemTrust(sdk(23)) { throw IllegalStateException("provider bug") }
+        try {
+            trust.socketFactory()
+            fail("expected a refusal")
+        } catch (expected: IOException) {
+            assertTrue(expected.cause is IllegalStateException)
+        }
+    }
+
+    @Test
+    fun `sockets of the api 23 factory enable only tls 1_2 and later`() {
+        val factory = SelectingSystemTrust(sdk(23)) { fakeAndroidCaStore() }.socketFactory()
+        assertNotNull(factory)
+        val socket = factory!!.createSocket() as SSLSocket
+        try {
+            assertTrue(socket.enabledProtocols.isNotEmpty())
+            assertTrue(socket.enabledProtocols.all { it == "TLSv1.2" || it == "TLSv1.3" })
+        } finally {
+            socket.close()
         }
     }
 

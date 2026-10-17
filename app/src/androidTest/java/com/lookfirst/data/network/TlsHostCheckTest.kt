@@ -18,7 +18,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
-import javax.net.ssl.SSLException
+import javax.net.ssl.SSLPeerUnverifiedException
 import javax.net.ssl.SSLServerSocket
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManagerFactory
@@ -147,8 +147,8 @@ class TlsHostCheckTest {
         try {
             request(server, host)
             fail("the certificate does not name $host")
-        } catch (expected: IOException) {
-            assertTrue(expected is SSLException || expected.message.orEmpty().isNotEmpty())
+        } catch (expected: SSLPeerUnverifiedException) {
+            assertEquals("certificate does not name the host", expected.message)
         }
     }
 

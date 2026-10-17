@@ -139,28 +139,47 @@ class ListSetVariationTest {
         keys.map { it xor Long.MIN_VALUE }.sorted().distinct().map { it xor Long.MIN_VALUE }.toLongArray()
 
     @Test
-    fun aClockAheadByAYearThenCorrectedDoesNotFreezeTheLimitWhenTheServerDateIsKnown() {
+    fun aClockAheadByAYearThenCorrectedKeepsTheLimitAndShowsStaleOnceTheDateContradictsIt() {
         val store = store()
         now = TEST_NOW + 365 * TEST_DAY
         store.put(0, 100) // first install with a wrong clock and no Date
         now = TEST_NOW + 60 * TEST_DAY
-        assertEquals(0, store.snapshot()!!.ageDays) // nothing can tell yet
-        // A contact with the publisher's Date: the recorded time is after it, the age is unknown, the limit lifts.
-        assertTrue(store.put(1000, 1100, serverTime = now) is ListInstallResult.Installed)
+        assertEquals(0, store.snapshot()!!.ageDays) // nothing can tell yet (LF-28)
+        // The publisher's Date never lifts the limit: a full replacement is refused...
+        assertEquals(ListFailure.VARIATION, store.put(1000, 1100, serverTime = now).reason())
+        // ...and the recorded time, in the future of both clock and Date, makes the lookup say "stale".
+        assertEquals(-1, store.staleAgeDays(store.current()!!))
+        // A 304 with the true Date brings the recorded time back near the clock: normal age again.
+        store.markUpToDate(source, serverTimeMillis = now)
+        assertEquals(0, store.staleAgeDays(store.current()!!))
         now += 3 * TEST_DAY
-        assertEquals(3, store.snapshot()!!.ageDays)
+        assertEquals(2, store.snapshot()!!.ageDays) // recorded at Date + 1 day at most
     }
 
     @Test
-    fun aClockAheadAtDownloadIsReplacedByTheServerDate() {
+    fun aPastDateWithTheRightClockNeverLiftsTheLimitNorMovesTheTimes() {
         val store = store()
-        now = TEST_NOW + 365 * TEST_DAY
-        store.put(0, 100, serverTime = TEST_NOW)
-        now = TEST_NOW + 2 * TEST_DAY
-        assertEquals(2, store.snapshot()!!.ageDays)
-        assertEquals(ListFailure.VARIATION, store.put(1000, 1100, serverTime = now).reason())
-        now = TEST_NOW + 100 * TEST_DAY
-        assertEquals(100, store.snapshot()!!.ageDays)
+        store.put(0, 100)
+        val before = File(root, "state").readText()
+        assertTrue(before.startsWith("maxSeen=$TEST_NOW"))
+        for (date in listOf(946_684_800_000L, TEST_NOW - 2 * TEST_DAY)) {
+            assertEquals(ListFailure.VARIATION, store.put(1000, 1100, serverTime = date).reason())
+            assertEquals(0, store.staleAgeDays(store.current()!!))
+        }
+        now += 3_600_000L
+        store.markUpToDate(source, serverTimeMillis = 946_684_800_000L)
+        assertEquals(0, store.staleAgeDays(store.current()!!))
+        assertEquals(ListFailure.VARIATION, store.put(1000, 1100).reason())
+        assertTrue(File(root, "state").readText().startsWith("maxSeen=${TEST_NOW + 3_600_000L}"))
+    }
+
+    @Test
+    fun aPastDateOnANotModifiedThenAFullDownloadWithoutDateKeepsTheLimit() {
+        val store = store()
+        store.put(0, 100)
+        now += 2 * TEST_DAY
+        store.markUpToDate(source, serverTimeMillis = TEST_NOW - 400 * TEST_DAY)
+        assertEquals(ListFailure.VARIATION, store.put(1000, 1100).reason())
     }
 
     @Test
@@ -171,7 +190,7 @@ class ListSetVariationTest {
         now = TEST_NOW
         store.markUpToDate(source, serverTimeMillis = TEST_NOW)
         now = TEST_NOW + 10 * TEST_DAY
-        assertEquals(10, store.snapshot()!!.ageDays)
+        assertEquals(9, store.snapshot()!!.ageDays) // recorded at Date + 1 day
     }
 
     @Test

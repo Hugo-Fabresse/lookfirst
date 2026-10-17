@@ -104,7 +104,7 @@ elif tool == "osv":
                 summ = v.get("summary", "")
                 summ = code(summ[:300]) if summ else ""  # inline code: no link, no #n reference rendered
                 dep = f"{name} {version}"
-                body = (f"**Vulnerabilite** : {code(vid)} (severite {sev}) - [osv.dev](https://osv.dev/{quote(vid)})"
+                body = (f"**Vulnerabilite** : {code(vid)} (severite {code(sev)}) - [osv.dev](https://osv.dev/{quote(vid)})"
                         f"\n\n**Dependance livree dans {shipped}** : {code(dep)} ({code(lock_name)})\n\n{summ}")
                 if aliases:
                     body += f"\n\n**Alias** : {aliases}"
@@ -116,7 +116,7 @@ elif tool == "osv":
                 findings.append({
                     "tool": tool, "fingerprint": f"osv-{fp}",
                     "title": clean(f"[security][osv] {vid} in {dep}"),
-                    "line": f"{code(vid)} {code(dep)} (severite {sev})",
+                    "line": f"{code(vid)} {code(dep)} (severite {code(sev)})",
                     "body": body,
                 })
 else:

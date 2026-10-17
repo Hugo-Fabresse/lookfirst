@@ -119,7 +119,7 @@ Un seul format, pour chaque commit et chaque titre de PR : `type(LF-n): summary`
 ## Structure de fichiers
 
 Layer-first, un seul module Gradle au départ (détail : `docs/design/architecture.md`).
-`app/src/main/java/com/lookfirst/` (nom de package à confirmer par LF-3) :
+`app/src/main/java/com/lookfirst/` (package `com.lookfirst`, confirmé par LF-3) :
 
 ```
   core/        # utilitaires purs : result, text, normalisation d'URL

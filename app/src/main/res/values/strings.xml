@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LookFirst</string>
+    <string name="home_tagline">Scan QR codes without opening anything automatically.</string>
+</resources>

@@ -86,7 +86,7 @@
     <string name="age_check">Check domain age</string>
     <string name="warn_rdap_title">Check domain age?</string>
     <string name="warn_rdap_body">LookFirst asks a public registry (RDAP, %2$s) how long this domain name has existed. Only the domain name (%1$s) is sent, not the full address. The registry sees your IP address. The site itself is not contacted.</string>
-    <string name="age_note_no_registry_list">Unavailable: the list of registries is not installed.</string>
+    <string name="age_note_no_registry_list">Unavailable: the list of registries could not be read.</string>
     <string name="age_note_no_domain">Only available for links with a domain name.</string>
     <string name="age_note_no_server">No known registry for this kind of domain.</string>
     <string name="age_result_unknown">The registry does not know this domain.</string>

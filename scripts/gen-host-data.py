@@ -10,7 +10,7 @@ Usage:
 
 SOURCES below is the single list of inputs: exact versioned URL + expected SHA-256 of each file. To update Unicode or
 the PSL, change the URL, the version and the SHA-256 there, run --download, generate, review the diff (docs/adr/0006).
-Output is plain text, one record per line: "LOW HIGH VALUE..." in hexadecimal (code points), '#' lines are comments.
+Output is plain text (except rdap-dns.json, copied as is), one record per line: "LOW HIGH VALUE..." in hexadecimal (code points), '#' lines are comments.
 Each file starts with comments naming its source URL, version and SHA-256; SHA256SUMS lists the SHA-256 of the files.
 Deterministic: same input, same output. Python standard library only.
 """
@@ -45,6 +45,10 @@ SOURCES = {
                                    "d6b151d2d40ee9b1876d26f417980f45ffae47b6055ccf7203cb31f07a030f94"),
     "public_suffix_list.dat": (f"{PSL}/public_suffix_list.dat", "PSL " + PSL_VERSION,
                                "13879fec7cb7f6c67991de0810874f511d67eca2d99af53e40db2a833b207cdc"),
+    # IANA RDAP bootstrap (RFC 9224). The URL is not versioned: the SHA-256 pins the content, so a new IANA
+    # publication makes --verify fail until the file is reviewed and the hash updated here (LF-27).
+    "rdap-dns.json": ("https://data.iana.org/rdap/dns.json", "IANA RDAP bootstrap, publication 2026-09-30T23:00:03Z",
+                      "e3419eb0b28dcc3a68dd3bb0e64429cb0d376c3883ca4c42317aea65fc0ab471"),
     # Test vectors: not embedded in the APK, compared byte for byte by --verify.
     "IdnaTestV2.txt": (f"{UNICODE}/idna/IdnaTestV2.txt", "Unicode 18.0.0",
                        "0236b75c5b20dfd857b3b5cf75509887959d6ab00d6c7bda9b7dc3df518c1fde"),
@@ -120,7 +124,7 @@ def compare(expected_dir, actual_dir, names):
 
 
 def write_sums(out):
-    names = sorted(p.name for p in out.glob("*.txt"))
+    names = sorted(p.name for p in [*out.glob("*.txt"), *out.glob("*.json")])
     with open(out / "SHA256SUMS", "w", encoding="utf-8", newline="\n") as f:
         for name in names:
             f.write(f"{sha256_of((out / name).read_bytes())}  {name}\n")
@@ -277,6 +281,11 @@ def generate_files():
         for rule in sorted(private - icann):
             f.write(rule + "\n")
     print("public-suffix-list.txt", len(icann), len(private))
+
+    # RDAP bootstrap: embedded byte for byte (JSON has no comments; where it comes from is SOURCES and SHA256SUMS).
+    # The app reads it with a strict, bounded parser and keeps only https servers (data/reputation/RdapBootstrap).
+    (out / "rdap-dns.json").write_bytes((src / "rdap-dns.json").read_bytes())
+    print("rdap-dns.json")
 
 
 if __name__ == "__main__":

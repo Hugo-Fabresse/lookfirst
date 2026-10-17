@@ -5,16 +5,11 @@ import com.lookfirst.domain.rdap.RdapPlan
 import com.lookfirst.domain.rdap.RdapServer
 import com.lookfirst.domain.rdap.RdapUnavailable
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
-import java.io.File
 
-class BundleRdapPlannerTest {
-    @get:Rule
-    val folder = TemporaryFolder()
-
+class EmbeddedRdapPlannerTest {
     private val psl = PublicSuffixList.instance!!
     private val bootstrap = RdapBootstrap.parseStrict(
         (
@@ -24,7 +19,7 @@ class BundleRdapPlannerTest {
     )!!
     private val verisign = RdapServer("rdap.verisign.com", "/com/v1/")
 
-    private fun plan(host: String) = BundleRdapPlanner.planIn(psl, bootstrap, host)
+    private fun plan(host: String) = EmbeddedRdapPlanner.planIn(psl, bootstrap, host)
 
     private fun unavailable(host: String) = (plan(host) as RdapPlan.Unavailable).reason
 
@@ -64,38 +59,14 @@ class BundleRdapPlannerTest {
     }
 
     @Test
-    fun `without an installed bundle there is no bootstrap`() {
-        val store = ReputationStore(
-            File(folder.root, "reputation"),
-            null,
-            { NOW },
-            directorySync = {},
-            acceptTestKeys = true,
-        )
-        val plan = BundleRdapPlanner(store).plan("example.com")
-        assertEquals(RdapPlan.Unavailable(RdapUnavailable.NO_BOOTSTRAP), plan)
-    }
-
-    @Test
-    fun `an installed bundle's bootstrap names the server, and one without a bootstrap file names none`() {
-        val store = ReputationStore(
-            File(folder.root, "reputation"),
-            null,
-            { NOW },
-            directorySync = {},
-            acceptTestKeys = true,
-        )
-        val bare = BundleBuilder.build(store.newCandidateDirectory(), BundleSpec(generatedAt = "2026-10-10T03:12:00Z"))
-        assertTrue(store.install(bare.directory) is InstallResult.Installed)
-        val planner = BundleRdapPlanner(store)
-        assertEquals(RdapPlan.Unavailable(RdapUnavailable.NO_BOOTSTRAP), planner.plan("example.com"))
-
-        val rdap = """{"services":[[["com"],["https://rdap.verisign.com/com/v1/"]]]}"""
-        val spec = BundleSpec(generatedAt = "2026-10-12T03:12:00Z", rdapJson = rdap)
-        val full = BundleBuilder.build(store.newCandidateDirectory(), spec)
-        assertTrue(store.install(full.directory) is InstallResult.Installed)
-        val ready = BundleRdapPlanner(store).plan("www.example.com") as RdapPlan.Ready
+    fun `the bootstrap shipped in the app is readable and names https servers for the big tlds`() {
+        val real = checkNotNull(EmbeddedRdapPlanner.embedded) { "rdap-dns.json is missing or unreadable" }
+        assertTrue("only ${real.size} tlds", real.size > 500)
+        for (tld in listOf("com", "net", "org", "uk", "fr")) {
+            assertNotNull(tld, real.serverFor(tld))
+        }
+        val ready = EmbeddedRdapPlanner().plan("www.example.com") as RdapPlan.Ready
         assertEquals("example.com", ready.target.domain)
-        assertEquals(verisign, ready.target.server)
+        assertTrue(ready.target.server.path.endsWith("/"))
     }
 }

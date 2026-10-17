@@ -4,8 +4,8 @@ import android.content.Context
 import com.lookfirst.BuildConfig
 import com.lookfirst.data.reputation.AndroidDirectorySync
 import com.lookfirst.data.reputation.AssetEmbeddedBundle
-import com.lookfirst.data.reputation.BundleRdapPlanner
 import com.lookfirst.data.reputation.DefaultListUpdateControl
+import com.lookfirst.data.reputation.EmbeddedRdapPlanner
 import com.lookfirst.data.reputation.ListUpdateControl
 import com.lookfirst.data.reputation.LocalReputationLookup
 import com.lookfirst.data.reputation.ReputationStore
@@ -27,7 +27,7 @@ abstract class ReputationModule {
     abstract fun bindReputationLookup(impl: LocalReputationLookup): ReputationLookup
 
     @Binds
-    abstract fun bindRdapPlanner(impl: BundleRdapPlanner): RdapPlanner
+    abstract fun bindRdapPlanner(impl: EmbeddedRdapPlanner): RdapPlanner
 
     @Binds
     abstract fun bindListUpdateControl(impl: DefaultListUpdateControl): ListUpdateControl

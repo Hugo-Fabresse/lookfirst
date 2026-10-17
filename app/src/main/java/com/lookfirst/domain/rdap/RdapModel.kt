@@ -25,7 +25,7 @@ data class RdapTarget(val domain: String, val server: RdapServer) {
 
 /** Why a domain-age request cannot be made on this phone, before anything is sent. */
 enum class RdapUnavailable {
-    /** No reputation bundle is installed, or it holds no usable RDAP bootstrap file. */
+    /** The RDAP bootstrap or the Public Suffix List embedded in the app could not be read (a damaged APK). */
     NO_BOOTSTRAP,
 
     /** The address has no registrable domain: an IP address, a bare public suffix, a name that did not normalize. */

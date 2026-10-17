@@ -35,7 +35,9 @@ internal enum class Uts46Error {
 
 internal sealed interface Uts46Result {
     /** [unicode] and [ascii] keep a trailing root dot if the input had one. */
-    data class Ok(val unicode: String, val ascii: String) : Uts46Result
+    data class Ok(val unicode: String, val ascii: String) : Uts46Result {
+        override fun toString(): String = "Ok(len=${ascii.length})"
+    }
 
     data class Failure(val error: Uts46Error) : Uts46Result
 }

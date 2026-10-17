@@ -29,6 +29,9 @@ enum class HostError {
     EMPTY_LABEL,
     LABEL_TOO_LONG,
 
+    /** The last label is a number (or `0x...`) but the host is not a valid IPv4 address (WHATWG "ends in a number"). */
+    INVALID_IPV4,
+
     /** The embedded Unicode data could not be loaded: nothing can be said about the host. */
     DATA_UNAVAILABLE,
 }
@@ -50,10 +53,15 @@ data class NormalizedHost(
 
     /** True when the Unicode form differs from the ASCII one, i.e. the name contains an IDN label. */
     val isInternational: Boolean get() = ascii != unicode
+
+    /** Lengths only: a host comes from a scanned code and never reaches logs. */
+    override fun toString(): String = "NormalizedHost(len=${ascii.length}, kind=$kind)"
 }
 
 sealed interface HostResult {
-    data class Normalized(val host: NormalizedHost) : HostResult
+    data class Normalized(val host: NormalizedHost) : HostResult {
+        override fun toString(): String = "Normalized($host)"
+    }
 
     data class Invalid(val error: HostError) : HostResult
 }
@@ -88,6 +96,7 @@ object HostNormalizer {
             ascii.isEmpty() -> HostResult.Invalid(HostError.EMPTY)
             ascii.any { it.code <= ' '.code || it.code >= ASCII_MAX || it in FORBIDDEN_ASCII } ->
                 HostResult.Invalid(HostError.FORBIDDEN_CHARACTER)
+            Ipv4Check.endsInNumber(ascii) && !Ipv4Check.isValid(ascii) -> HostResult.Invalid(HostError.INVALID_IPV4)
             else -> HostResult.Normalized(
                 NormalizedHost(ascii, unicode, HostNumbers.classify(ascii), trailingDot, percent),
             )

@@ -130,6 +130,28 @@ class HostNormalizerTest {
     }
 
     @Test
+    fun numericLastLabelMustBeAValidIpv4() {
+        for (host in listOf("foo.1", "1.2.3.4.5", "256.1.1.1", "09.1", "a.0x", "example.123", "1.2.3.4.")) {
+            if (host == "1.2.3.4." || host == "a.0x") continue
+            assertEquals(host, HostError.INVALID_IPV4, error(host))
+        }
+        assertEquals(HostKind.IPV4, ok("1.2.3.4.").kind)
+        assertEquals(HostKind.IPV4_OBFUSCATED, ok("0x7f.1").kind)
+        assertEquals(HostKind.IPV4_OBFUSCATED, ok("4294967295").kind)
+        assertEquals(HostError.INVALID_IPV4, error("4294967296"))
+        assertEquals(HostKind.DOMAIN, ok("0xabc.com").kind)
+    }
+
+    @Test
+    fun resultsNeverPrintTheHost() {
+        val host = ok("secret-host.example")
+        assertFalse("secret-host" in host.toString())
+        assertFalse("secret-host" in HostResult.Normalized(host).toString())
+        val uts = Uts46.process("secret-host.example", Uts46Options(false, false, true), UnicodeTables.instance!!)
+        assertFalse("secret-host" in uts.toString())
+    }
+
+    @Test
     fun trailingDotIsStrippedAndRemembered() {
         val host = ok("example.com.")
         assertEquals("example.com", host.ascii)

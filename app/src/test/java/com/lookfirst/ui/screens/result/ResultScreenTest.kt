@@ -64,6 +64,19 @@ class ResultScreenTest {
     }
 
     @Test
+    fun severalCodesInAnImageAreSaidOnlyWhenFlagged() {
+        val state = PayloadParser.parse("https://first.example/").toUiState(multipleCodes = true)
+        show(state)
+        composeRule.onNodeWithText(text(R.string.err_multi_qr)).assertExists()
+    }
+
+    @Test
+    fun aSingleCodeHasNoMultipleCodesLine() {
+        showScanned("https://first.example/")
+        composeRule.onAllNodesWithText(text(R.string.err_multi_qr)).assertCountEquals(0)
+    }
+
+    @Test
     fun urlShowsTheNotAnalysedBannerTheRealHostAndOnlyCancelAndCopy() {
         showScanned("https://paypal.com@evil.example/login")
         composeRule.onNodeWithText(text(R.string.not_analysed_banner), substring = true).assertExists()

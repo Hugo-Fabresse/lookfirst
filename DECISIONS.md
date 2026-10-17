@@ -76,3 +76,7 @@ DECISION [analyse] : marque distinctive (6 lettres ou plus, non courante) en par
 DECISION [analyse] : WHOLE_SCRIPT_CONFUSABLE (SUSPICIOUS) — label d'un seul script non latin dont le squelette est du Latin pur, TLD d'un autre script (règle du vérificateur IDN de Chrome) ; `пример.рф` reste propre
 DECISION [hôtes] : dernier label numérique ou `0x…` qui n'est pas une IPv4 valide (`foo.1`, `256.1.1.1`) = hôte invalide (WHATWG « ends in a number ») ; toString de NormalizedHost / résultats masqué (longueurs)
 DECISION [analyse] : corpus de non-régression de 208 domaines légitimes (Tranco, services publics FR, banques FR) = 0 signal de marque ; liste de mots-clés × domaines officiels = 0 signal
+DECISION [image-scan] : bornes — 10 Mio lus au plus, 25 Mpx déclarés max, décodage à ~4 Mpx, octets magiques jpeg/png/webp/heif avant le décodeur, URI content:// seulement — image piégée (T-IMG-1/2)
+DECISION [image-scan] : pas d'aperçu de l'image sur l'écran d'échec — l'image n'est pas conservée après la lecture (T-IMG-4)
+DECISION [image-scan] : textes err_image_too_big et err_image_corrupt ajoutés (absents d'ux.md §7) — « trop volumineuse » et « format illisible » ne se confondent pas avec « aucun QR »
+DECISION [image-scan] : lecture multi-QR seulement si ≤ 30 motifs de repérage candidats, un seul thread dédié, nouvelle lecture refusée (BUSY) tant qu'il est occupé — QRCodeMultiReader est cubique et non annulable

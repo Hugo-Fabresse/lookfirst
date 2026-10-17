@@ -108,6 +108,11 @@ enum class TraceState {
 data class OptionalChecks(
     val trace: TraceState = TraceState.IDLE,
     val httpsOnly: Boolean = false,
+    /** The link names a port other than 443: the tracer only contacts 443 (T-NET-2). */
+    val unusualPort: Boolean = false,
     val online: Boolean = true,
     val levelChangedTo: VerdictLevel? = null,
-)
+) {
+    /** The link itself allows a trace (https, port 443). */
+    val traceable: Boolean get() = !httpsOnly && !unusualPort
+}

@@ -108,7 +108,11 @@ class ResultViewModel @Inject constructor(
                 traceStart = start
                 localVerdict = verdict
                 val checks = start?.let {
-                    OptionalChecks(httpsOnly = it.scheme != HTTPS, online = networkStatus.isOnline())
+                    OptionalChecks(
+                        httpsOnly = it.scheme != HTTPS,
+                        unusualPort = it.port != null && it.port != HTTPS_PORT,
+                        online = networkStatus.isOnline(),
+                    )
                 }
                 mutableState.update {
                     if (it is ResultUiState.Content) it.copy(verdict = verdict, checks = checks) else it
@@ -222,7 +226,8 @@ class ResultViewModel @Inject constructor(
     fun onTraceRequested() {
         val current = mutableState.value as? ResultUiState.Content ?: return
         val checks = current.checks ?: return
-        if (checks.httpsOnly || checks.trace == TraceState.RUNNING || checks.trace == TraceState.DONE) return
+        val busy = checks.trace == TraceState.RUNNING || checks.trace == TraceState.DONE
+        if (!checks.traceable || busy) return
         val online = networkStatus.isOnline()
         updateChecks { it.copy(online = online, trace = if (online) TraceState.WARNING else it.trace) }
     }
@@ -303,3 +308,4 @@ class ResultViewModel @Inject constructor(
 }
 
 private const val HTTPS = "https"
+private const val HTTPS_PORT = 443

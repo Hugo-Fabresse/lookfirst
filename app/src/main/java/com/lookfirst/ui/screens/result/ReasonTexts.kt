@@ -192,8 +192,20 @@ internal class ReasonTexts(private val resources: Resources) {
             is SentenceRes.Counted ->
                 resources.formatQuantity(sentence.id, signal.count, countedArgs(signal, evidence))
             is SentenceRes.Text ->
-                resources.formatString(brandSentence(signal) ?: sentence.id, textArgs(signal, evidence))
+                resources.formatString(
+                    brandSentence(signal) ?: directPrivateSentence(signal) ?: sentence.id,
+                    textArgs(signal, evidence),
+                )
         }
+    }
+
+    /** A redirect to a private address says "this link" when the scanned address itself is the private one. */
+    private fun directPrivateSentence(signal: Signal): Int? = if (signal.code == SignalCode.REDIRECT_PRIVATE &&
+        signal.count == 0
+    ) {
+        R.string.reason_redirect_private_direct
+    } else {
+        null
     }
 
     private fun brandSentence(signal: Signal): Int? = if (signal.code == SignalCode.BRAND_LOOKALIKE) {

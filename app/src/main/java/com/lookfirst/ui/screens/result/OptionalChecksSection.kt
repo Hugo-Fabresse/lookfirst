@@ -61,11 +61,12 @@ internal fun OptionalChecksSection(checks: OptionalChecks, onTrace: () -> Unit, 
         )
         TextButton(
             onClick = onTrace,
-            enabled = !checks.httpsOnly && checks.online && checks.trace != TraceState.RUNNING,
+            enabled = checks.traceable && checks.online && checks.trace != TraceState.RUNNING,
             modifier = Modifier.heightIn(min = MinTarget),
         ) { Text(stringResource(R.string.trace_redirects)) }
         val note = when {
             checks.httpsOnly -> R.string.trace_https_only
+            checks.unusualPort -> R.string.trace_port_only
             !checks.online -> R.string.check_offline_note
             checks.trace == TraceState.FAILED -> R.string.check_failed
             else -> null

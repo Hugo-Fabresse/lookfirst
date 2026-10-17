@@ -123,6 +123,15 @@ class ResultViewModelTraceTest {
     }
 
     @Test
+    fun `a link on another port cannot be traced`() {
+        val vm = shown("https://a.example:8443/")
+        assertTrue(vm.checks()!!.unusualPort)
+        vm.onTraceRequested()
+        assertEquals(TraceState.IDLE, vm.checks()!!.trace)
+        assertTrue(tracer.requested.isEmpty())
+    }
+
+    @Test
     fun `asking opens the warning and nothing is sent`() {
         val vm = shown("https://a.example/")
         assertEquals(TraceState.IDLE, vm.checks()!!.trace)

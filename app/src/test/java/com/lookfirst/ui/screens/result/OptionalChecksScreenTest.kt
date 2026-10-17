@@ -97,6 +97,13 @@ class OptionalChecksScreenTest {
     }
 
     @Test
+    fun `a link on another port has the button disabled and says why`() {
+        show(raw = "https://a.example:8443/", checks = OptionalChecks(unusualPort = true))
+        traceButton.performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText(text(R.string.trace_port_only)).assertExists()
+    }
+
+    @Test
     fun `offline the button is disabled with the offline note`() {
         show(checks = OptionalChecks(online = false))
         traceButton.performScrollTo().assertIsNotEnabled()

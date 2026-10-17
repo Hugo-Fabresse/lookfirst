@@ -85,6 +85,7 @@
     <string name="reason_redirect_final_short">Final destination</string>
     <string name="reason_redirect_private_short">Redirect to local network</string>
     <string name="reason_redirect_private">This link redirects to an address on a local or reserved network (%1$s). LookFirst did not contact it.</string>
+    <string name="reason_redirect_private_direct">This link points to an address on a local or reserved network (%1$s). LookFirst did not contact it.</string>
     <string name="reason_redirect_excessive_short">Too many redirects</string>
     <string name="reason_redirect_excessive">This link chains too many redirects or loops: LookFirst stopped following it.</string>
     <string name="reason_domain_recent_short">Recent domain</string>

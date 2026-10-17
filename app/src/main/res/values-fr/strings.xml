@@ -76,6 +76,7 @@
     <string name="optional_checks">Vérifications facultatives</string>
     <string name="trace_redirects">Suivre les redirections</string>
     <string name="trace_https_only">Disponible pour les liens https uniquement.</string>
+    <string name="trace_port_only">Disponible pour les liens sur le port https standard uniquement.</string>
     <string name="check_offline_note">Hors connexion</string>
     <string name="warn_trace_title">Suivre les redirections ?</string>
     <string name="warn_trace_body">LookFirst va contacter ce lien pour voir où il mène. Le site verra votre adresse IP et saura que son QR code a été scanné. Rien n\'est ouvert ni installé.</string>

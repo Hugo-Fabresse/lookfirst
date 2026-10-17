@@ -25,6 +25,7 @@ import com.lookfirst.domain.model.Untrusted
 fun ScanRoute(
     viewModel: ScanViewModel,
     analyzerFactory: QrAnalyzerFactory,
+    onOpenSettings: () -> Unit,
     onCodeRead: (Untrusted, multipleCodes: Boolean) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -68,7 +69,7 @@ fun ScanRoute(
         onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
         onOpenAndroidSettings = viewModel::onOpenAndroidSettings,
         onTorchToggle = viewModel::onTorchToggle,
-        onOpenSettings = {},
+        onOpenSettings = onOpenSettings,
         onCameraRetry = viewModel::onCameraRetry,
         onPickImage = {
             imageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))

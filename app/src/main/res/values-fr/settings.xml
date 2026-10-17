@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_tagline">Regardez avant d\'ouvrir.</string>
+    <string name="onboarding_nothing_opens">Rien ne s\'ouvre tout seul. Vous choisissez toujours.</string>
+    <string name="onboarding_privacy">Tout est analysé sur votre téléphone. Les adresses scannées ne sont envoyées nulle part, sauf si vous lancez une vérification facultative.</string>
+    <string name="onboarding_lists">Les listes de sites signalés sont téléchargées en tâche de fond.</string>
+    <string name="onboarding_auto_update">Mise à jour automatique</string>
+    <string name="onboarding_changeable">Modifiable dans Réglages.</string>
+    <string name="onboarding_no_guarantee">Aucun scan ne garantit rien : un site nouveau peut ne figurer dans aucune liste.</string>
+    <string name="onboarding_start">Commencer</string>
+
+    <string name="settings_title">Réglages</string>
+    <string name="settings_lists_header">Listes de réputation</string>
+    <string name="settings_lists_version">Version %1$d · %2$s</string>
+    <string name="settings_last_attempt_ok">Dernière tentative : réussie</string>
+    <string name="settings_last_attempt_failed">Dernière tentative : échouée</string>
+    <string name="settings_last_attempt_none">Aucune tentative pour l\'instant</string>
+    <string name="settings_update_now">Mettre à jour maintenant</string>
+    <string name="settings_auto_update">Mise à jour automatique</string>
+    <string name="settings_unmetered_only">Réseau non limité uniquement</string>
+    <string name="lists_updating">Mise à jour en cours</string>
+    <string name="lists_update_failed">Échec de la mise à jour : la liste précédente est conservée.</string>
+    <string name="lists_rejected">Liste refusée par les contrôles d\'intégrité. La liste précédente est conservée.</string>
+    <string name="lists_offline">Hors connexion</string>
+    <string name="lists_up_to_date">Déjà à jour.</string>
+    <string name="settings_about_link">À propos et confidentialité</string>
+    <string name="settings_app_version">Version de l\'application</string>
+
+    <string name="about_title">À propos et confidentialité</string>
+    <string name="about_local_header">Ce qui reste sur votre téléphone</string>
+    <string name="about_local_body">Le contenu des QR codes, l\'analyse et les résultats. LookFirst n\'enregistre pas vos scans.</string>
+    <string name="about_network_header">Ce qui utilise le réseau</string>
+    <string name="about_net_lists">Mise à jour des listes (automatique)</string>
+    <string name="about_net_lists_who">Codeberg, l\'hébergeur des listes, voit votre adresse IP lors de la mise à jour des listes. Rien d\'autre.</string>
+    <string name="about_net_redirects">Redirections (sur demande)</string>
+    <string name="about_net_redirects_who">Le site scanné voit votre adresse IP et sait que son QR code a été scanné.</string>
+    <string name="about_net_rdap">Âge du domaine (sur demande)</string>
+    <string name="about_net_rdap_who">Registre RDAP : votre adresse IP et le nom de domaine.</string>
+    <string name="about_no_guarantee_header">Ce que LookFirst ne garantit pas</string>
+    <string name="about_no_guarantee_body">Un site neuf ou non signalé peut être malveillant. Restez vigilant.</string>
+    <string name="about_licences">Licences</string>
+    <string name="about_licences_body">LookFirst utilise ZXing et AndroidX (licence Apache 2.0). Les listes de réputation contiennent la Public Suffix List (Mozilla Public License 2.0) et des données de Phishing.Database (licence MIT) ; le fichier NOTICE.txt livré avec chaque liste donne le détail.</string>
+</resources>

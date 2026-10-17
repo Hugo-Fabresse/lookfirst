@@ -9,6 +9,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class ReputationStoreTest {
     @get:Rule
@@ -367,5 +369,70 @@ class ReputationStoreTest {
         assertEquals(RejectReason.BAD_SIGNATURE, reasonOf(release.install(candidate)))
         assertNull(release.current())
         assertEquals(versionOf(day10.generatedAt), store().current()?.version?.bundle)
+    }
+
+    @Test
+    fun preloadLoadsTheInstalledBundleSoThatLookupsAndSnapshotNeedNoLock() {
+        install(store(), day10)
+        val restarted = store()
+        assertNull("nothing is loaded before preload", restarted.snapshot())
+        restarted.preload()
+        assertEquals(versionOf(day10.generatedAt), restarted.snapshot()?.version)
+        assertEquals(7, restarted.snapshot()?.ageDays)
+        assertNotNull(restarted.current())
+    }
+
+    @Test
+    fun aLookupNeverWaitsForAnInstallationItSaysListsMissing() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val busy = ReputationStore(
+            root,
+            null,
+            { clock },
+            directorySync = {},
+            acceptTestKeys = true,
+            onStage = {
+                if (it == InstallStage.FILES_SYNCED) {
+                    entered.countDown()
+                    release.await(5, TimeUnit.SECONDS)
+                }
+            },
+        )
+        val candidate = BundleBuilder.build(busy.newCandidateDirectory(), day12).directory
+        val installer = Thread { busy.install(candidate) }
+        installer.start()
+        try {
+            assertTrue(entered.await(5, TimeUnit.SECONDS))
+            // Not loaded yet from this instance's point of view, and an installation holds the lock.
+            val started = System.nanoTime()
+            assertNull(busy.current())
+            assertTrue("current() must not block", System.nanoTime() - started < 1_000_000_000L)
+        } finally {
+            release.countDown()
+            installer.join(5000)
+        }
+    }
+
+    @Test
+    fun aCandidateInProgressSurvivesTheInstallationOfAnotherOne() {
+        val s = store()
+        val downloading = s.newCandidateDirectory()
+        File(downloading, "partial").writeText("half a file")
+        assertTrue(install(s, day10) is InstallResult.Installed)
+        assertTrue("the running download must not be erased", File(downloading, "partial").isFile)
+        s.releaseCandidate(downloading)
+        assertFalse(downloading.exists())
+    }
+
+    @Test
+    fun inspectManifestDoesNotInstallAndRemembersARejection() {
+        val s = store()
+        install(s, day10)
+        val candidate = BundleBuilder.build(s.newCandidateDirectory(), day12.copy(signer = TestKeys.other)).directory
+        val inspection = s.inspectManifest(candidate)
+        assertEquals(RejectReason.BAD_SIGNATURE, (inspection as ManifestInspection.Rejected).reason)
+        assertEquals(versionOf(day10.generatedAt), s.current()?.version?.bundle)
+        s.releaseCandidate(candidate)
     }
 }

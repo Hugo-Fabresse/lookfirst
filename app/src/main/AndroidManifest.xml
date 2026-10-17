@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Runtime permission, asked at the first display of the camera view (never at launch). -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -10,7 +11,19 @@
     <uses-feature
         android:name="android.hardware.camera.any"
         android:required="false" />
-    <!-- No INTERNET yet: added by the ticket that downloads the reputation lists. -->
+    <!-- Network: the reputation lists (one fixed https host, ListsEndpoint) and, later, the two optional checks the
+         user starts by a tap. Cleartext is forbidden by network_security_config.xml. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- WorkManager adds these through the manifest merger; none is needed (no foreground or expedited work, jobs are
+         not persisted and the schedule is re-applied at every start), so they are removed. WAKE_LOCK and
+         ACCESS_NETWORK_STATE stay: WorkManager needs them for the network constraint. -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.RECEIVE_BOOT_COMPLETED"
+        tools:node="remove" />
 
     <!-- Package visibility (API 30+), resolution only: which browsers exist, whether an app other than a browser
          would capture an https link (App Links; best effort, hostless filters only), and the system add-network dialog. No QUERY_ALL_PACKAGES. -->
@@ -45,7 +58,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LookFirst"
         android:usesCleartextTraffic="false">
-        <!-- Only exported component. Any new exported component must go through security-reviewer. -->
+        <!-- Only exported component of the app. Libraries add SystemJobService (WorkManager, exported but protected by
+             the system permission BIND_JOB_SERVICE) and ProfileInstallReceiver (protected by DUMP). Any new exported
+             component must go through security-reviewer. -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -54,5 +69,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Diagnostics broadcast of WorkManager: exported (DUMP-protected), not needed. -->
+        <receiver
+            android:name="androidx.work.impl.diagnostics.DiagnosticsReceiver"
+            tools:node="remove" />
     </application>
 </manifest>

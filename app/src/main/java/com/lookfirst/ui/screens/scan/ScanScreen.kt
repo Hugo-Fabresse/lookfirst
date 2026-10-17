@@ -108,7 +108,6 @@ private fun TopBar(state: ScanUiState, onTorchToggle: () -> Unit, onOpenSettings
                 )
             }
         }
-        // TODO(settings screen): no-op until the settings screen exists.
         IconButton(onClick = onOpenSettings) {
             Icon(
                 painter = painterResource(R.drawable.ic_settings),

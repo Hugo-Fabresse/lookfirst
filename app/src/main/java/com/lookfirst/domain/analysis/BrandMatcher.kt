@@ -17,6 +17,7 @@ private val LURE_WORDS =
         "verifier", "paiement", "facture", "refund", "remboursement", "reward", "gift", "claim", "access", "portal",
         "espace", "colis", "livraison", "suivi", "tracking", "delivery", "parcel", "gouv", "amende", "amendes",
         "stationnement", "parking", "rdv", "aide", "assure", "mon", "banque", "id", "fr", "app",
+        "vitale",
     )
 
 /** Cheap or abused TLDs: a small typo of a brand next to one of them is a stronger hint. */
@@ -26,7 +27,14 @@ private val RISKY_TLDS =
         "ml", "ga", "cf", "gq", "work", "live", "rest", "support", "bond", "sbs", "cfd", "lat", "club", "store",
     )
 
+/** Lure words too common in ordinary names (`mon-amelie.fr`) to count as a hint for a typo found in a dashed part. */
+private val WEAK_LURES = setOf("mon", "id", "fr", "app")
+
+/** Common words one edit from a brand (`amelie`, `email`, `mobile`): never a typo when found as a dashed part. */
+private val PART_NEAR_MISS_WORDS = setOf("email", "amelie", "amelia", "mobile", "telecom", "tresor", "fortune")
+
 private const val MIN_TYPO_LENGTH = 6
+private const val MIN_PART_LENGTH = 5
 private const val MIN_TWO_EDITS_LENGTH = 10
 private const val MIN_DISTINCTIVE_LENGTH = 6
 private const val MIN_UNHINTED_TYPO_LENGTH = 8
@@ -61,7 +69,11 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
     private val skeletons: List<String> =
         if (nameIndex < 0) emptyList() else unicode.take(nameIndex + 1).map { Confusables.skeleton(it) ?: it }
     private val hasLure = (0..nameIndex).any { isLure(ascii[it]) || isLure(skeletons[it]) }
-    private val hint = hasLure || ascii.last() in RISKY_TLDS
+    private val riskyTld = ascii.last() in RISKY_TLDS
+    private val hint = hasLure || riskyTld
+    private val hasStrongLure = (0..nameIndex).any { i ->
+        (ascii[i].split('-') + skeletons[i].split('-')).any { it in LURE_WORDS && it !in WEAK_LURES }
+    }
 
     private class Match(val brand: Brand, val rank: Int, val kind: LookalikeKind)
 
@@ -98,7 +110,7 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
         val sk = skeletons[nameIndex]
         val rank = when {
             sk == keyword.skeleton -> RANK_HOMOGLYPH
-            isTypo(ascii[nameIndex], sk, keyword) -> RANK_TYPO
+            isTypo(ascii[nameIndex], sk, keyword) || isTypoInPart(ascii[nameIndex], sk, keyword) -> RANK_TYPO
             isCombinedInName(name, sk, keyword) || isInSubdomain(keyword) -> RANK_COMBINED
             else -> null
         }
@@ -121,6 +133,29 @@ internal class BrandMatcher(host: NormalizedHost, suffixes: PublicSuffixList) {
         // The cheaper of the two measures: a dropped or added `m` costs one edit in the letters, two in the skeleton.
         return minOf(editDistance(sk, keywordSk, budget), editDistance(label, keyword.text, budget)) <= budget
     }
+
+    /**
+     * A small edit of the brand in one piece of a dashed label (`amelli-assure.fr`, `mon-amelli.xyz`). The hint is
+     * always required, and ordinary words that are also short brands (`mobile-service.com`) need a risky TLD.
+     */
+    private fun isTypoInPart(label: String, sk: String, keyword: BrandKeyword): Boolean {
+        val budget = typoBudget(keyword)
+        if (keyword.generic || budget == 0 || '-' !in label) return false
+        val strong = keyword.alwaysTypo || keyword.sensitiveShort || keyword.text.length >= MIN_UNHINTED_TYPO_LENGTH
+        if (!(riskyTld || (hasStrongLure && strong))) return false
+        val parts = label.split('-')
+        val skeletonParts = sk.split('-')
+        return parts.indices.any { i ->
+            // The skeleton keeps the hyphens, so both lists line up; the common-word list applies to the written part.
+            val skeletonPart = skeletonParts.getOrElse(i) { parts[i] }
+            parts[i].length >= MIN_PART_LENGTH &&
+                parts[i] !in PART_NEAR_MISS_WORDS &&
+                (isNearMiss(parts[i], keyword.text, budget) || isNearMiss(skeletonPart, keyword.skeleton, budget))
+        }
+    }
+
+    /** Within the budget but not equal: an exact part is the COMBINED rule's business. */
+    private fun isNearMiss(part: String, word: String, budget: Int) = editDistance(part, word, budget) in 1..budget
 
     private fun isDistinctive(keyword: BrandKeyword) = !keyword.generic && keyword.text.length >= MIN_DISTINCTIVE_LENGTH
 

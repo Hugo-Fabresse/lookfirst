@@ -61,6 +61,8 @@ Les alertes de sécurité de la CI (semgrep, gitleaks, osv-scanner, en mode rapp
 ### Gradle
 Toujours sous le verrou partagé avec les autres projets du PC : `flock /tmp/memlearn-gradle-test.lock ./gradlew … --max-workers=4`. `./gradlew --stop` aussi sous ce verrou.
 
+**Vérification des dépendances** : `gradle/verification-metadata.xml` (sha256, plugins de build compris) est vérifié à chaque build, en local comme en CI. À régénérer quand une dépendance ou un plugin change (catalogue de versions, Renovate), si le build échoue sur « Dependency verification failed » après contrôle que le changement est voulu : `flock /tmp/memlearn-gradle-test.lock ./gradlew --write-verification-metadata sha256 help assembleDebug assembleRelease testDebugUnitTest ktlintCheck detekt cpdCheck lintDebug lintRelease --max-workers=2`, puis relire le diff du fichier (jamais de régénération aveugle) et le commiter avec le changement de dépendance.
+
 ### Refactoring
 Seulement quand une relecture signale un problème structurel. Jamais mélangé à un commit de feature.
 

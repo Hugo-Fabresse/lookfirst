@@ -90,6 +90,7 @@ fun HardenDialogWindow() {
 }
 
 /** Needs the HIDE_OVERLAY_WINDOWS permission (manifest); without it the other protections above still apply. */
+@RequiresApi(Build.VERSION_CODES.S)
 private fun hideOverlays(window: Window) {
     try {
         window.setHideOverlayWindows(true)

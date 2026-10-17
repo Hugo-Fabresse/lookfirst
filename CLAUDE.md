@@ -52,7 +52,7 @@ GitHub ; rien n'est commité directement sur `main`.
 4. `di/` — bindings Hilt (si nouveaux injectables).
 5. `ui/screens/<name>/` — `UiState`, `ViewModel`, `Route`, `Screen`, composables de section.
 6. En local, sous le verrou : `flock /tmp/memlearn-gradle-test.lock ./gradlew compileDebugUnitTestKotlin ktlintCheck detekt --max-workers=4` + les tests touchés. Le gate de PR
-   `./gradlew ktlintCheck detekt cpdCheck testDebugUnitTest assembleDebug` tourne **une fois, en CI** sur la PR et doit être vert avant fusion. `lintDebug` et `assembleRelease` ne sont pas dans une PR ordinaire : ils font partie du gate complet, lancé à la main sur `main`.
+   `./gradlew ktlintCheck detekt cpdCheck testDebugUnitTest assembleDebug lintDebug` tourne **une fois, en CI** sur la PR et doit être vert avant fusion. `lintRelease` et `assembleRelease` ne sont pas dans une PR ordinaire : ils font partie du gate complet, lancé à la main sur `main` (lintDebug est dans le gate de PR depuis LF-21).
 7. Installation sur téléphone et test à la main, aux jalons (pas d'adb, pas d'`installDebug` dans les agents).
 8. Mettre à jour `PROGRESS.md` (+ `DECISIONS.md` / `BUGS.md` au besoin).
 
@@ -161,6 +161,6 @@ BUG [decoder] : ✅ Wi-Fi sans mot de passe rejeté — corrigé (LF-12)
 
 ## Critère de "done" (par ticket)
 
-- Gate de PR vert en CI : `./gradlew ktlintCheck detekt cpdCheck testDebugUnitTest assembleDebug` ; gate complet (à la main sur `main`) : + `lintDebug assembleRelease`.
+- Gate de PR vert en CI : `./gradlew ktlintCheck detekt cpdCheck testDebugUnitTest assembleDebug lintDebug` ; gate complet (à la main sur `main`) : + `lintRelease assembleRelease`.
 - Aucune violation ❌ ouverte dans `BUGS.md` pour la feature.
 - Critères d'acceptation du ticket cochés, PR relue (une seule relecture) puis fusionnée.

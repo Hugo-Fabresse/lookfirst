@@ -61,8 +61,8 @@ jobs:
         env:
           FULL_GATE: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          tasks=(ktlintCheck detekt cpdCheck testDebugUnitTest assembleDebug)
-          [ "$FULL_GATE" = true ] && tasks+=(lintDebug lintRelease assembleRelease)
+          tasks=(ktlintCheck detekt cpdCheck testDebugUnitTest assembleDebug lintDebug)
+          [ "$FULL_GATE" = true ] && tasks+=(lintRelease assembleRelease)
           tasks+=(:app:dependencies --configuration releaseRuntimeClasspath)
           echo "gradle tasks: ${tasks[*]}"
           ./gradlew --continue --max-workers=2 "${tasks[@]}"

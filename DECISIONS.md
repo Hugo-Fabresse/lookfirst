@@ -29,3 +29,4 @@ DECISION [decoder] : champs répétés Wi-Fi (S/T/P/H), schéma hors liste sans 
 DECISION [decoder] : HostKind.UNRESOLVED pour tout hôte non ASCII ou avec « % » — IPv4/domaine ne se décide qu'après le normaliseur UTS #46 (rawHost = hôte tel que saisi)
 DECISION [decoder] : espaces et caractères Default_Ignorable en tête ignorés pour classer le schéma — « \u200Bjavascript: » reste DangerousScheme
 DECISION [decoder] : longueur d'IBAN par pays non contrôlée (format + clé mod 97 seulement) — table des longueurs reportée à l'analyse
+DECISION [sécurité] : alerte semgrep exported_activity sur l'activité de lancement acceptée — composant MAIN/LAUNCHER obligatoirement exporté, seul composant exporté

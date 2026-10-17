@@ -106,6 +106,11 @@ private val REASON_TABLE: Map<SignalCode, ReasonRes> = mapOf(
     ),
     SignalCode.UNPARSABLE to reason(R.string.reason_unparsable_short, R.string.reason_unparsable),
     SignalCode.REDIRECT_HTTP to reason(R.string.reason_redirect_http_short, R.string.reason_redirect_http),
+    SignalCode.REDIRECT_PRIVATE to reason(R.string.reason_redirect_private_short, R.string.reason_redirect_private),
+    SignalCode.REDIRECT_EXCESSIVE to reason(
+        R.string.reason_redirect_excessive_short,
+        R.string.reason_redirect_excessive,
+    ),
     SignalCode.REDIRECT_FINAL to counted(R.string.reason_redirect_final_short, R.plurals.reason_redirect_final),
     SignalCode.DOMAIN_RECENT to counted(R.string.reason_domain_recent_short, R.plurals.reason_domain_recent),
 )

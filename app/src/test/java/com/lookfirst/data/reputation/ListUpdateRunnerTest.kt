@@ -69,7 +69,12 @@ class ListUpdateRunnerTest {
         ReputationStore(File(folder.root, "reputation"), null, { NOW }, directorySync = {}, acceptTestKeys = true)
     }
     private val runner by lazy {
-        ListUpdateRunner(ListDownloader(server, server.endpoint, store, pause = {}), preferences) { clockValue }
+        ListUpdateRunner(
+            ListDownloader(server, server.endpoint, store, pause = {
+            }),
+            preferences,
+            Dispatchers.IO,
+        ) { clockValue }
     }
 
     private val day10 =

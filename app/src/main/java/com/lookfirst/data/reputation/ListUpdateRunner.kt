@@ -3,7 +3,8 @@ package com.lookfirst.data.reputation
 import com.lookfirst.data.platform.AppPreferences
 import com.lookfirst.data.platform.LastAttempt
 import com.lookfirst.data.platform.UpdateOutcome
-import kotlinx.coroutines.Dispatchers
+import com.lookfirst.di.IoDispatcher
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,11 +25,15 @@ class RunResult(val outcome: UpdateOutcome?, val retry: Boolean)
 class ListUpdateRunner internal constructor(
     private val downloader: ListDownloader,
     private val preferences: AppPreferences,
+    private val io: CoroutineDispatcher,
     private val clock: () -> Long,
 ) {
     @Inject
-    internal constructor(downloader: ListDownloader, preferences: AppPreferences) :
-        this(downloader, preferences, System::currentTimeMillis)
+    internal constructor(
+        downloader: ListDownloader,
+        preferences: AppPreferences,
+        @IoDispatcher io: CoroutineDispatcher,
+    ) : this(downloader, preferences, io, System::currentTimeMillis)
 
     private val gate = Mutex()
     private val mutableRunning = MutableStateFlow(false)
@@ -44,7 +49,7 @@ class ListUpdateRunner internal constructor(
         if (!gate.tryLock()) return RunResult(null, retry = false)
         try {
             mutableRunning.value = true
-            val outcome = withContext(Dispatchers.IO) { downloader.download() }
+            val outcome = withContext(io) { downloader.download() }
             val result = toResult(outcome)
             result.outcome?.let { preferences.recordAttempt(LastAttempt(clock(), it)) }
             return result

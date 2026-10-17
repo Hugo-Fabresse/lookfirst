@@ -27,7 +27,12 @@ class ListUpdateControlTest {
         ReputationStore(File(folder.root, "reputation"), null, { NOW }, directorySync = {}, acceptTestKeys = true)
     }
     private val runner by lazy {
-        ListUpdateRunner(ListDownloader(server, server.endpoint, store, pause = {}), preferences) { now }
+        ListUpdateRunner(
+            ListDownloader(server, server.endpoint, store, pause = {
+            }),
+            preferences,
+            Dispatchers.IO,
+        ) { now }
     }
     private val control by lazy {
         DefaultListUpdateControl(

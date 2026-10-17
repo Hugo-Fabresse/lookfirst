@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -96,7 +97,8 @@ private fun TopBar(state: ScanUiState, onTorchToggle: () -> Unit, onOpenSettings
             text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f),
+            // A title for TalkBack: without it the screen starts on a viewfinder with no heading.
+            modifier = Modifier.weight(1f).semantics { heading() },
         )
         if (state is ScanUiState.Scanning && state.torchAvailable) {
             val colors = MaterialTheme.colorScheme

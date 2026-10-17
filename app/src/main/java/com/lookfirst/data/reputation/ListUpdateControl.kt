@@ -14,6 +14,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val MANUAL_COOLDOWN_MILLIS = 15 * 60_000L
+private val EMPTY_STATUS =
+    ListsStatus(entries = null, ageDays = null, autoUpdate = true, lastAttempt = null, updating = false)
 
 /** What the settings screen shows about the lists. [entries] and [ageDays] are null while nothing is loaded. */
 data class ListsStatus(
@@ -61,7 +63,9 @@ class DefaultListUpdateControl internal constructor(
         @ApplicationScope scope: CoroutineScope,
     ) : this(store, preferences, scheduler, runner, scope, System::currentTimeMillis)
 
-    private val mutableStatus = MutableStateFlow(read())
+    // Empty until the first refresh: injection happens on the main thread, which must not read the preferences or the
+    // store. ListsStartup refreshes from the IO dispatcher at app start.
+    private val mutableStatus = MutableStateFlow(EMPTY_STATUS)
     override val status: StateFlow<ListsStatus> = mutableStatus.asStateFlow()
 
     init {

@@ -7,10 +7,11 @@ import com.lookfirst.domain.rdap.RdapFailure
 import com.lookfirst.domain.rdap.RdapOutcome
 import com.lookfirst.domain.rdap.RdapServer
 import com.lookfirst.domain.rdap.RdapTarget
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -352,10 +353,11 @@ class SocketRdapClientTest {
     fun `cancelling the caller closes the open connection`() {
         val closed = AtomicBoolean(false)
         val entered = CountDownLatch(1)
+        val hold = CountDownLatch(1)
         val hanging = HopTransport { _, _, _, abort ->
             abort.register(Closeable { closed.set(true) })
             entered.countDown()
-            Thread.sleep(2_000)
+            hold.await(30, TimeUnit.SECONDS)
             found("2026-10-10T00:00:00Z")
         }
         val pool = Executor { Thread(it).apply { isDaemon = true }.start() }
@@ -363,10 +365,11 @@ class SocketRdapClientTest {
             val job: Job = launch {
                 SocketRdapClient(resolver, hanging, pool, timeoutMillis = 10_000, wallClock = { wall }).lookup(target)
             }
-            while (entered.count > 0) delay(10)
+            assertTrue(withContext(Dispatchers.IO) { entered.await(5, TimeUnit.SECONDS) })
             job.cancel()
             job.join()
         }
+        hold.countDown()
         assertTrue(closed.get())
     }
 }

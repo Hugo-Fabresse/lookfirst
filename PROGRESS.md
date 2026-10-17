@@ -37,3 +37,4 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-37 — label du clip sensible persisté (effacement après mort du processus) + toString des ScanPayload sans contenu — tests: ClipboardProcessDeathTest, ScanPayloadToStringTest
 - [✅ DONE] LF-36 — API 23 : confiance limitée aux autorités système pour les listes, le traceur et le RDAP (audit S-8) — tests: SystemTrustTest ; androidTest TlsHostCheckTest à lancer sur API 23
 - [✅ DONE] LF-45 — icône finale (adaptative + thématique, PNG de repli API 23-25) — branche feat/LF-45-app-icon
+- [🔄 WIP]  LF-40 — règles d'architecture automatisées (ArchitectureRulesTest), tests sans sleep, navigation Scan→Résultat, CheckedNetwork, titre d'accessibilité du scan, statut des listes hors thread principal à l'injection — branche test/LF-40-architecture-and-gaps

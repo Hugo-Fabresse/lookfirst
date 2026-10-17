@@ -43,6 +43,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Stays on the main thread on purpose: the start destination must be known before the first frame, and this is
+        // one boolean of a tiny preferences file (a blocking read here is the cost of not showing the wrong screen).
         val showFirstLaunch = !preferences.firstLaunchDone()
         setContent {
             LookFirstTheme {

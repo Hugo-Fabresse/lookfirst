@@ -30,7 +30,7 @@ class ListUpdateControlTest {
         ListUpdateRunner(
             PublisherDownloader(server, listOf(source), store, emptySet(), publicSuffixList = { TEST_PSL }),
             preferences,
-            Dispatchers.IO,
+            Dispatchers.Unconfined,
         ) { now }
     }
     private val control by lazy {
@@ -45,14 +45,9 @@ class ListUpdateControlTest {
 
     private fun publish() = server.put(source.url, domainLines(100))
 
-    private fun waitFor(condition: () -> Boolean) {
-        val deadline = System.nanoTime() + 5_000_000_000L
-        while (!condition() && System.nanoTime() < deadline) Thread.sleep(10)
-        assertTrue("condition not reached in time", condition())
-    }
-
-    private fun waitForAttempt(): UpdateOutcome {
-        waitFor { preferences.last != null && !runner.running.value }
+    /** Everything runs on [Dispatchers.Unconfined]: once `updateNow()` returns, the attempt is over. */
+    private fun finishedAttempt(): UpdateOutcome {
+        assertFalse(runner.running.value)
         return preferences.last!!.outcome
     }
 
@@ -70,7 +65,7 @@ class ListUpdateControlTest {
         assertTrue(preferences.firstLaunch)
         assertTrue(preferences.auto)
         assertEquals(1, scheduler.scheduled)
-        assertEquals(UpdateOutcome.UPDATED, waitForAttempt())
+        assertEquals(UpdateOutcome.UPDATED, finishedAttempt())
         assertEquals(1, server.requests.size)
     }
 
@@ -97,8 +92,8 @@ class ListUpdateControlTest {
     fun updateNowRunsOnceAndShowsTheResult() {
         publish()
         control.updateNow()
-        assertEquals(UpdateOutcome.UPDATED, waitForAttempt())
-        waitFor { control.status.value.entries != null }
+        assertEquals(UpdateOutcome.UPDATED, finishedAttempt())
+        assertNotNull(control.status.value.entries)
         assertEquals(100L, control.status.value.entries)
         assertEquals(UpdateOutcome.UPDATED, control.status.value.lastAttempt?.outcome)
         assertFalse(control.status.value.updating)
@@ -108,25 +103,24 @@ class ListUpdateControlTest {
     fun aSecondTapWithinFifteenMinutesOfASuccessDoesNotAskTheServerAgain() {
         publish()
         control.updateNow()
-        waitForAttempt()
+        finishedAttempt()
         val before = server.requests.size
         now += 14 * 60_000L
         control.updateNow()
-        Thread.sleep(100)
         assertEquals(before, server.requests.size)
         now += 2 * 60_000L
         control.updateNow()
-        waitFor { server.requests.size > before }
+        assertTrue(server.requests.size > before)
     }
 
     @Test
     fun aFailedAttemptCanBeRetriedAtOnce() {
         server.failure = IOException("down")
         control.updateNow()
-        assertEquals(UpdateOutcome.FAILED, waitForAttempt())
+        assertEquals(UpdateOutcome.FAILED, finishedAttempt())
         val before = server.requests.size
         control.updateNow()
-        waitFor { server.requests.size > before }
+        assertTrue(server.requests.size > before)
     }
 
     @Test

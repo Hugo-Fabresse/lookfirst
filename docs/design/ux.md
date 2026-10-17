@@ -675,7 +675,8 @@ Phrasing rules: one sentence, says what was seen, then what it means; no "malwar
 | age_result_registered (plurals) | Domaine enregistré le %1$s (il y a %2$d jour(s)). | Domain registered on %1$s (%2$d day(s) ago). |
 | warn_continue | Continuer | Continue |
 | check_loading | Vérification en cours… | Checking… |
-| check_failed | Vérification impossible (délai dépassé ou réseau indisponible). Le verdict reste celui de l'analyse locale. | Check not possible (timed out or network unavailable). The verdict remains the local analysis. |
+| check_failed | Vérification impossible (délai dépassé ou réseau indisponible). Le verdict n'a pas changé. | Check not possible (timed out or network unavailable). The verdict has not changed. |
+| check_busy | Réessayez dans un instant. | Try again in a moment. |
 | trace_https_only | Disponible pour les liens https uniquement. | Only available for https links. |
 | trace_port_only | Disponible pour les liens sur le port https standard uniquement. | Only available for links on the standard https port. |
 | check_offline_note | Hors connexion | Offline |

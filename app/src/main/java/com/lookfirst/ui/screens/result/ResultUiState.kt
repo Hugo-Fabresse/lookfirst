@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.lookfirst.R
 import com.lookfirst.domain.model.Untrusted
 import com.lookfirst.domain.verdict.Verdict
+import com.lookfirst.domain.verdict.VerdictLevel
 
 /** State of the Result screen (ux.md 5.5, 5.6). The content shown never changes once it is [Content]. */
 sealed interface ResultUiState {
@@ -27,6 +28,8 @@ sealed interface ResultUiState {
         val confirmingOpen: Boolean = false,
         /** Open was tapped and its action is under way: a second tap does nothing. */
         val opening: Boolean = false,
+        /** The "Optional checks" section (ux.md 3.7); null for content that is not a web link. */
+        val checks: OptionalChecks? = null,
     ) : ResultUiState
 }
 
@@ -79,3 +82,32 @@ data class HostDisplay(val shown: Untrusted, val technical: String?, val strongF
 
 /** The action behind the Open button. */
 enum class OpenKind { BROWSER, DIALER, SMS, MAIL, MAPS, WIFI }
+
+/** Where the redirect check stands. The warning is shown every time, never remembered. */
+enum class TraceState {
+    IDLE,
+
+    /** The warning sheet (ux.md 5.12) is open. */
+    WARNING,
+
+    /** The request is under way (loading sheet, Cancel always available). */
+    RUNNING,
+
+    /** No trace could be made: the section says so, the verdict is the local analysis. */
+    FAILED,
+
+    /** The trace was made and its signals are in the verdict: the check is not offered again. */
+    DONE,
+}
+
+/**
+ * The optional, network-using checks of a web link (ux.md 3.7). [httpsOnly]: the link is plain `http://`, which the
+ * app never contacts. [online] false disables the button. [levelChangedTo] is set once when a check moved the level
+ * (TalkBack announces it through a live region, nothing is announced otherwise).
+ */
+data class OptionalChecks(
+    val trace: TraceState = TraceState.IDLE,
+    val httpsOnly: Boolean = false,
+    val online: Boolean = true,
+    val levelChangedTo: VerdictLevel? = null,
+)

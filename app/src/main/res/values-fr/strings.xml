@@ -73,6 +73,16 @@
     <string name="a11y_masked">masqué</string>
     <string name="a11y_copy_exact">%1$s, contenu exact</string>
     <string name="a11y_cancel_resume">Annuler et reprendre le scan</string>
+    <string name="optional_checks">Vérifications facultatives</string>
+    <string name="trace_redirects">Suivre les redirections</string>
+    <string name="trace_https_only">Disponible pour les liens https uniquement.</string>
+    <string name="check_offline_note">Hors connexion</string>
+    <string name="warn_trace_title">Suivre les redirections ?</string>
+    <string name="warn_trace_body">LookFirst va contacter ce lien pour voir où il mène. Le site verra votre adresse IP et saura que son QR code a été scanné. Rien n\'est ouvert ni installé.</string>
+    <string name="warn_continue">Continuer</string>
+    <string name="check_loading">Vérification en cours…</string>
+    <string name="check_failed">Vérification impossible (délai dépassé ou réseau indisponible). Le verdict reste celui de l\'analyse locale.</string>
+    <string name="a11y_level_changed">Niveau passé à %1$s</string>
     <plurals name="chars_more">
         <item quantity="one">… (%1$d caractère de plus non affiché)</item>
         <item quantity="other">… (%1$d caractères de plus non affichés)</item>

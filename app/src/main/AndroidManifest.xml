@@ -10,7 +10,10 @@
     <uses-feature
         android:name="android.hardware.camera.any"
         android:required="false" />
-    <!-- No INTERNET yet: added by the ticket that downloads the reputation lists. -->
+    <!-- Reputation list updates and the optional, user-triggered checks (redirect tracing). Nothing else uses the network. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Normal permission: only to know whether the device is offline, so that the optional checks can be disabled. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Package visibility (API 30+), resolution only: which browsers exist, whether an app other than a browser
          would capture an https link (App Links; best effort, hostless filters only), and the system add-network dialog. No QUERY_ALL_PACKAGES. -->

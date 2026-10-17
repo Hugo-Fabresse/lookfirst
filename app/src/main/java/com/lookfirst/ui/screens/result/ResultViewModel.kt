@@ -2,8 +2,10 @@ package com.lookfirst.ui.screens.result
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lookfirst.data.network.RedirectTracer
 import com.lookfirst.data.platform.ActionExecutor
 import com.lookfirst.data.platform.ClipboardWriter
+import com.lookfirst.data.platform.NetworkStatus
 import com.lookfirst.data.platform.OpenOutcome
 import com.lookfirst.data.platform.PayloadIdGenerator
 import com.lookfirst.data.platform.RegionHintProvider
@@ -16,7 +18,10 @@ import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.Signal
 import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
+import com.lookfirst.domain.open.CanonicalUrl
+import com.lookfirst.domain.redirect.TraceOutcome
 import com.lookfirst.domain.usecase.AnalyzeScan
+import com.lookfirst.domain.usecase.ApplyRedirectTrace
 import com.lookfirst.domain.verdict.Verdict
 import com.lookfirst.domain.verdict.VerdictEngine
 import com.lookfirst.domain.verdict.VerdictLevel
@@ -60,6 +65,9 @@ class ResultViewModel @Inject constructor(
     private val analyzeScan: AnalyzeScan,
     private val regionHints: RegionHintProvider,
     private val payloadIds: PayloadIdGenerator,
+    private val redirectTracer: RedirectTracer,
+    private val applyRedirectTrace: ApplyRedirectTrace,
+    private val networkStatus: NetworkStatus,
     @DefaultDispatcher private val workDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow<ResultUiState>(ResultUiState.NoContent)
@@ -72,6 +80,11 @@ class ResultViewModel @Inject constructor(
     private var payload: ScanPayload? = null
     private var copyIsSecret = false
     private var parsing: Job? = null
+    private var tracing: Job? = null
+
+    /** What the optional redirect check works on: the scanned address in canonical form and the local verdict. */
+    private var traceStart: CanonicalUrl? = null
+    private var localVerdict: Verdict? = null
 
     /**
      * Starts showing [content]. Ignored while another content is displayed. [multipleCodes]: the image it comes
@@ -91,7 +104,15 @@ class ResultViewModel @Inject constructor(
             mutableState.value = ui
             if (parsed is ParseResult.Ok) {
                 val verdict = withContext(workDispatcher) { analyze(content.value, payloadId, parsed) }
-                mutableState.update { if (it is ResultUiState.Content) it.copy(verdict = verdict) else it }
+                val start = (payload as? ScanPayload.Url)?.let { CanonicalUrl.of(it) }
+                traceStart = start
+                localVerdict = verdict
+                val checks = start?.let {
+                    OptionalChecks(httpsOnly = it.scheme != HTTPS, online = networkStatus.isOnline())
+                }
+                mutableState.update {
+                    if (it is ResultUiState.Content) it.copy(verdict = verdict, checks = checks) else it
+                }
             }
         }
     }
@@ -197,10 +218,77 @@ class ResultViewModel @Inject constructor(
         mutableState.update { if (it is ResultUiState.Content) it.copy(confirmingSecretCopy = false) else it }
     }
 
+    /** "Follow redirects": opens the warning sheet (every time). Offline or http: nothing opens. */
+    fun onTraceRequested() {
+        val current = mutableState.value as? ResultUiState.Content ?: return
+        val checks = current.checks ?: return
+        if (checks.httpsOnly || checks.trace == TraceState.RUNNING || checks.trace == TraceState.DONE) return
+        val online = networkStatus.isOnline()
+        updateChecks { it.copy(online = online, trace = if (online) TraceState.WARNING else it.trace) }
+    }
+
+    /** "Continue" in the warning: the one place where a request about the scanned link is made. */
+    fun onTraceConfirmed() {
+        val checks = (mutableState.value as? ResultUiState.Content)?.checks ?: return
+        val start = traceStart
+        val base = localVerdict
+        if (checks.trace != TraceState.WARNING || start == null || base == null) return
+        updateChecks { it.copy(trace = TraceState.RUNNING) }
+        tracing = viewModelScope.launch {
+            val outcome = redirectTracer.trace(start)
+            if (outcome !is TraceOutcome.Completed) {
+                updateChecks { it.copy(trace = TraceState.FAILED) }
+                return@launch
+            }
+            val updated = withContext(workDispatcher) { merge(base, outcome) }
+            mutableState.update {
+                if (it !is ResultUiState.Content || it.checks == null) return@update it
+                val before = it.verdict?.level
+                val changed = if (before != null && updated.level != before) updated.level else null
+                it.copy(verdict = updated, checks = it.checks.copy(trace = TraceState.DONE, levelChangedTo = changed))
+            }
+        }
+    }
+
+    /** Cancel in the warning or while loading: nothing is kept, no verdict changes. */
+    fun onTraceCancelled() {
+        tracing?.cancel()
+        tracing = null
+        updateChecks {
+            if (it.trace == TraceState.WARNING ||
+                it.trace == TraceState.RUNNING
+            ) {
+                it.copy(trace = TraceState.IDLE)
+            } else {
+                it
+            }
+        }
+    }
+
+    /** Never throws: a merge that fails keeps the local verdict and reports the check as failed. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun merge(base: Verdict, outcome: TraceOutcome.Completed): Verdict = try {
+        applyRedirectTrace(base, outcome.trace, AnalysisContext(regionHints.regionHint()))
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (ignored: Exception) {
+        base
+    }
+
+    private fun updateChecks(change: (OptionalChecks) -> OptionalChecks) {
+        mutableState.update {
+            if (it is ResultUiState.Content && it.checks != null) it.copy(checks = change(it.checks)) else it
+        }
+    }
+
     /** Cancel / back: forget the content. */
     fun clear() {
         parsing?.cancel()
         parsing = null
+        tracing?.cancel()
+        tracing = null
+        traceStart = null
+        localVerdict = null
         scanned = null
         payload = null
         copyIsSecret = false
@@ -213,3 +301,5 @@ class ResultViewModel @Inject constructor(
         eventChannel.trySend(ResultEvent.Copied)
     }
 }
+
+private const val HTTPS = "https"

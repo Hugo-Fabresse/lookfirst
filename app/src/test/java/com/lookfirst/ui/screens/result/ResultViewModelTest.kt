@@ -13,7 +13,10 @@ import com.lookfirst.data.reputation.NoReputationLists
 import com.lookfirst.domain.model.ScanPayload
 import com.lookfirst.domain.model.SignalCode
 import com.lookfirst.domain.model.Untrusted
+import com.lookfirst.domain.redirect.TraceFailure
+import com.lookfirst.domain.redirect.TraceOutcome
 import com.lookfirst.domain.usecase.AnalyzeScan
+import com.lookfirst.domain.usecase.ApplyRedirectTrace
 import com.lookfirst.domain.verdict.Verdict
 import com.lookfirst.domain.verdict.VerdictLevel
 import kotlinx.coroutines.CoroutineDispatcher
@@ -68,6 +71,9 @@ class ResultViewModelTest {
         analyzeScan = AnalyzeScan(NoReputationLists()),
         regionHints = RegionHintProvider { region },
         payloadIds = PayloadIdGenerator { "id-${++nextId}" },
+        redirectTracer = { TraceOutcome.Failed(TraceFailure.NETWORK) },
+        applyRedirectTrace = ApplyRedirectTrace(AnalyzeScan(NoReputationLists())),
+        networkStatus = { true },
         workDispatcher = Dispatchers.Unconfined,
     )
 
@@ -308,6 +314,9 @@ class ResultViewModelTest {
             analyzeScan = AnalyzeScan(NoReputationLists()),
             regionHints = RegionHintProvider { error("boom") },
             payloadIds = PayloadIdGenerator { "id-x" },
+            redirectTracer = { TraceOutcome.Failed(TraceFailure.NETWORK) },
+            applyRedirectTrace = ApplyRedirectTrace(AnalyzeScan(NoReputationLists())),
+            networkStatus = { true },
             workDispatcher = Dispatchers.Unconfined,
         )
         vm.show(Untrusted("https://example.com/"))
@@ -326,6 +335,9 @@ class ResultViewModelTest {
             analyzeScan = AnalyzeScan(NoReputationLists()),
             regionHints = RegionHintProvider { null },
             payloadIds = PayloadIdGenerator { "id-${++nextId}" },
+            redirectTracer = { TraceOutcome.Failed(TraceFailure.NETWORK) },
+            applyRedirectTrace = ApplyRedirectTrace(AnalyzeScan(NoReputationLists())),
+            networkStatus = { true },
             workDispatcher = queue,
         )
         vm.show(Untrusted("https://first.example/"))

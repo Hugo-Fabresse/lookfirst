@@ -7,6 +7,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -85,7 +86,9 @@ class VerdictScreenTest {
         show(analysed("https://192.0.2.1/login"))
         composeRule.onNodeWithText(text(R.string.level_suspicious)).assertExists()
         composeRule.onNodeWithText(text(R.string.action_open_anyway)).assertExists()
-        composeRule.onNodeWithContentDescription(text(R.string.a11y_open_unavailable)).assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(
+            text(R.string.a11y_open_unavailable, text(R.string.action_open_anyway)),
+        ).assertIsNotEnabled()
     }
 
     @Test
@@ -215,9 +218,25 @@ class VerdictScreenTest {
     }
 
     @Test
-    fun onlyTheBannerIsALiveRegionAndAHeading() {
-        show(analysed("https://paypal.com@evil.example/login"))
-        composeRule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.LiveRegion)).assertCountEquals(1)
+    fun theBannerIsTheOnlyHeadingAndIsNotAnnouncedAgainAfterARotation() {
+        val tester = StateRestorationTester(composeRule)
+        val state = analysed("https://paypal.com@evil.example/login")
+        tester.setContent {
+            LookFirstTheme {
+                ResultScreen(
+                    state = state,
+                    snackbarHostState = SnackbarHostState(),
+                    onCancel = {},
+                    onCopy = {},
+                    onConfirmSecretCopy = {},
+                    onDismissSecretCopy = {},
+                )
+            }
+        }
+        composeRule.waitForIdle()
+        tester.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+        composeRule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.LiveRegion)).assertCountEquals(0)
         composeRule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertCountEquals(1)
     }
 
@@ -225,7 +244,9 @@ class VerdictScreenTest {
     fun aCopyOnlyContentHasNoOpenButton() {
         show(analysed("monappli://pay?to=bob"))
         composeRule.onNodeWithText(text(R.string.copy_only)).assertExists()
-        composeRule.onAllNodes(hasContentDescription(text(R.string.a11y_open_unavailable))).assertCountEquals(0)
+        composeRule.onAllNodes(
+            hasContentDescription(text(R.string.a11y_open_unavailable, ""), substring = true),
+        ).assertCountEquals(0)
         composeRule.onAllNodesWithText(text(R.string.open_in_browser)).assertCountEquals(0)
     }
 }

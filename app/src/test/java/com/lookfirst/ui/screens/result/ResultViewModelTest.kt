@@ -1,5 +1,6 @@
 package com.lookfirst.ui.screens.result
 
+import android.os.Looper
 import app.cash.turbine.test
 import com.lookfirst.R
 import com.lookfirst.data.platform.ClipboardWriter
@@ -11,6 +12,7 @@ import com.lookfirst.domain.model.Untrusted
 import com.lookfirst.domain.usecase.AnalyzeScan
 import com.lookfirst.domain.verdict.Verdict
 import com.lookfirst.domain.verdict.VerdictLevel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -20,6 +22,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import kotlin.coroutines.CoroutineContext
 
 /** Robolectric only for the main looper behind `viewModelScope`; parsing runs on `Dispatchers.Unconfined`. */
 @RunWith(RobolectricTestRunner::class)
@@ -259,6 +263,57 @@ class ResultViewModelTest {
         assertTrue(verdictOf("tel:0899123456").reasons.any { it.code == SignalCode.PREMIUM_NUMBER })
         region = null
         assertTrue(verdictOf("tel:0899123456").reasons.none { it.code == SignalCode.PREMIUM_NUMBER })
+    }
+
+    /** A dispatcher that only runs what it queued when the test says so. */
+    private class QueueDispatcher : CoroutineDispatcher() {
+        private val queue = ArrayDeque<Runnable>()
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            queue.addLast(block)
+        }
+
+        fun runAll() {
+            repeat(5) {
+                while (queue.isNotEmpty()) queue.removeFirst().run()
+                shadowOf(Looper.getMainLooper()).idle()
+            }
+        }
+    }
+
+    @Test
+    fun aFailingAnalysisIsCautionAndIncompleteNeverNoRisk() {
+        val vm = ResultViewModel(
+            clipboard = clipboard,
+            analyzeScan = AnalyzeScan(NoReputationLists()),
+            regionHints = RegionHintProvider { error("boom") },
+            payloadIds = PayloadIdGenerator { "id-x" },
+            workDispatcher = Dispatchers.Unconfined,
+        )
+        vm.show(Untrusted("https://example.com/"))
+        val verdict = vm.verdict()
+        assertEquals(VerdictLevel.CAUTION, verdict.level)
+        assertEquals(listOf(SignalCode.ANALYSIS_INCOMPLETE), verdict.reasons.map { it.code })
+        assertEquals("id-x", verdict.payloadId)
+    }
+
+    @Test
+    fun onlyTheLastShownContentGetsItsVerdictWhenTheFirstWasCleared() {
+        val queue = QueueDispatcher()
+        val vm = ResultViewModel(
+            clipboard = clipboard,
+            analyzeScan = AnalyzeScan(NoReputationLists()),
+            regionHints = RegionHintProvider { null },
+            payloadIds = PayloadIdGenerator { "id-${++nextId}" },
+            workDispatcher = queue,
+        )
+        vm.show(Untrusted("https://first.example/"))
+        vm.clear()
+        vm.show(Untrusted("https://second.example/"))
+        queue.runAll()
+        val state = vm.state.value as ResultUiState.Content
+        assertEquals("https://second.example/", state.content.exact.value)
+        assertEquals("id-2", state.verdict?.payloadId)
     }
 
     @Test

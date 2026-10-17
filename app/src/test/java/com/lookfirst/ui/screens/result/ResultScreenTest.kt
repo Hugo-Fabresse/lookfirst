@@ -99,7 +99,9 @@ class ResultScreenTest {
         composeRule.onNodeWithText("https://paypal.com@evil.example/login").assertExists()
         composeRule.onNodeWithText(text(R.string.action_cancel)).assertExists()
         composeRule.onNodeWithText(text(R.string.action_copy)).assertExists()
-        composeRule.onNodeWithContentDescription(text(R.string.a11y_open_unavailable)).assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(
+            text(R.string.a11y_open_unavailable, text(R.string.action_open_anyway)),
+        ).assertIsNotEnabled()
     }
 
     @Test
@@ -218,7 +220,9 @@ class ResultScreenTest {
         showScanned("WIFI:T:WPA;S:HomeNet;P:hunter2;;", confirmingSecretCopy = true)
         composeRule.onNodeWithText(text(R.string.dialog_copy_secret_title)).assertExists()
         composeRule.onNodeWithText(text(R.string.dialog_copy_secret_body)).assertExists()
-        val dialogCopy = hasText(text(R.string.action_copy)) and !hasContentDescription(text(R.string.a11y_copy_exact))
+        val dialogCopy =
+            hasText(text(R.string.action_copy)) and
+                !hasContentDescription(text(R.string.a11y_copy_exact, text(R.string.action_copy)))
         composeRule.onNode(dialogCopy).performClick()
         assertEquals(1, confirms)
         val dialogCancel = hasText(text(R.string.action_cancel)) and

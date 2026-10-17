@@ -128,6 +128,13 @@ private fun ContentBody(content: ResultContent) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         NotAnalysedBanner()
+        if (content.multipleCodes) {
+            Text(
+                text = stringResource(R.string.err_multi_qr),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+        }
         Text(
             text = stringResource(content.typeLabel),
             style = MaterialTheme.typography.titleMedium,

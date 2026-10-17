@@ -58,6 +58,16 @@ class ResultViewModelTest {
     }
 
     @Test
+    fun multipleCodesFromAnImageAreFlaggedOnTheContent() {
+        val vm = viewModel()
+        vm.show(Untrusted("https://first.example"), multipleCodes = true)
+        assertTrue(vm.content().multipleCodes)
+        vm.clear()
+        vm.show(Untrusted("https://first.example"))
+        assertFalse(vm.content().multipleCodes)
+    }
+
+    @Test
     fun theContentNeverChangesWhileOpen() {
         val vm = viewModel()
         vm.show(Untrusted("https://first.example"))

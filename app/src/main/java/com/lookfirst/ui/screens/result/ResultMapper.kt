@@ -8,7 +8,7 @@ import com.lookfirst.domain.model.Untrusted
 private const val CRYPTO_GROUP_SIZE = 4
 
 /** Pure mapping from the decoder output to what the Result screen shows. No analysis, no verdict. */
-internal fun ParseResult.toUiState(): ResultUiState = when (this) {
+internal fun ParseResult.toUiState(multipleCodes: Boolean = false): ResultUiState = when (this) {
     is ParseResult.TooLarge -> ResultUiState.Unreadable(UnreadableReason.TOO_LARGE)
     ParseResult.Empty -> ResultUiState.Unreadable(UnreadableReason.EMPTY)
     is ParseResult.Ok -> ResultUiState.Content(
@@ -21,6 +21,7 @@ internal fun ParseResult.toUiState(): ResultUiState = when (this) {
             hiddenCharCount = hiddenChars.size + fieldHiddenChars.sumOf { it.chars.size },
             containsSecret = payload.containsSecret(),
             copyOnly = payload is ScanPayload.AppLink || payload is ScanPayload.DangerousScheme,
+            multipleCodes = multipleCodes,
         ),
     )
 }

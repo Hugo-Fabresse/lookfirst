@@ -86,4 +86,13 @@
     </plurals>
     <string name="overlay_blocked">Another app is covering LookFirst. Close it to continue.</string>
     <string name="host_non_latin_warning">This address contains non-Latin characters: it can imitate another site.</string>
+    <string name="pick_other_image">Choose another image</string>
+    <string name="back_to_camera">Back to camera</string>
+    <string name="image_title">Image</string>
+    <string name="reading_image">Reading the image…</string>
+    <string name="err_no_qr">No QR code found in this image. Try a sharper, well-framed image without glare.</string>
+    <string name="err_unreadable">A QR code was spotted, but it is too damaged to be read.</string>
+    <string name="err_image_too_big">This image is too large to be read safely. Choose a lighter one.</string>
+    <string name="err_image_corrupt">This image cannot be opened. It may be damaged or in an unsupported format.</string>
+    <string name="err_multi_qr">Several QR codes in the image: only the first is shown.</string>
 </resources>

@@ -90,6 +90,7 @@ Status legend: **M** mitigated by design; **A** accepted explicitly (reason give
 | T-STO-1 | History reveals what the user scanned (I) | Off by default; host + level + time only; never otpauth, Wi-Fi secrets or payment data; excluded from backup and device transfer; one-tap delete; auto-expiry | M; protection is the device lock only, A |
 | T-STO-2 | Other apps read app storage (A5) | App-private storage, no world-readable modes, `allowBackup="false"` | M (rooted devices out of scope) |
 | T-STO-3 | Logs leak scanned content (I) | No scan content in release logs: R8 needs `-assumenosideeffects class android.util.Log { ... }` rules to strip `Log.*` (plain shrinking does not); no crash-reporting SDK | M |
+| T-STO-4 | Scanned content in `toString()` of the payload types (I) | Every `ScanPayload` variant prints its type and length only; a test walks all variants with a sentinel and an exhaustive `when` without `else` breaks the build when a variant is added untested (LF-37) | M |
 | T-PRM-1 | Broad permissions enlarge blast radius (E) | Only `CAMERA` (runtime) and `INTERNET`; Photo Picker for images; no `QUERY_ALL_PACKAGES` | M |
 | T-PRM-2 | Camera kept open or frames kept (I) | CameraX lifecycle-bound, released on stop; frames never saved | M |
 

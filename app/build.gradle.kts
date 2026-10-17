@@ -108,6 +108,9 @@ android {
             isIncludeAndroidResources = true // Robolectric needs the merged resources
             all {
                 it.dependsOn(prepareRobolectricAndroidAll)
+                it.inputs.files(prepareRobolectricAndroidAll)
+                    .withPropertyName("robolectricAndroidAll")
+                    .withPathSensitivity(PathSensitivity.RELATIVE)
                 // Relative to the test working directory (the app module): no absolute path.
                 it.systemProperty("robolectric.offline", "true")
                 it.systemProperty("robolectric.dependency.dir", "build/robolectric-android-all")

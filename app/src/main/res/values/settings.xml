@@ -3,7 +3,7 @@
     <string name="onboarding_tagline">Look before you open.</string>
     <string name="onboarding_nothing_opens">Nothing opens by itself. You always choose.</string>
     <string name="onboarding_privacy">Everything is analysed on your phone. Scanned addresses are not sent anywhere, unless you start an optional check.</string>
-    <string name="onboarding_lists">Lists of reported sites are downloaded in the background.</string>
+    <string name="onboarding_lists">Lists of reported sites are downloaded now, then every day, from their publisher (CERT Polska).</string>
     <string name="onboarding_auto_update">Automatic update</string>
     <string name="onboarding_changeable">You can change this in Settings.</string>
     <string name="onboarding_no_guarantee">No scan guarantees anything: a new site may be on no list.</string>

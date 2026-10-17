@@ -14,10 +14,8 @@ class LfixTest {
     @get:Rule
     val folder = TemporaryFolder()
 
-    private val pslSha = "ab".repeat(32)
-
     private fun write(name: String, keys: List<Long>, source: Int = 1): File =
-        File(folder.root, name).also { it.writeBytes(TestIndex.indexOfKeys(source, keys, pslSha)) }
+        File(folder.root, name).also { it.writeBytes(TestIndex.indexOfKeys(source, keys)) }
 
     @Test
     fun keyIsTheFirstEightBytesOfSha256OfKindAndName() {
@@ -38,7 +36,6 @@ class LfixTest {
         val header = Lfix.validate(file)
         assertNotNull(header)
         assertEquals(5L, header!!.entryCount)
-        assertEquals(pslSha, header.pslSha256)
         val index = MappedIndex.open(file)!!
         keys.forEach { assertTrue(index.contains(it)) }
         listOf(0L, 6L, 10L, Long.MAX_VALUE - 1, -2L).forEach { assertFalse(index.contains(it)) }
@@ -53,7 +50,7 @@ class LfixTest {
 
     @Test
     fun malformedFilesAreRefused() {
-        val good = TestIndex.indexOfKeys(1, listOf(1L, 2L, 3L), pslSha)
+        val good = TestIndex.indexOfKeys(1, listOf(1L, 2L, 3L))
         fun bytes(change: (ByteArray) -> ByteArray) =
             File(folder.root, "x${System.nanoTime()}").also { it.writeBytes(change(good)) }
         assertNull(Lfix.validate(bytes { it.copyOf(63) }))
@@ -76,15 +73,11 @@ class LfixTest {
     }
 
     @Test
-    fun largeIndexValidatesAndIntersectsQuickly() {
+    fun largeIndexValidatesQuickly() {
         val keys = TestIndex.syntheticKeys(2_000_000, 11)
         val big = write("big.idx", keys)
-        val other = write("other.idx", TestIndex.syntheticKeys(50_000, 12))
         val start = System.nanoTime()
         assertEquals(2_000_000L, Lfix.validate(big)!!.entryCount)
-        assertFalse(Lfix.intersects(big, other))
-        val shared = write("shared.idx", listOf(keys[1_234_567]))
-        assertTrue(Lfix.intersects(big, shared))
         assertTrue("took too long", (System.nanoTime() - start) / 1_000_000 < 5_000)
         val index = MappedIndex.open(big)!!
         assertTrue(index.contains(keys[777_777]))

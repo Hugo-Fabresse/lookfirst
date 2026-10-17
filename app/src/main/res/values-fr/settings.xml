@@ -3,7 +3,7 @@
     <string name="onboarding_tagline">Regardez avant d\'ouvrir.</string>
     <string name="onboarding_nothing_opens">Rien ne s\'ouvre tout seul. Vous choisissez toujours.</string>
     <string name="onboarding_privacy">Tout est analysé sur votre téléphone. Les adresses scannées ne sont envoyées nulle part, sauf si vous lancez une vérification facultative.</string>
-    <string name="onboarding_lists">Les listes de sites signalés sont téléchargées en tâche de fond.</string>
+    <string name="onboarding_lists">Les listes de sites signalés sont téléchargées maintenant puis chaque jour, depuis l\'éditeur (CERT Polska).</string>
     <string name="onboarding_auto_update">Mise à jour automatique</string>
     <string name="onboarding_changeable">Modifiable dans Réglages.</string>
     <string name="onboarding_no_guarantee">Aucun scan ne garantit rien : un site nouveau peut ne figurer dans aucune liste.</string>

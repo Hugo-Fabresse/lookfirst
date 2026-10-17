@@ -22,13 +22,16 @@ internal class ListSource(
 
 /** The sources the app knows. Adding one needs the criteria of `reputation-sources.md` and a new source id. */
 internal object ListSources {
-    /** CERT Polska warning list: active malicious domains, one per line (about 2.5 MB, 125 000 entries). */
+    /**
+     * CERT Polska warning list: active malicious domains, one per line (about 2.5 MB, 125 000 entries).
+     * `minEntries` is about a third of today's size: review it if the list grows a lot.
+     */
     val CERT_PL = ListSource(
         id = SourceIds.CERT_PL,
         displayName = "CERT Polska",
         url = URI("https://hole.cert.pl/domains/v2/domains.txt"),
         maxDownloadBytes = 8 * MIB,
-        minEntries = 10_000,
+        minEntries = 40_000,
         maxEntries = 600_000,
     )
 

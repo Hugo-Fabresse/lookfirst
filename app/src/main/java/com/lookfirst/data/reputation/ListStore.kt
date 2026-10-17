@@ -12,6 +12,9 @@ private const val NO_LIMIT_AFTER_DAYS = 45L
 private const val PERCENT = 100L
 private const val DAY_MILLIS = 24L * 60 * 60 * 1000
 
+/** A list is downloaded in full at least this often, whatever the server answers to a conditional request. */
+private const val FULL_DOWNLOAD_MAX_AGE_DAYS = 7L
+
 /** One installed source: its index mapped read-only and the moment it was last confirmed current. */
 internal class LoadedSource(val source: ListSource, val index: MappedIndex, val checkedAtMillis: Long)
 
@@ -102,11 +105,19 @@ class ListStore internal constructor(
         return daysBetween(oldest, referenceClock())
     }
 
-    /** Entry count, age and validator of the installed index of [source], or null if it has none. */
+    /**
+     * Entry count, age and the validator of the installed index of [source], or null if it has none. The validator
+     * is null (the next request is unconditional) when it is missing, in the future, or when the last full download
+     * is [FULL_DOWNLOAD_MAX_AGE_DAYS] days old or more: a server that keeps answering `304` cannot freeze the list.
+     */
     internal fun installedInfo(source: ListSource): InstalledInfo? = lock.withLock {
         val entry = ensureLoaded()?.sources?.firstOrNull { it.source.id == source.id } ?: return null
         val state = ListsState.read(stateFile).of(source.id)
-        InstalledInfo(entry.index.entryCount, daysBetween(entry.checkedAtMillis, referenceClock()), state.validator)
+        val now = referenceClock()
+        val fullRecent =
+            state.fullAtMillis != null && now - state.fullAtMillis < FULL_DOWNLOAD_MAX_AGE_DAYS * DAY_MILLIS
+        val validator = state.validatorMillis?.takeIf { fullRecent && it <= now }
+        InstalledInfo(entry.index.entryCount, daysBetween(entry.checkedAtMillis, now), validator)
     }
 
     private fun referenceClock(): Long = maxOf(clock(), maxSeenMillis)
@@ -168,7 +179,7 @@ class ListStore internal constructor(
     /** The server said "not modified": the installed index is current as of now. */
     internal fun markUpToDate(source: ListSource) = lock.withLock {
         ensureLoaded()
-        val now = clock()
+        val now = referenceClock()
         val state = ListsState.read(stateFile)
         val fresh = state.of(source.id).copy(fetchedAtMillis = now, failure = null, failureAtMillis = null)
         try {
@@ -197,18 +208,11 @@ class ListStore internal constructor(
         recordFailureLocked(source, reason)
     }
 
-    /** The most recent failure across sources and when it happened, or null. */
-    internal fun lastFailure(): Pair<ListFailure, Long>? = lock.withLock {
-        ListsState.read(stateFile).sources.values
-            .mapNotNull { s -> s.failure?.let { f -> s.failureAtMillis?.let { f to it } } }
-            .maxByOrNull { it.second }
-    }
-
     /** Applies the checks of ADR-0008 to a parsed list and, if all pass, replaces the installed index atomically. */
-    internal fun install(source: ListSource, parsed: ParseOutcome.Parsed, validator: String?): ListInstallResult =
+    internal fun install(source: ListSource, parsed: ParseOutcome.Parsed, validatorMillis: Long?): ListInstallResult =
         lock.withLock {
             val result = try {
-                installLocked(source, parsed, validator)
+                installLocked(source, parsed, validatorMillis)
             } catch (@Suppress("SwallowedException") ignored: IOException) {
                 ListInstallResult.Rejected(ListFailure.STORAGE)
             }
@@ -216,12 +220,16 @@ class ListStore internal constructor(
             result
         }
 
-    private fun installLocked(source: ListSource, parsed: ParseOutcome.Parsed, validator: String?): ListInstallResult {
+    private fun installLocked(
+        source: ListSource,
+        parsed: ParseOutcome.Parsed,
+        validatorMillis: Long?,
+    ): ListInstallResult {
         val refusal = refusalFor(source, parsed.keys.size.toLong()) ?: writeIndex(source, parsed)
         return if (refusal != null) {
             ListInstallResult.Rejected(refusal)
         } else {
-            adopt(source, parsed.keys.size.toLong(), validator)
+            adopt(source, parsed.keys.size.toLong(), validatorMillis)
         }
     }
 
@@ -263,14 +271,13 @@ class ListStore internal constructor(
         }
     }
 
-    private fun adopt(source: ListSource, entries: Long, validator: String?): ListInstallResult {
-        val now = clock()
+    private fun adopt(source: ListSource, entries: Long, validatorMillis: Long?): ListInstallResult {
+        val now = referenceClock()
         val state = ListsState.read(stateFile)
+        val validator = validatorMillis?.takeIf { it in 1..now }
         persist(
-            state.with(
-                source.id,
-                SourceState(fetchedAtMillis = now, validator = validator?.takeIf(ListsState::isPlausibleValidator)),
-            ).copy(maxSeenMillis = maxOf(state.maxSeenMillis, now)),
+            state.with(source.id, SourceState(fetchedAtMillis = now, fullAtMillis = now, validatorMillis = validator))
+                .copy(maxSeenMillis = maxOf(state.maxSeenMillis, now)),
         )
         maxSeenMillis = maxOf(maxSeenMillis, now)
         val index = MappedIndex.open(indexFile(source)) ?: return ListInstallResult.Rejected(ListFailure.STORAGE)
@@ -302,4 +309,4 @@ class ListStore internal constructor(
 }
 
 /** What the downloader needs to know about an installed source. */
-internal class InstalledInfo(val entries: Long, val ageDays: Int, val validator: String?)
+internal class InstalledInfo(val entries: Long, val ageDays: Int, val validatorMillis: Long?)

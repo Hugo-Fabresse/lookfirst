@@ -82,7 +82,7 @@ class ListUpdateRunnerTest {
 
     @Test
     fun successInstallsAndRecordsTheAttempt() = runBlocking {
-        server.put(first.url, domainLines(20), "Sat, 17 Oct 2026 19:20:06 GMT")
+        server.put(first.url, domainLines(20), TEST_LAST_MODIFIED)
         val result = runner.runNow()
         assertEquals(UpdateOutcome.UPDATED, result.outcome)
         assertFalse(result.retry)

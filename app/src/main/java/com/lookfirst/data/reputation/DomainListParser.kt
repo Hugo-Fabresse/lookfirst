@@ -32,7 +32,7 @@ internal sealed interface ParseOutcome {
  * scanned host, so an entry and a lookup always agree. Linear in the file size, no regular expression.
  *
  * Refused as a whole: no entry, more than 2 % invalid lines (a binary or wrong file), more entries than the
- * source allows, or more than [MAX_OFFICIAL_DROPPED] entries that name an official (embedded) domain.
+ * source allows, or more than [MAX_OFFICIAL_DROPPED] entries that are an official (embedded) domain or sit under one.
  */
 internal object DomainListParser {
     fun parse(file: File, maxEntries: Long, officialDomains: Set<String>, psl: PublicSuffixList?): ParseOutcome =
@@ -55,6 +55,8 @@ internal object DomainListParser {
         private var failure: ListFailure? = null
 
         fun execute(file: File): ParseOutcome {
+            // Without the Public Suffix List no entry can be classified: nothing is built (BAD_FORMAT).
+            if (psl == null) return ParseOutcome.Rejected(ListFailure.BAD_FORMAT)
             BufferedInputStream(FileInputStream(file), READ_CHUNK).use { input ->
                 val chunk = ByteArray(READ_CHUNK)
                 while (failure == null) {
@@ -140,12 +142,13 @@ internal object DomainListParser {
             val key: Long
             if (host.kind == HostKind.DOMAIN) {
                 val registrable = psl?.registrableDomain(ascii)
-                if (psl != null && registrable == null) {
+                if (registrable == null) {
                     // A bare public suffix ("com", "co.uk") would flag a whole registry: refused, not stored.
                     invalid++
                     return
                 }
-                if (registrable != null && registrable in officialDomains && ascii == registrable) {
+                if (registrable in officialDomains) {
+                    // The domain itself or anything under it (accounts.google.com): counted, never indexed.
                     dropped++
                     return
                 }

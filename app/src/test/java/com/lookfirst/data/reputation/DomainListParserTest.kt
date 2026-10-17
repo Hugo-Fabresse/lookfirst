@@ -1,6 +1,7 @@
 package com.lookfirst.data.reputation
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -85,11 +86,28 @@ class DomainListParserTest {
     }
 
     @Test
-    fun anOfficialDomainIsDroppedButItsSubdomainsAreKept() {
-        val out = parsedOf("paypal.com\nevil.paypal.com\nother.com\nthird.com\n", officials = setOf("paypal.com"))
+    fun anOfficialDomainAndEverythingUnderItIsDroppedAndCounted() {
+        val out = parsedOf(
+            "paypal.com\naccounts.paypal.com\nevil.login.paypal.com\nother.com\nthird.com\nfourth.net\n",
+            officials = setOf("paypal.com"),
+        )
         assertEquals(3, out.keys.size)
-        assertEquals(1, out.droppedOfficial)
-        assertTrue(out.has(Lfix.KIND_HOST, "evil.paypal.com"))
+        assertEquals(3, out.droppedOfficial)
+        assertFalse(out.has(Lfix.KIND_HOST, "accounts.paypal.com"))
+    }
+
+    @Test
+    fun manyHostsUnderOfficialDomainsMeanAPoisonedList() {
+        val hosts = (1..150).joinToString("\n") { "x$it.paypal.com" }
+        val outcome = parse(hosts + "\nok.com\nok2.com\n", officials = setOf("paypal.com"))
+        assertEquals(ListFailure.POISONED, reason(outcome))
+    }
+
+    @Test
+    fun withoutThePublicSuffixListTheFileIsRefused() {
+        val file = folder.newFile().also { it.writeText(domainLines(20)) }
+        val outcome = DomainListParser.parse(file, 1000, emptySet(), null)
+        assertEquals(ListFailure.BAD_FORMAT, reason(outcome))
     }
 
     @Test

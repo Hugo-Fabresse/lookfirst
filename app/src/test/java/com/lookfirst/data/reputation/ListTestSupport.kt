@@ -42,6 +42,14 @@ internal fun parsed(vararg names: String, officials: Set<String> = emptySet()): 
     }
 }
 
+/** The failure remembered for a source, read from the state file the store writes. */
+internal fun failureOf(root: java.io.File, id: Int): ListFailure? =
+    ListsState.read(java.io.File(root, "state")).of(id).failure
+
+/** A `Last-Modified` before [TEST_NOW], and the same instant in milliseconds. */
+internal const val TEST_LAST_MODIFIED = "Sat, 17 Oct 2026 09:20:06 GMT"
+internal val TEST_LAST_MODIFIED_MILLIS: Long = HttpDate.parse(TEST_LAST_MODIFIED)!!
+
 /** Raw index keys written as `h:host` or `d:domain`, sorted and unique like the parser's output. */
 internal fun keyed(vararg specs: String): ParseOutcome.Parsed {
     val keys = specs.map { Lfix.keyOf(it[0], it.substring(2)) xor Long.MIN_VALUE }.sorted().distinct()
@@ -84,15 +92,13 @@ internal const val OTHER_SOURCE_ID = 99
 
 /** Raw LFIX bytes for the format tests (the app itself writes indexes with `IndexWriter`). */
 internal object TestIndex {
-    fun indexOfKeys(sourceId: Int, keys: List<Long>, pslSha: String): ByteArray {
+    fun indexOfKeys(sourceId: Int, keys: List<Long>): ByteArray {
         val out = ByteArrayOutputStream()
         val header = ByteBuffer.allocate(64).order(ByteOrder.BIG_ENDIAN)
         header.put("LFIX".toByteArray(Charsets.US_ASCII))
         header.putShort(1)
         header.putShort(sourceId.toShort())
         header.putInt(keys.size)
-        header.position(32)
-        header.put(Hex.decodeLower(pslSha)!!)
         out.write(header.array())
         val body = ByteBuffer.allocate(keys.size * 8).order(ByteOrder.BIG_ENDIAN)
         keys.forEach { body.putLong(it) }

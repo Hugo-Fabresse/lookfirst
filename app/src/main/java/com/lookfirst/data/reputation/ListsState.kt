@@ -5,20 +5,21 @@ import java.io.IOException
 
 private const val STATE_MAX_BYTES = 16 * 1024L
 private const val MAX_SOURCES = 16
-private const val VALIDATOR_MAX_LENGTH = 40
 
 /** What the store remembers about one source besides its index file. */
 internal data class SourceState(
     val fetchedAtMillis: Long? = null,
-    /** The publisher's own `Last-Modified` date, sent back as `If-Modified-Since`. Never anything else. */
-    val validator: String? = null,
+    /** Time of the last full download (`200`) that was installed: a `304` never refreshes it. */
+    val fullAtMillis: Long? = null,
+    /** The publisher's `Last-Modified` as an instant (never as text); the app formats the date it sends back. */
+    val validatorMillis: Long? = null,
     val failure: ListFailure? = null,
     val failureAtMillis: Long? = null,
 )
 
 /**
- * App-private bookkeeping (outside backups): per source the time of the last successful check, the validator and
- * the last failure, plus the latest time ever seen (a reference clock for list age that a clock set back cannot
+ * App-private bookkeeping (outside backups): per source the time of the last successful check, of the last full
+ * download, the validator instant and the last failure, plus the latest time ever seen (a reference clock for list age that a clock set back cannot
  * rewind). A missing or damaged file is an empty state: nothing is trusted from it beyond dates.
  */
 internal data class ListsState(val maxSeenMillis: Long = 0L, val sources: Map<Int, SourceState> = emptyMap()) {
@@ -30,7 +31,8 @@ internal data class ListsState(val maxSeenMillis: Long = 0L, val sources: Map<In
         appendLine("maxSeen=$maxSeenMillis")
         for ((id, state) in sources) {
             state.fetchedAtMillis?.let { appendLine("$id.fetchedAt=$it") }
-            state.validator?.let { appendLine("$id.validator=$it") }
+            state.fullAtMillis?.let { appendLine("$id.fullAt=$it") }
+            state.validatorMillis?.let { appendLine("$id.validatorMs=$it") }
             if (state.failure != null && state.failureAtMillis != null) {
                 appendLine("$id.failure=${state.failure.name}:${state.failureAtMillis}")
             }
@@ -38,13 +40,6 @@ internal data class ListsState(val maxSeenMillis: Long = 0L, val sources: Map<In
     }
 
     companion object {
-        /**
-         * A `Last-Modified` value is stored and sent back only if it is short and made of letters, digits, spaces,
-         * commas and colons: a date, never free text that could carry an identifier.
-         */
-        fun isPlausibleValidator(text: String): Boolean = text.length in 1..VALIDATOR_MAX_LENGTH &&
-            text.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == ' ' || it == ',' || it == ':' }
-
         fun read(file: File): ListsState = try {
             if (!file.isFile || file.length() > STATE_MAX_BYTES) {
                 ListsState()
@@ -80,7 +75,8 @@ internal data class ListsState(val maxSeenMillis: Long = 0L, val sources: Map<In
 
         private fun apply(state: SourceState, field: String, value: String): SourceState = when (field) {
             "fetchedAt" -> state.copy(fetchedAtMillis = value.toLongOrNull())
-            "validator" -> state.copy(validator = value.takeIf { isPlausibleValidator(it) })
+            "fullAt" -> state.copy(fullAtMillis = value.toLongOrNull())
+            "validatorMs" -> state.copy(validatorMillis = value.toLongOrNull()?.takeIf { it > 0 })
             "failure" -> {
                 val parts = value.split(':', limit = 2)
                 state.copy(

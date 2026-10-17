@@ -26,7 +26,7 @@ class ListStoreTest {
 
     private fun names(count: Int, prefix: String = "site") = Array(count) { "$prefix$it.com" }
 
-    private fun ListStore.put(source: ListSource, count: Int, prefix: String = "site", validator: String? = null) =
+    private fun ListStore.put(source: ListSource, count: Int, prefix: String = "site", validator: Long? = null) =
         install(source, parsed(*names(count, prefix)), validator)
 
     @Test
@@ -34,7 +34,7 @@ class ListStoreTest {
         val store = store()
         assertNull(store.current())
         assertNull(store.snapshot())
-        assertNull(store.lastFailure())
+        assertNull(failureOf(root, first.id))
     }
 
     @Test
@@ -70,7 +70,7 @@ class ListStoreTest {
         assertEquals(ListFailure.TOO_FEW, (store.put(first, 2) as ListInstallResult.Rejected).reason)
         assertEquals(ListFailure.TOO_MANY, (store.put(first, 501) as ListInstallResult.Rejected).reason)
         assertEquals(100L, store.snapshot()!!.entries)
-        assertEquals(ListFailure.TOO_MANY, store.lastFailure()!!.first)
+        assertEquals(ListFailure.TOO_MANY, failureOf(root, first.id))
     }
 
     @Test
@@ -159,15 +159,46 @@ class ListStoreTest {
     }
 
     @Test
-    fun theValidatorIsStoredOnlyWhenItLooksLikeADate() {
+    fun theValidatorIsAnInstantNotInTheFutureAndOnlyUsedWhileTheLastFullDownloadIsRecent() {
         val store = store()
-        store.put(first, 50, validator = "Sat, 17 Oct 2026 19:20:06 GMT")
-        assertEquals("Sat, 17 Oct 2026 19:20:06 GMT", store.installedInfo(first)!!.validator)
+        store.put(first, 50, validator = TEST_LAST_MODIFIED_MILLIS)
+        assertEquals(TEST_LAST_MODIFIED_MILLIS, store.installedInfo(first)!!.validatorMillis)
         now += TEST_DAY
-        store.put(first, 51, validator = "abc-123/xyz?id=42")
-        assertNull(store.installedInfo(first)!!.validator)
-        store.put(first, 52, validator = "x".repeat(500))
-        assertNull(store.installedInfo(first)!!.validator)
+        store.put(first, 51, validator = TEST_NOW + 2 * TEST_DAY)
+        assertNull("a date after the clock is dropped", store.installedInfo(first)!!.validatorMillis)
+        store.put(first, 52, validator = TEST_LAST_MODIFIED_MILLIS)
+        assertEquals(TEST_LAST_MODIFIED_MILLIS, store.installedInfo(first)!!.validatorMillis)
+        now += 7 * TEST_DAY
+        store.markUpToDate(first)
+        assertNull("7 days after the last full download: unconditional", store.installedInfo(first)!!.validatorMillis)
+    }
+
+    @Test
+    fun aClockAheadThenCorrectedKeepsTheAgeRightAndTheVariationLimitOn() {
+        val store = store()
+        store.put(first, 100)
+        now = TEST_NOW + 60 * TEST_DAY
+        store.markUpToDate(first)
+        now = TEST_NOW + TEST_DAY
+        // The clock is right again: the list was confirmed at the latest time seen, it is not 59 days old.
+        store.markUpToDate(first)
+        assertEquals(0, store.snapshot()!!.ageDays)
+        assertEquals(0, store.installedInfo(first)!!.ageDays)
+        val refused = store.put(first, 150)
+        assertEquals(ListFailure.VARIATION, (refused as ListInstallResult.Rejected).reason)
+        assertEquals(100L, store.snapshot()!!.entries)
+        now = TEST_NOW + 62 * TEST_DAY
+        assertEquals(2, store.snapshot()!!.ageDays)
+    }
+
+    @Test
+    fun anInstallWithAClockAheadThenCorrectedIsNotAgedEither() {
+        val store = store()
+        now = TEST_NOW + 90 * TEST_DAY
+        store.put(first, 100)
+        now = TEST_NOW
+        assertEquals(0, store.snapshot()!!.ageDays)
+        assertEquals(ListFailure.VARIATION, (store.put(first, 150) as ListInstallResult.Rejected).reason)
     }
 
     @Test
@@ -225,9 +256,11 @@ class ListStoreTest {
         store.recordFailure(first, ListFailure.HTTP)
         now += 1000
         store.recordFailure(second, ListFailure.NETWORK)
-        assertEquals(ListFailure.NETWORK, store.lastFailure()!!.first)
+        assertEquals(ListFailure.HTTP, failureOf(root, first.id))
+        assertEquals(ListFailure.NETWORK, failureOf(root, second.id))
         store.put(second, 10)
-        assertEquals(ListFailure.HTTP, store.lastFailure()!!.first)
+        assertNull(failureOf(root, second.id))
+        assertEquals(ListFailure.HTTP, failureOf(root, first.id))
     }
 
     @Test

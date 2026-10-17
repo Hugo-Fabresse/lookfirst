@@ -19,8 +19,9 @@ private const val MAX_DOMAIN_PROBES = MAX_PROBES - 1
  * indexes are searched in place, nothing about the host leaves the phone and nothing is logged.
  *
  * The embedded allow-list of official domains ([BrandList.officialDomains]) is consulted first: a list can add a
- * warning for any other host but never for an official registrable domain (or its `www`) and never through a
- * domain-wide entry of one. Then, for each source, `h:` for the host and `d:` for the host and each parent down to
+ * warning for any other host but never for an official registrable domain or anything under it. Without the
+ * Public Suffix List nothing can be classified and the answer is "lists missing", never a clean result. Then, for
+ * each source, `h:` for the host and `d:` for the host and each parent down to
  * the registrable domain included, never the public suffix. At most [MAX_PROBES] probes per source.
  */
 class LocalReputationLookup internal constructor(
@@ -37,15 +38,14 @@ class LocalReputationLookup internal constructor(
     }
 
     internal fun lookupIn(lists: LoadedLists, ageDays: Int, host: NormalizedHost): ReputationResult {
+        val suffixes = publicSuffixList() ?: return ReputationResult.ListsMissing
         val ascii = host.ascii
-        val registrable =
-            if (host.kind == HostKind.DOMAIN) publicSuffixList()?.registrableDomain(ascii) else null
+        val registrable = if (host.kind == HostKind.DOMAIN) suffixes.registrableDomain(ascii) else null
         val official = registrable != null && registrable in officialDomains
-        val ownName = official && (ascii == registrable || ascii == "www.$registrable")
         val domains = if (!official && registrable != null) domainCandidates(ascii, registrable) else emptyList()
         val hostKey = Lfix.keyOf(Lfix.KIND_HOST, ascii)
         for (loaded in lists.sources) {
-            val hostListed = !ownName && loaded.index.contains(hostKey)
+            val hostListed = !official && loaded.index.contains(hostKey)
             val domainListed = domains.any { loaded.index.contains(Lfix.keyOf(Lfix.KIND_DOMAIN, it)) }
             if (hostListed || domainListed) return ReputationResult.Listed(loaded.source.displayName)
         }

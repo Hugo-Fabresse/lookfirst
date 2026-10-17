@@ -49,8 +49,9 @@ internal class UpdateReport(val outcomes: List<SourceOutcome>)
  * a fixed [ListSource.url]; the only server-supplied address ever followed is a redirect to the same host over
  * `https`, at most 3 times. The size is counted while streaming (`Content-Length` is never used). Requests carry
  * a constant User-Agent without version, `Accept-Encoding: identity` and, when an index is installed, the
- * publisher's own `Last-Modified` date as `If-Modified-Since`; no cookie, no other validator, no identifier.
- * Nothing about a scan is available here: this class has no access to scanned content.
+ * publisher's own `Last-Modified` date (parsed as an IMF-fixdate, bounded by the clock and re-formatted by the app,
+ * never echoed) as `If-Modified-Since`, only while the last full download is under 7 days old; no cookie, no other
+ * validator, no identifier. Nothing about a scan is available here: this class has no access to scanned content.
  */
 internal class PublisherDownloader internal constructor(
     private val transport: ListTransport,
@@ -88,24 +89,35 @@ internal class PublisherDownloader internal constructor(
             return SourceOutcome.Failed(ListFailure.STORAGE, retry = true)
         }
         try {
-            val since = store.installedInfo(source)?.validator
+            val since = store.installedInfo(source)?.validatorMillis?.let(HttpDate::format)
             return when (val fetched = fetch(source, candidate, since, active)) {
-                is Fetched.Failure -> fetched.outcome
+                is Fetched.Failure -> fetched.outcome.also { remember(source, it) }
                 Fetched.NotModified -> {
                     store.markUpToDate(source)
                     SourceOutcome.UpToDate
                 }
-                is Fetched.Downloaded -> parseAndInstall(source, candidate, fetched.lastModified, active)
+                is Fetched.Downloaded ->
+                    parseAndInstall(source, candidate, fetched.lastModified?.let(HttpDate::parse), active)
             }
         } finally {
             store.releaseCandidate(candidate)
         }
     }
 
+    /** Network, HTTP and size failures are remembered per source like the refusals of the checks. */
+    private fun remember(source: ListSource, outcome: SourceOutcome) {
+        val reason = when (outcome) {
+            is SourceOutcome.Failed -> outcome.reason
+            is SourceOutcome.Rejected -> outcome.reason
+            else -> null
+        }
+        if (reason != null) store.recordFailure(source, reason)
+    }
+
     private fun parseAndInstall(
         source: ListSource,
         candidate: File,
-        lastModified: String?,
+        lastModified: Long?,
         active: () -> Boolean,
     ): SourceOutcome {
         if (!active()) return SourceOutcome.Failed(ListFailure.NETWORK, retry = true)
@@ -147,7 +159,7 @@ internal class PublisherDownloader internal constructor(
 
     /** Downloads the source into [candidate], following the allowed redirects by hand. */
     private fun fetch(source: ListSource, candidate: File, since: String?, active: () -> Boolean): Fetched {
-        val headers = if (since != null && ListsState.isPlausibleValidator(since)) {
+        val headers = if (since != null) {
             REQUEST_HEADERS + (IF_MODIFIED to since)
         } else {
             REQUEST_HEADERS

@@ -46,11 +46,11 @@ class PublisherDownloaderTest {
 
     @Test
     fun aListIsDownloadedParsedAndInstalled() {
-        server.put(first.url, domainLines(20), lastModified = "Sat, 17 Oct 2026 19:20:06 GMT")
+        server.put(first.url, domainLines(20), lastModified = TEST_LAST_MODIFIED)
         val outcome = only(run())
         assertEquals(20L, (outcome as SourceOutcome.Installed).entries)
         assertEquals(20L, entries())
-        assertEquals("Sat, 17 Oct 2026 19:20:06 GMT", store.installedInfo(first)!!.validator)
+        assertEquals(TEST_LAST_MODIFIED_MILLIS, store.installedInfo(first)!!.validatorMillis)
     }
 
     @Test
@@ -88,24 +88,85 @@ class PublisherDownloaderTest {
 
     @Test
     fun theSecondRunSendsTheValidatorAndA304KeepsTheListAndRefreshesItsAge() {
-        server.put(first.url, domainLines(20), lastModified = "Sat, 17 Oct 2026 19:20:06 GMT")
+        server.put(first.url, domainLines(20), lastModified = TEST_LAST_MODIFIED)
         run()
         now += 2 * TEST_DAY
         server.putStatus(first.url, 304)
         val outcome = only(run())
         assertEquals(SourceOutcome.UpToDate, outcome)
-        assertEquals("Sat, 17 Oct 2026 19:20:06 GMT", server.requests.last().headers["If-Modified-Since"])
+        assertEquals(TEST_LAST_MODIFIED, server.requests.last().headers["If-Modified-Since"])
         assertEquals(0, store.snapshot()!!.ageDays)
         assertEquals(20L, entries())
     }
 
     @Test
-    fun aValidatorThatIsNotADateIsNeverSentBack() {
-        server.put(first.url, domainLines(20), lastModified = "user=42;track")
+    fun aLastModifiedThatIsNotAStrictImfFixdateInThePastIsNeverSentBack() {
+        listOf(
+            "user=42;track",
+            "Saturday, 17-Oct-26 09:20:06 GMT",
+            "Sun, 17 Oct 2026 09:20:06 GMT",
+            "Sat, 30 Feb 2026 09:20:06 GMT",
+            "Sat, 17 Oct 2026 09:20:06 GMT; id=42",
+            "Sun, 18 Oct 2026 09:20:06 GMT",
+            "x".repeat(500),
+        ).forEach { value ->
+            server.requests.clear()
+            server.put(first.url, domainLines(20), lastModified = value)
+            run()
+            server.put(first.url, domainLines(20))
+            run()
+            assertFalse(value, server.requests.last().headers.containsKey("If-Modified-Since"))
+        }
+    }
+
+    @Test
+    fun aValidDateIsReformattedByTheAppNotEchoed() {
+        server.put(first.url, domainLines(20), lastModified = TEST_LAST_MODIFIED)
         run()
-        server.put(first.url, domainLines(20))
         run()
+        assertEquals(TEST_LAST_MODIFIED, server.requests.last().headers["If-Modified-Since"])
+        assertEquals(HttpDate.format(TEST_LAST_MODIFIED_MILLIS), server.requests.last().headers["If-Modified-Since"])
+    }
+
+    @Test
+    fun aServerThatAnswers304ForeverIsAskedForTheWholeFileAfterSevenDays() {
+        server.put(first.url, domainLines(20), lastModified = TEST_LAST_MODIFIED)
+        run()
+        server.putStatus(first.url, 304)
+        now += 6 * TEST_DAY
+        assertEquals(SourceOutcome.UpToDate, only(run()))
+        assertTrue(server.requests.last().headers.containsKey("If-Modified-Since"))
+        now += 2 * TEST_DAY
+        val outcome = only(run())
         assertFalse(server.requests.last().headers.containsKey("If-Modified-Since"))
+        assertTrue(outcome is SourceOutcome.Failed)
+        server.put(first.url, domainLines(20), lastModified = TEST_LAST_MODIFIED)
+        assertTrue(only(run()) is SourceOutcome.Installed)
+    }
+
+    @Test
+    fun networkHttpAndSizeFailuresAreRememberedPerSource() {
+        val root = File(folder.root, "reputation")
+        server.failure = SocketTimeoutException()
+        run()
+        assertEquals(ListFailure.NETWORK, failureOf(root, first.id))
+        server.failure = null
+        server.putStatus(first.url, 503)
+        run()
+        assertEquals(ListFailure.HTTP, failureOf(root, first.id))
+        server.putBytes(first.url, ByteArray((first.maxDownloadBytes + 10).toInt()) { 'a'.code.toByte() })
+        run()
+        assertEquals(ListFailure.TOO_LARGE, failureOf(root, first.id))
+        assertNull(failureOf(root, second.id))
+    }
+
+    @Test
+    fun withoutThePublicSuffixListNothingIsInstalled() {
+        val noPsl = PublisherDownloader(server, listOf(first), store, emptySet(), publicSuffixList = { null })
+        server.put(first.url, domainLines(20))
+        val outcome = runBlocking { noPsl.download() }.outcomes.single() as SourceOutcome.Rejected
+        assertEquals(ListFailure.BAD_FORMAT, outcome.reason)
+        assertNull(entries())
     }
 
     @Test
@@ -234,7 +295,7 @@ class PublisherDownloaderTest {
         val outcome = only(run()) as SourceOutcome.Rejected
         assertEquals(ListFailure.BAD_FORMAT, outcome.reason)
         assertEquals(20L, entries())
-        assertEquals(ListFailure.BAD_FORMAT, store.lastFailure()!!.first)
+        assertEquals(ListFailure.BAD_FORMAT, failureOf(File(folder.root, "reputation"), first.id))
     }
 
     @Test
@@ -252,7 +313,7 @@ class PublisherDownloaderTest {
         val outcome = only(run()) as SourceOutcome.Rejected
         assertEquals(ListFailure.VARIATION, outcome.reason)
         assertEquals(100L, entries())
-        assertEquals(ListFailure.VARIATION, store.lastFailure()!!.first)
+        assertEquals(ListFailure.VARIATION, failureOf(File(folder.root, "reputation"), first.id))
     }
 
     @Test

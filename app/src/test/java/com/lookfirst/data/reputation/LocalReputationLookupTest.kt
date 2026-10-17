@@ -80,7 +80,7 @@ class LocalReputationLookupTest {
     }
 
     @Test
-    fun theEmbeddedAllowlistIsConsultedFirst() {
+    fun theEmbeddedAllowlistIsConsultedFirstForTheDomainAndEverythingUnderIt() {
         // The list holds good.com in every shape (a poisoned list or a hash collision): the allow-list wins.
         val lookup = lookupWith(
             keyed("d:good.com", "h:good.com", "h:www.good.com", "h:cdn.good.com", "d:other.good.com"),
@@ -88,7 +88,16 @@ class LocalReputationLookupTest {
         assertEquals(ReputationResult.NotListed, lookup.result("good.com"))
         assertEquals(ReputationResult.NotListed, lookup.result("www.good.com"))
         assertEquals(ReputationResult.NotListed, lookup.result("x.other.good.com"))
-        assertEquals("a host entry of a specific subdomain stays valid", listed, lookup.result("cdn.good.com"))
+        assertEquals(ReputationResult.NotListed, lookup.result("cdn.good.com"))
+    }
+
+    @Test
+    fun withoutThePublicSuffixListNothingIsListedAndTheAnswerIsListsMissing() {
+        val store = ListStore(File(folder.root, "rep"), listOf(cert), { clock }, {})
+        store.install(cert, standard, null)
+        val lookup = LocalReputationLookup(store, emptySet()) { null }
+        assertEquals(ReputationResult.ListsMissing, lookup.result("evil.example.com"))
+        assertEquals(ReputationResult.ListsMissing, lookup.result("phish.net"))
     }
 
     @Test

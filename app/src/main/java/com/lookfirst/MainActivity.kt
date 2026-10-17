@@ -61,7 +61,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        clipboard.onAppStopped()
+        // A rotation also stops the activity: our own secret must stay until it is pasted.
+        if (!isChangingConfigurations) clipboard.onAppStopped()
     }
 
     /** From API 29 the clipboard is readable only with the focus: a sensitive copy is cleared here (T-SCH-11). */

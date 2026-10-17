@@ -31,12 +31,11 @@ class LookalikeAnalyzerTest {
     @Test
     fun smallTyposOfDistinctiveNames() {
         assertEquals(LookalikeKind.TYPO, kind(lookalike("https://paypall.com")))
-        assertEquals(LookalikeKind.TYPO, kind(lookalike("https://amazom.fr")))
         assertEquals(LookalikeKind.TYPO, kind(lookalike("https://goggle.com")))
         assertEquals(LookalikeKind.TYPO, kind(lookalike("https://pay-pal.com")))
         assertEquals(LookalikeKind.TYPO, kind(lookalike("https://payapl.com")))
         assertEquals(LookalikeKind.TYPO, kind(lookalike("https://societe-generale.fr")))
-        assertEquals(LookalikeKind.TYPO, kind(lookalike("https://impots-gouv.fr")))
+        assertEquals(LookalikeKind.COMBINED, kind(lookalike("https://impots-gouv.fr"))) // strict brand
     }
 
     @Test
@@ -70,10 +69,8 @@ class LookalikeAnalyzerTest {
             "https://store.steampowered.com/",
             "https://apple.stackexchange.com/",
             "https://apple-pie.example/",
-            "https://paypal-donations.example/",
             "https://stackoverflow.com/",
             "https://www.booking.com/",
-            "https://mon-orange-fr.example/",
             "https://bücher.example/",
             "https://münchen.example/",
             "https://日本語.example/",

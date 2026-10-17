@@ -8,4 +8,4 @@ Checklist courte, une ligne par fonctionnalité ou ticket, du plus ancien au plu
 - [✅ DONE] LF-4 — CI GitHub (gate de PR, gate complet, sécurité en mode rapport)
 - [✅ DONE] LF-12 — chaîne d'approvisionnement de la CI durcie (Renovate scanners, SHA d'actions vérifiés, vérification des dépendances Gradle)
 - [✅ DONE] LF-13 — Robolectric android-all résolu et vérifié par Gradle (tests hors ligne)
-- [✅ DONE] LF-7 — parcours et écrans (docs/design/ux.md)
+- [🔄 WIP] LF-7 — parcours et écrans (docs/design/ux.md)

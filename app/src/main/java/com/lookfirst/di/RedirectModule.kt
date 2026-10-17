@@ -1,12 +1,15 @@
 package com.lookfirst.di
 
 import com.lookfirst.data.network.RedirectTracer
+import com.lookfirst.data.network.SelectingSystemTrust
 import com.lookfirst.data.network.SocketRdapClient
 import com.lookfirst.data.network.SocketRedirectTracer
 import com.lookfirst.data.network.SystemHostResolver
+import com.lookfirst.data.network.SystemTrust
 import com.lookfirst.data.network.TlsHopTransport
 import com.lookfirst.data.platform.AndroidNetworkStatus
 import com.lookfirst.data.platform.NetworkStatus
+import com.lookfirst.data.platform.SdkVersion
 import com.lookfirst.domain.rdap.RdapClient
 import dagger.Module
 import dagger.Provides
@@ -51,19 +54,25 @@ object RedirectModule {
 
     @Provides
     @Singleton
-    fun provideRedirectTracer(@NetworkExecutor executor: Executor): RedirectTracer = SocketRedirectTracer(
-        resolver = SystemHostResolver,
-        transport = TlsHopTransport(),
-        executor = executor,
-    )
+    fun provideRedirectTracer(@NetworkExecutor executor: Executor, trust: SystemTrust): RedirectTracer =
+        SocketRedirectTracer(
+            resolver = SystemHostResolver,
+            transport = TlsHopTransport(trust),
+            executor = executor,
+        )
 
     @Provides
     @Singleton
-    fun provideRdapClient(@NetworkExecutor executor: Executor): RdapClient = SocketRdapClient(
+    fun provideRdapClient(@NetworkExecutor executor: Executor, trust: SystemTrust): RdapClient = SocketRdapClient(
         resolver = SystemHostResolver,
-        transport = TlsHopTransport(),
+        transport = TlsHopTransport(trust),
         executor = executor,
     )
+
+    /** One trust policy for the list download, the redirect tracer and RDAP. */
+    @Provides
+    @Singleton
+    fun provideSystemTrust(sdk: SdkVersion): SystemTrust = SelectingSystemTrust(sdk)
 
     @Provides
     fun provideNetworkStatus(impl: AndroidNetworkStatus): NetworkStatus = impl

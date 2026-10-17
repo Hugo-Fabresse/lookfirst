@@ -119,6 +119,22 @@ class ApplyRedirectTraceTest {
     }
 
     @Test
+    fun `a hop on another port is a caution and is never reported as the destination`() {
+        val end = TraceEnd.UnsupportedPort(url("https://b.example:8443/"))
+        val after = apply(scanned("https://a.example/"), trace("https://a.example/", listOf(end.target.value), end))
+        assertEquals(VerdictLevel.CAUTION, after.level)
+        assertTrue(SignalCode.UNUSUAL_PORT in codes(after))
+        assertFalse(SignalCode.REDIRECT_FINAL in codes(after))
+    }
+
+    @Test
+    fun `a private scanned address has no hop count`() {
+        val end = TraceEnd.BlockedAddress(url("https://a.example/"))
+        val after = apply(scanned("https://a.example/"), trace("https://a.example/", emptyList(), end))
+        assertEquals(0, after.reasons.single { it.code == SignalCode.REDIRECT_PRIVATE }.count)
+    }
+
+    @Test
     fun `a loop or too many hops is a caution`() {
         listOf(TraceEnd.Loop, TraceEnd.TooManyHops).forEach { end ->
             val after =

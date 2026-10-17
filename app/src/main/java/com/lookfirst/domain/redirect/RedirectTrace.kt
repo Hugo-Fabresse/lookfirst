@@ -27,6 +27,9 @@ sealed interface TraceEnd {
     /** [target] resolves to a private, local or reserved address: nothing was sent to it (T-NET-2). */
     data class BlockedAddress(val target: CanonicalUrl) : TraceEnd
 
+    /** [target] uses a port other than 443: nothing was sent to it (T-NET-2). */
+    data class UnsupportedPort(val target: CanonicalUrl) : TraceEnd
+
     /** The chain came back to an address it had already visited. */
     data object Loop : TraceEnd
 

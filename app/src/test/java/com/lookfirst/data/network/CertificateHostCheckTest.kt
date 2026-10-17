@@ -43,6 +43,14 @@ class CertificateHostCheckTest {
     }
 
     @Test
+    fun `a wildcard over a public suffix is refused`() {
+        assertFalse(matches("a.co.uk", names(dns("*.co.uk"))))
+        assertFalse(matches("a.github.io", names(dns("*.github.io"))))
+        assertFalse(matches("a.com.au", names(dns("*.com.au"))))
+        assertTrue(matches("a.example.co.uk", names(dns("*.example.co.uk"))))
+    }
+
+    @Test
     fun `the common name is not used, only the subject alternative names`() {
         assertFalse(matches("example.com", null))
         assertFalse(matches("example.com", names()))

@@ -96,9 +96,11 @@ class HttpHeadTest {
     }
 
     @Test
-    fun `a folded line never extends a location`() {
-        val head = read("HTTP/1.1 302 Found\r\nLocation: https://a.example/\r\n  .evil.example\r\n\r\n")
-        assertEquals(listOf("https://a.example/"), head.locations)
+    fun `a folded continuation line is refused`() {
+        assertThrows(ProtocolException::class.java) {
+            read("HTTP/1.1 302 Found\r\nLocation: https://a.example/\r\n  .evil.example\r\n\r\n")
+        }
+        assertThrows(ProtocolException::class.java) { read("HTTP/1.1 302 Found\r\nX: a\r\n\tb\r\n\r\n") }
     }
 
     @Test

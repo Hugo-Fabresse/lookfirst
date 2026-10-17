@@ -91,6 +91,7 @@ internal class SocketRedirectTracer(
 
         /** Contacts [current] and decides where the chain goes next. */
         private fun advance(current: CanonicalUrl): Step {
+            if ((current.port ?: HTTPS_PORT) != HTTPS_PORT) return Step.Stop(TraceEnd.UnsupportedPort(current))
             val addresses = checkedAddresses(current) ?: return Step.Stop(TraceEnd.BlockedAddress(current))
             val head = request(current, addresses)
             val location = head.locations.firstOrNull()
@@ -136,15 +137,14 @@ internal class SocketRedirectTracer(
 
         /** Tries the checked addresses in order; an unreachable one falls through to the next, a timeout ends it all. */
         private fun exchange(url: CanonicalUrl, addresses: List<InetAddress>, rangeProbe: Boolean): ResponseHead {
-            val port = url.port ?: HTTPS_PORT
-            val hostHeader = if (url.port == null || url.port == HTTPS_PORT) url.host else "${url.host}:${url.port}"
+            val hostHeader = url.host
             val bytes = requestBytes(url, hostHeader, rangeProbe)
             val host = url.host.removePrefix("[").removeSuffix("]")
             var failure: IOException? = null
             for (address in addresses.take(MAX_CONNECT_ATTEMPTS)) {
                 budget.requireRemaining()
                 try {
-                    return transport.exchange(HopTarget(host, address, port), bytes, budget, abort)
+                    return transport.exchange(HopTarget(host, address, HTTPS_PORT), bytes, budget, abort)
                 } catch (timeout: SocketTimeoutException) {
                     throw timeout
                 } catch (io: IOException) {

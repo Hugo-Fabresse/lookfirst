@@ -1,5 +1,6 @@
 package com.lookfirst.data.network
 
+import com.lookfirst.domain.host.PublicSuffixList
 import java.net.InetAddress
 import java.net.UnknownHostException
 import java.security.cert.CertificateParsingException
@@ -59,7 +60,17 @@ internal object CertificateHostCheck {
         val wildcardOk = patternLabels[0] == "*" && patternLabels.size >= MIN_WILDCARD_LABELS
         val restIsPlain = patternLabels.drop(1).none { it.contains('*') }
         val sameShape = hostLabels.size == patternLabels.size && hostLabels[0].isNotEmpty()
-        return wildcardOk && restIsPlain && sameShape && hostLabels.drop(1) == patternLabels.drop(1)
+        return wildcardOk &&
+            restIsPlain &&
+            sameShape &&
+            hostLabels.drop(1) == patternLabels.drop(1) &&
+            !isPublicSuffix(patternLabels.drop(1))
+    }
+
+    /** `*.co.uk` would cover every site under a public suffix. Without the list, a wildcard is refused. */
+    private fun isPublicSuffix(labels: List<String>): Boolean {
+        val list = PublicSuffixList.instance ?: return true
+        return list.suffixLabelCount(labels) >= labels.size
     }
 
     private fun isDottedQuad(text: String): Boolean {

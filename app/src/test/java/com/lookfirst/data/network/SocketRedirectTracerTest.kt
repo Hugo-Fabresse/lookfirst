@@ -122,10 +122,10 @@ class SocketRedirectTracerTest {
     @Test
     fun `the request carries the host and port headers and nothing identifying`() {
         host("a.example", public1)
-        completed("https://a.example:8443/p?q=1#frag")
+        completed("https://a.example:443/p?q=1#frag")
         val request = sent.single()
-        assertEquals(8443, request.target.port)
-        assertEquals("a.example:8443", request.header)
+        assertEquals(443, request.target.port)
+        assertEquals("a.example", request.header)
         assertEquals("/p?q=1", request.path)
         assertFalse(request.text.contains("Cookie", ignoreCase = true))
         assertFalse(request.text.contains("frag"))
@@ -198,6 +198,27 @@ class SocketRedirectTracerTest {
         assertEquals(listOf("https://b.example/x"), trace.hops.map { it.value })
         assertEquals(2, sent.size)
         assertFalse(resolutions.contains("c.example"))
+    }
+
+    @Test
+    fun `only port 443 is ever contacted, for the scanned link and for a hop`() {
+        host("a.example", public1)
+        val start = completed("https://a.example:8443/")
+        assertEquals(TraceEnd.UnsupportedPort(url("https://a.example:8443/")), start.end)
+        assertTrue(sent.isEmpty())
+        assertTrue(resolutions.isEmpty())
+        script = { redirect("https://a.example:22/x") }
+        val hop = completed("https://a.example/")
+        assertEquals(TraceEnd.UnsupportedPort(url("https://a.example:22/x")), hop.end)
+        assertEquals(1, hop.hops.size)
+        assertEquals(1, sent.size)
+    }
+
+    @Test
+    fun `a refused execution is a network failure`() {
+        val full =
+            SocketRedirectTracer(resolver, transport, { throw java.util.concurrent.RejectedExecutionException() })
+        assertEquals(TraceOutcome.Failed(TraceFailure.NETWORK), runBlocking { full.trace(url("https://a.example/")) })
     }
 
     @Test

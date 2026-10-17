@@ -51,6 +51,7 @@ class ApplyRedirectTrace @Inject constructor(private val analyzeScan: AnalyzeSca
     private fun extraTargets(end: TraceEnd): List<String> = when (end) {
         is TraceEnd.InsecureHop -> listOf(end.target.value)
         is TraceEnd.BlockedAddress -> listOf(end.target.value)
+        is TraceEnd.UnsupportedPort -> listOf(end.target.value)
         is TraceEnd.BadLocation -> listOf(end.raw.value)
         else -> emptyList()
     }
@@ -61,7 +62,11 @@ class ApplyRedirectTrace @Inject constructor(private val analyzeScan: AnalyzeSca
         )
         is TraceEnd.InsecureHop -> listOf(Signal(SignalCode.REDIRECT_HTTP, evidence = Untrusted(end.target.value)))
         is TraceEnd.BlockedAddress ->
-            listOf(Signal(SignalCode.REDIRECT_PRIVATE, evidence = Untrusted(end.target.value)))
+            listOf(
+                Signal(SignalCode.REDIRECT_PRIVATE, evidence = Untrusted(end.target.value), count = trace.hops.size),
+            )
+        // The analysis of the target already carries UNUSUAL_PORT (CAUTION); nothing more to say.
+        is TraceEnd.UnsupportedPort -> emptyList()
         is TraceEnd.BadLocation -> listOf(
             Signal(SignalCode.URL_MALFORMED, evidence = Untrusted(end.raw.value.take(MAX_LOCATION_EVIDENCE))),
         )

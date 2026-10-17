@@ -99,11 +99,11 @@ internal object HttpHead {
         val lines = head.split("\r\n")
         val status = parseStatusLine(lines.first())
         val locations = mutableListOf<String>()
-        // A folded line (obs-fold) continues the previous header; the tracer never accepts a folded Location.
-        val headerLines = lines.drop(1).takeWhile { it.isNotEmpty() }.filterNot { it[0] == ' ' || it[0] == '\t' }
+        val headerLines = lines.drop(1).takeWhile { it.isNotEmpty() }
         for (line in headerLines) {
+            // A folded line (obs-fold) is refused, never guessed at: a Location split in two is an attack.
             val colon = line.indexOf(':')
-            if (colon <= 0) throw ProtocolException("bad header line")
+            if (colon <= 0 || line[0] == ' ' || line[0] == '\t') throw ProtocolException("bad header line")
             if (line.substring(0, colon).equals("location", ignoreCase = true)) {
                 locations += line.substring(colon + 1).trim(' ', '\t')
             }

@@ -10,8 +10,14 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import java.util.concurrent.Executors
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
+
+/** At most two traces (or abandoned blocked DNS calls) at a time; a third is refused and reported as a network failure. */
+private const val MAX_TRACE_THREADS = 2
+private const val IDLE_SECONDS = 30L
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -25,9 +31,13 @@ object RedirectModule {
     fun provideRedirectTracer(): RedirectTracer = SocketRedirectTracer(
         resolver = SystemHostResolver,
         transport = TlsHopTransport(),
-        executor = Executors.newCachedThreadPool { task ->
-            Thread(task, "redirect-trace").apply { isDaemon = true }
-        },
+        executor = ThreadPoolExecutor(
+            0,
+            MAX_TRACE_THREADS,
+            IDLE_SECONDS,
+            TimeUnit.SECONDS,
+            SynchronousQueue(),
+        ) { task -> Thread(task, "redirect-trace").apply { isDaemon = true } },
     )
 
     @Provides

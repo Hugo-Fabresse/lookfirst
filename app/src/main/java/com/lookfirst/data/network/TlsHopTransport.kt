@@ -31,25 +31,32 @@ internal class TlsHopTransport(private val sslFactory: SSLSocketFactory = SSLSoc
     override fun exchange(target: HopTarget, request: ByteArray, budget: TimeBudget, abort: AbortHandle): ResponseHead {
         val plain = Socket(Proxy.NO_PROXY)
         abort.register(plain)
+        var tls: SSLSocket? = null
         try {
             plain.tcpNoDelay = true
             plain.connect(InetSocketAddress(target.address, target.port), budget.requireRemaining())
             plain.soTimeout = budget.requireRemaining()
-            val tls = sslFactory.createSocket(plain, target.host, target.port, true) as SSLSocket
-            abort.register(tls)
-            configure(tls)
-            tls.soTimeout = budget.requireRemaining()
-            tls.startHandshake()
-            verify(target.host, tls)
-            tls.outputStream.write(request)
-            tls.outputStream.flush()
-            return HttpHead.read(tls.inputStream) { tls.soTimeout = budget.requireRemaining() }
+            val secure = sslFactory.createSocket(plain, target.host, target.port, true) as SSLSocket
+            tls = secure
+            abort.register(secure)
+            configure(secure)
+            secure.soTimeout = budget.requireRemaining()
+            secure.startHandshake()
+            verify(target.host, secure)
+            secure.outputStream.write(request)
+            secure.outputStream.flush()
+            return HttpHead.read(secure.inputStream) { secure.soTimeout = budget.requireRemaining() }
         } finally {
-            try {
-                plain.close()
-            } catch (ignored: IOException) {
-                // Nothing left to release.
-            }
+            closeQuietly(tls)
+            closeQuietly(plain)
+        }
+    }
+
+    private fun closeQuietly(socket: Socket?) {
+        try {
+            socket?.close()
+        } catch (ignored: IOException) {
+            // Nothing left to release.
         }
     }
 

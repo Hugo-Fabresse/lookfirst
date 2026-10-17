@@ -11,11 +11,11 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.lookfirst.domain.scan.BarcodeDecoder
+import com.lookfirst.data.scan.camera.QrAnalyzerFactory
 
 /** Wires [ScanViewModel] to [ScanScreen]: permission dialog, one-shot haptic tick, camera slot. */
 @Composable
-fun ScanRoute(viewModel: ScanViewModel, decoder: BarcodeDecoder) {
+fun ScanRoute(viewModel: ScanViewModel, analyzerFactory: QrAnalyzerFactory) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -36,7 +36,7 @@ fun ScanRoute(viewModel: ScanViewModel, decoder: BarcodeDecoder) {
         state = state,
         cameraContent = { modifier, scanning ->
             CameraPreview(
-                decoder = decoder,
+                analyzerFactory = analyzerFactory,
                 torchOn = scanning.torchOn,
                 onCodeRead = viewModel::onCodeRead,
                 onTorchAvailable = viewModel::onTorchAvailable,

@@ -7,7 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import com.lookfirst.domain.scan.BarcodeDecoder
+import com.lookfirst.data.scan.camera.QrAnalyzerFactory
 import com.lookfirst.ui.screens.scan.ScanRoute
 import com.lookfirst.ui.screens.scan.ScanViewModel
 import com.lookfirst.ui.theme.LookFirstTheme
@@ -19,14 +19,14 @@ class MainActivity : ComponentActivity() {
     private val scanViewModel: ScanViewModel by viewModels()
 
     @Inject
-    lateinit var barcodeDecoder: BarcodeDecoder
+    lateinit var analyzerFactory: QrAnalyzerFactory
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             LookFirstTheme {
-                ScanRoute(viewModel = scanViewModel, decoder = barcodeDecoder)
+                ScanRoute(viewModel = scanViewModel, analyzerFactory = analyzerFactory)
             }
         }
         hardenAgainstOverlays()

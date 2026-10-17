@@ -27,8 +27,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lookfirst.R
-import com.lookfirst.data.scan.camera.QrImageAnalyzer
-import com.lookfirst.domain.scan.BarcodeDecoder
+import com.lookfirst.data.scan.camera.QrAnalyzerFactory
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
@@ -44,7 +43,7 @@ private const val ANALYSIS_HEIGHT = 720
  */
 @Composable
 fun CameraPreview(
-    decoder: BarcodeDecoder,
+    analyzerFactory: QrAnalyzerFactory,
     torchOn: Boolean,
     onCodeRead: (String) -> Unit,
     onTorchAvailable: (Boolean) -> Unit,
@@ -62,7 +61,7 @@ fun CameraPreview(
     }
     var camera by remember { mutableStateOf<Camera?>(null) }
 
-    DisposableEffect(lifecycleOwner, decoder) {
+    DisposableEffect(lifecycleOwner, analyzerFactory) {
         val analysisExecutor = Executors.newSingleThreadExecutor()
         val providerFuture = ProcessCameraProvider.getInstance(context)
         var released = false
@@ -76,7 +75,7 @@ fun CameraPreview(
                         null
                     }
                     provider?.let { p ->
-                        camera = bindCamera(p, lifecycleOwner, previewView, analysisExecutor, decoder) {
+                        camera = bindCamera(p, lifecycleOwner, previewView, analysisExecutor, analyzerFactory) {
                             currentOnCodeRead(it)
                         }
                         currentOnTorchAvailable(camera?.cameraInfo?.hasFlashUnit() == true)
@@ -107,7 +106,7 @@ private fun bindCamera(
     lifecycleOwner: LifecycleOwner,
     previewView: PreviewView,
     analysisExecutor: Executor,
-    decoder: BarcodeDecoder,
+    analyzerFactory: QrAnalyzerFactory,
     onCodeRead: (String) -> Unit,
 ): Camera? {
     val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
@@ -124,7 +123,7 @@ private fun bindCamera(
         )
         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
         .build()
-        .also { it.setAnalyzer(analysisExecutor, QrImageAnalyzer(decoder, onCodeRead)) }
+        .also { it.setAnalyzer(analysisExecutor, analyzerFactory.create(onCodeRead)) }
     return try {
         provider.unbindAll()
         provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)

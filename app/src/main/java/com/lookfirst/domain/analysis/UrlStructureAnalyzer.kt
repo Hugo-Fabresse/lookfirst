@@ -67,6 +67,9 @@ object UrlStructureAnalyzer : SignalAnalyzer {
             if (normalized.host.kind == HostKind.DOMAIN && ShortenerDomains.matches(normalized.host.ascii)) {
                 add(Signal(SignalCode.SHORTENER, evidence = ascii))
             }
+            if (normalized.host.kind == HostKind.DOMAIN && LocalHosts.matches(normalized.host.ascii)) {
+                add(Signal(SignalCode.LOCAL_HOST, evidence = ascii))
+            }
         }
     }
 

@@ -440,6 +440,8 @@ Fixed zone first, the rest of the middle (reasons, optional checks) scrolls abov
 
 "(o)" is the eye icon. The line "Contrôles effectués : …" lists what was checked (not the result) so the user knows what absence of signal means (D18).
 
+For a web link with no risk signal, a second line follows it (LF-33): "Liste consultée : CERT Polska (centrée sur la Pologne)." / "List consulted: CERT Polska (centred on Poland)." (`checked_line_list_source`). It says which list was read, is not a reason and never changes the level; it is absent for content that is not a web link and for any verdict that shows a risk or a "lists missing" reason (the checks line itself is only shown under "Aucun signal de risque détecté").
+
 ### 5.11 Content type without Open (deep link, otpauth)
 
 ```
@@ -502,6 +504,8 @@ Domain age sheet: "LookFirst demande à un registre public (RDAP, rdap.verisign.
 +--------------------------------------+
 ```
 
+Under the version line, `lists_coverage_note` (same text as in About, LF-33): the list is Polish-centred and the other checks stay active.
+
 States: updating (spinner, "Mise à jour en cours"), failed ("Échec de la mise à jour : la liste précédente est conservée."), rejected ("Liste refusée : la vérification de signature a échoué. La liste précédente est conservée." No technical detail), offline ("Hors connexion"), up to date ("Déjà à jour.").
 
 ### 5.14 About and privacy
@@ -525,6 +529,10 @@ States: updating (spinner, "Mise à jour en cours"), failed ("Échec de la mise 
 |  | Âge du domaine  | Registre RDAP: ||
 |  | (sur demande)   | nom de domaine ||
 |  +-----------------+----------------+|
+|                                      |
+|  Liste publiée par le CERT polonais, |
+|  centrée sur la Pologne : elle       |
+|  couvre peu les arnaques françaises. |
 |                                      |
 |  Ce que LookFirst ne garantit pas    |
 |  Un site neuf ou non signalé peut    |
@@ -574,6 +582,7 @@ Strings live in `strings.xml` (fr default, en). This section is exhaustive and i
 | lists_age_short | Listes : mises à jour %1$s. | Lists: updated %1$s. |
 | checked_line | Contrôles effectués : adresse, alphabets, schéma, listes de réputation. | Checks run: address, alphabets, scheme, reputation lists. |
 | checked_line_content | Contrôles effectués : type de contenu, caractères cachés, cohérence des champs. | Checks run: type of content, hidden characters, consistency of the fields. |
+| checked_line_list_source | Liste consultée : CERT Polska (centrée sur la Pologne). | List consulted: CERT Polska (centred on Poland). |
 | lists_none | Aucune liste de réputation installée. | No reputation list installed. |
 | analysing_banner | Analyse en cours… | Analysing… |
 | optional_checks | Vérifications facultatives | Optional checks |
@@ -764,6 +773,7 @@ Error handling rule: typed errors map to these strings; `Throwable.message` is n
 | lists_rejected | Liste refusée : la vérification de signature a échoué. La liste précédente est conservée. | List rejected: the signature check failed. The previous list is kept. |
 | lists_offline | Hors connexion | Offline |
 | lists_up_to_date | Déjà à jour. | Already up to date. |
+| lists_coverage_note | Liste publiée par le CERT polonais, centrée sur les fraudes visant la Pologne : elle couvre peu les arnaques françaises. Les autres contrôles de l'app (faux liens, imitations de marques) restent actifs. | List published by the Polish CERT, centred on fraud aimed at Poland: it covers few French scams. The app's other checks (fake links, brand imitations) stay active. |
 | settings_about_link | À propos et confidentialité | About and privacy |
 | settings_app_version | Version de l'application | App version |
 | about_title | À propos et confidentialité | About and privacy |

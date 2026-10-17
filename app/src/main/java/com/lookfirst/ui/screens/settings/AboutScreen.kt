@@ -38,6 +38,7 @@ fun AboutScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     modifier = Modifier.padding(top = 12.dp).semantics { heading() },
                 )
                 NetworkRow(R.string.about_net_lists, R.string.about_net_lists_who)
+                Text(text = stringResource(R.string.lists_coverage_note), style = MaterialTheme.typography.bodyLarge)
                 NetworkRow(R.string.about_net_redirects, R.string.about_net_redirects_who)
                 NetworkRow(R.string.about_net_rdap, R.string.about_net_rdap_who)
                 Section(R.string.about_no_guarantee_header, R.string.about_no_guarantee_body)

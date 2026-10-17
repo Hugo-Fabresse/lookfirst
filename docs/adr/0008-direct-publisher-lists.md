@@ -26,5 +26,6 @@ We lose authenticity (anyone who controls the publisher or the connection after 
 - A false warning on a non-official domain is possible and cannot be undone by the app within a run. The wording stays "reported by public lists", with the list name.
 - No offline coverage on first launch before the first download.
 - Coverage depends on one publisher at the start. Adding a source is a code change (`ListSources`) guided by `reputation-sources.md`.
+- LF-33 (audit S-4): that publisher is Polish and covers few French scams (measured: allegro 9,260 entries against antai 11, ameli 10, colissimo 3). The app says so in About and Settings and names the list in the verdict's "checks run" line; the other checks stay active. A second source was studied (phishunt.io, CIRCL, CERT-FR, CERT.at/EE, SWITCH, Phishing Initiative, Spamhaus, URLhaus): none passes the criteria with certainty, so none was added (`reputation-sources.md`).
 - The implementation removed: `PinnedKeys`, `SignatureVerifier`, `Keyset`, manifest and bundle verifier, `ListsEndpoint`, embedded bundle source, old store and downloader, the Gradle publication guards.
 - Thresholds are recorded in `DECISIONS.md` (D20).

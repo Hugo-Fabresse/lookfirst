@@ -191,11 +191,19 @@ private fun rememberReasonTexts(): ReasonTexts {
 /** "Checks run: ..." under a no-risk banner: what was looked at, so the user knows what no signal means (D18). */
 @Composable
 internal fun ChecksLine(webLink: Boolean, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        ChecksText(if (webLink) R.string.checked_line else R.string.checked_line_content)
+        // LF-33: the only list is centred on Poland; a web link with no list signal says which list was read.
+        if (webLink) ChecksText(R.string.checked_line_list_source)
+    }
+}
+
+@Composable
+private fun ChecksText(text: Int) {
     Text(
-        text = stringResource(if (webLink) R.string.checked_line else R.string.checked_line_content),
+        text = stringResource(text),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onBackground,
-        modifier = modifier.fillMaxWidth(),
     )
 }
 

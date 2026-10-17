@@ -34,8 +34,26 @@ One source at the start: **CERT Polska Warning List**. It is the only candidate 
 
 Points to know:
 - **Automation is implicit, not explicit.** CERT Polska's text allows use "for any purpose" and instructs operators to feed the list into their systems automatically (5-minute refresh). It does not name mobile apps. The app fetches once a day at most (`If-Modified-Since`), far below that. If Hugo wants a written confirmation, it must come from CERT Polska (contact on cert.pl). Flagged as the one open point of LF-28.
-- **Coverage is mostly Polish.** The list is run by a national CSIRT and is built from what is reported to it: it is strongest on phishing and fraud aimed at Poland and on large campaigns; sites aimed at other countries, notably France, can be missing, and a fresh site is often missing. The About screen says so ("a new or unreported site can be malicious").
+- **Coverage is mostly Polish, measured (audit S-4, 125,446 lines).** The list is run by a national CSIRT and is built from what is reported to it. Entries naming Polish brands: allegro 9,260, olx 2,552, vinted 1,839. French brands: antai 11, ameli 10, colissimo 3, and none for impots, laposte, chronopost, urssaf, franceconnect. A fresh site is often missing too. LF-28 wrote that the About screen said so; it did not (only the generic "a new or unreported site can be malicious"). Since LF-33 it does, in About and in Settings: "List published by the Polish CERT, centred on fraud aimed at Poland: it covers few French scams. The app's other checks (fake links, brand imitations) stay active." (`lists_coverage_note`, FR and EN). The verdict of a web link with no risk signal also says which list was read ("List consulted: CERT Polska (centred on Poland).", `checked_line_list_source`); this is not a reason and does not change the level.
 - **Candidate second source, if coverage proves too thin: Phishing.Database ACTIVE domains** (MIT, 11 MB). With CERT Polska (2.5 MB) a full update would be about 13.6 MB, above the 10 MiB target: Hugo would have to relax the budget or accept a reduced file. Its provenance is undocumented and GitHub is a US host. Not added by LF-28.
+
+## Second source study (LF-33, 2026-10-18)
+
+Goal: a French or EU source, same six criteria. Method: the publishers' own pages and files fetched with `curl` / HTTPS GET on 2026-10-18, nothing personal sent. **Result: no source passes all criteria with certainty; none was added.** `ListSources` still has CERT Polska only. Candidates and blockers:
+
+| Candidate | Where | Finding | Verdict |
+|---|---|---|---|
+| **phishunt.io** `https://phishunt.io/feed.txt` | Spain (Daniel Lopez, "independent side project"), behind Cloudflare (US CDN) | No key. Terms (https://phishunt.io/tos/, updated 27 Aug 2026): "free of charge, without authentication, for security research, incident response, brand protection, and other lawful purposes"; section 7: data "released into the public domain under Creative Commons CC0 1.0"; rate limit 10 requests/s per IP; "may be modified, suspended, or discontinued at any time". Section 3: "reflects suspicion based on automated heuristics ... False positives and false negatives occur routinely." Section 4 forbids asserting "that a listed domain is confirmed phishing based solely on its presence". Measured: `text/plain`, 761 lines, 33 KB, one full URL per line (not domains), `cache-control: max-age=900`. Entries include shared hosts (`*.blogspot.com`, `*.vercel.app`) | **Rejected.** (1) Terms and format are fine, but the data is declared suspicion with routine false positives, from one person. (2) A rolling list of 761 URLs that turns over within days cannot pass the variation limit (10 % + 2 points per day, `reputation-lists.md`) without weakening it for CERT Polska as well; the churn was not measured, a day-to-day diff is needed. (3) Entries on shared platforms would need per-host handling that the registrable-domain index does not do for `vercel.app`. (4) 761 entries do not fix the French gap. Revisit if the operator publishes a stable, verified subset |
+| **CIRCL OSINT feed** `https://www.circl.lu/doc/misp/feed-osint/` | Luxembourg | Directory of hundreds of MISP event files (JSON, up to 7 MB each, many MB in total); not a domain list; the page states no licence for the feed. https://www.circl.lu/opendata/ says "subject to the licence attached to each resource" | Rejected (criteria 4 and 5; terms not stated per file) |
+| **CERT-FR** (`cert.cyber.gouv.fr`) | France | Publishes advisories and a few IOC reports per campaign or intrusion set (e.g. a public MISP feed, 2022), not a continuous phishing domain list | Rejected (criteria 4 and 6) |
+| **CERT.at**, **CERT-EE**, **SWITCH-CERT** | Austria, Estonia, Switzerland | Their feeds page lists only blog RSS/Atom; no public domain blocklist found on the pages consulted | Rejected: nothing to download |
+| **Phishing Initiative** (Orange Cyberdefense) | France | Reporting and verification form only; confirmed URLs go to partner browsers; no public download found | Rejected: no file |
+| **Signal Spam** | France | Reporting service for spam; no public list | Rejected |
+| **Spamhaus DBL** | United Kingdom / Switzerland | Free use is by DNS queries (the free tier is the "DNSBL Fair Use Policy"), which sends the looked-up name to a resolver: forbidden by D3. Data feeds are commercial | Rejected (D3, terms) |
+| **abuse.ch URLhaus / ThreatFox** | Switzerland | Auth-Key required since 2025 for downloads | Rejected (criterion 1) |
+| **Phishing.Database** `phishing-domains-ACTIVE.txt` | GitHub (US) | Unchanged from LF-28: 11 MB, MIT, provenance undocumented. The `NEW-last-day` / `NEW-last-week` files no longer exist (HTTP 404), `NEW-last-hour` is empty | Rejected |
+
+Next step if coverage must improve: a written agreement with a French publisher (for example a CERT or a bank-sector body) giving a stable download, or Hugo relaxing criterion 2 for Phishing.Database with the 10 MiB budget decision it implies. Neither is for an agent to decide.
 
 ## Data that is not a reputation list
 
@@ -71,6 +89,10 @@ IANA's file again: a `::warning::` annotation means IANA published a new one. Th
 ## Sources consulted
 
 - CERT Polska Warning List: https://cert.pl/en/warning-list/ and https://hole.cert.pl/domains/v2/domains.txt
+- phishunt.io: https://phishunt.io/tos/ and https://phishunt.io/feed.txt
+- CIRCL: https://www.circl.lu/doc/misp/feed-osint/ and https://www.circl.lu/opendata/
+- CERT-FR: https://cert.cyber.gouv.fr/ ; CERT.at feeds: https://www.cert.at/en/services/feeds/ ; Phishing Initiative: https://phishing-initiative.eu/contrib/
+- Spamhaus: https://www.spamhaus.org/blocklists/dnsbl-fair-use-policy/
 - URLhaus API page: https://urlhaus.abuse.ch/api/
 - Phishing Army: https://phishing.army/ and https://phishing.army/license/
 - Phishing.Database: https://github.com/Phishing-Database/Phishing.Database

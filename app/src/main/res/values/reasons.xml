@@ -145,6 +145,7 @@
     <string name="analysing_banner">Analysing…</string>
     <string name="no_risk_disclaimer">This guarantees nothing: lists only know threats that were already reported.</string>
     <string name="checked_line">Checks run: address, alphabets, scheme, reputation lists.</string>
+    <string name="checked_line_list_source">List consulted: CERT Polska (centred on Poland).</string>
     <string name="checked_line_content">Checks run: type of content, hidden characters, consistency of the fields.</string>
     <string name="technical_form">Technical form: %1$s</string>
     <string name="technical_form_help">Browsers will use this technical form. If it does not look like the expected name, that is a risk signal.</string>

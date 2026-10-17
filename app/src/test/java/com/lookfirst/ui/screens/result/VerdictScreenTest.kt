@@ -105,14 +105,38 @@ class VerdictScreenTest {
         composeRule.onNodeWithText(text(R.string.level_no_risk_signal)).assertExists()
         composeRule.onNodeWithText(text(R.string.no_risk_disclaimer)).assertExists()
         composeRule.onNodeWithText(text(R.string.checked_line_content)).assertExists()
+        composeRule.onAllNodesWithText(text(R.string.checked_line_list_source)).assertCountEquals(0)
         composeRule.onAllNodesWithText("safe", substring = true, ignoreCase = true).assertCountEquals(0)
     }
 
     @Test
-    fun theNoRiskChecksLineOfAWebLinkNamesTheAddressChecks() {
+    fun theNoRiskChecksLineOfAWebLinkNamesTheAddressChecksAndTheListRead() {
         showWith("https://example.com/", emptyList(), VerdictLevel.NO_RISK_SIGNAL)
         composeRule.onNodeWithText(text(R.string.checked_line)).assertExists()
+        composeRule.onNodeWithText(text(R.string.checked_line_list_source)).assertExists()
+        composeRule.onAllNodesWithText("safe", substring = true, ignoreCase = true).assertCountEquals(0)
         composeRule.onNodeWithText(text(R.string.no_risk_disclaimer)).assertExists()
+    }
+
+    @Test
+    fun theListSourceLineIsAbsentWhenAListSignalOrAnotherRiskIsShown() {
+        showWith("https://example.com/", listOf(Signal(SignalCode.LISTS_MISSING)), VerdictLevel.CAUTION)
+        composeRule.onAllNodesWithText(text(R.string.checked_line_list_source)).assertCountEquals(0)
+    }
+
+    @Test
+    fun theListSourceLineIsWordedInBothLanguagesWithoutTheWordSafe() {
+        val en = text(R.string.checked_line_list_source)
+        assertEquals("List consulted: CERT Polska (centred on Poland).", en)
+        val fr = RuntimeEnvironment.getApplication().resources.let {
+            val config = android.content.res.Configuration(it.configuration).apply {
+                setLocale(java.util.Locale.FRENCH)
+            }
+            RuntimeEnvironment.getApplication().createConfigurationContext(
+                config,
+            ).getString(R.string.checked_line_list_source)
+        }
+        assertEquals("Liste consultée : CERT Polska (centrée sur la Pologne).", fr)
     }
 
     @Test

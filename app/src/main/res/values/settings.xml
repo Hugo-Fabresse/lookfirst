@@ -23,6 +23,7 @@
     <string name="lists_rejected">List refused by the integrity checks. The previous list is kept.</string>
     <string name="lists_offline">Offline</string>
     <string name="lists_up_to_date">Already up to date.</string>
+    <string name="lists_coverage_note">List published by the Polish CERT, centred on fraud aimed at Poland: it covers few French scams. The app\'s other checks (fake links, brand imitations) stay active.</string>
     <string name="settings_about_link">About and privacy</string>
     <string name="settings_app_version">App version</string>
 

@@ -23,6 +23,7 @@
     <string name="lists_rejected">Liste refusée par les contrôles d\'intégrité. La liste précédente est conservée.</string>
     <string name="lists_offline">Hors connexion</string>
     <string name="lists_up_to_date">Déjà à jour.</string>
+    <string name="lists_coverage_note">Liste publiée par le CERT polonais, centrée sur les fraudes visant la Pologne : elle couvre peu les arnaques françaises. Les autres contrôles de l\'app (faux liens, imitations de marques) restent actifs.</string>
     <string name="settings_about_link">À propos et confidentialité</string>
     <string name="settings_app_version">Version de l\'application</string>
 

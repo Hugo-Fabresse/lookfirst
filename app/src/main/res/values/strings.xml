@@ -9,8 +9,11 @@
     <string name="open_android_settings">Open Android settings</string>
     <string name="action_cancel">Cancel</string>
     <string name="scan_result_title">Scan result</string>
-    <string name="scan_result_length">Code read: %1$d characters</string>
     <string name="a11y_camera_preview">Camera preview. Point at a QR code.</string>
     <string name="a11y_settings">Settings</string>
     <string name="a11y_torch">Torch</string>
+    <plurals name="scan_result_length">
+        <item quantity="one">Code read: %1$d character</item>
+        <item quantity="other">Code read: %1$d characters</item>
+    </plurals>
 </resources>

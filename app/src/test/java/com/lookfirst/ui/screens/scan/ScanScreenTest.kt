@@ -86,7 +86,12 @@ class ScanScreenTest {
     @Test
     fun capturedShowsOnlyTheLengthAndCancelResumes() {
         show(ScanUiState.Captured(contentLength = 42))
-        composeRule.onNodeWithText(text(R.string.scan_result_length, 42)).assertExists()
+        val length = RuntimeEnvironment.getApplication().resources.getQuantityString(
+            R.plurals.scan_result_length,
+            42,
+            42,
+        )
+        composeRule.onNodeWithText(length).assertExists()
         composeRule.onNodeWithText("camera-slot").assertDoesNotExist()
         composeRule.onNodeWithText(text(R.string.action_cancel)).performClick()
         assertEquals(1, cancels)

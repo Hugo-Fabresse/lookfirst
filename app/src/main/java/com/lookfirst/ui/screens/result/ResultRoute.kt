@@ -7,10 +7,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lookfirst.R
+import com.lookfirst.ui.components.SecureWindow
 import kotlinx.coroutines.launch
 
 /**
@@ -24,7 +23,7 @@ fun ResultRoute(viewModel: ResultViewModel, onClose: () -> Unit) {
     val copied = stringResource(R.string.copied)
 
     BackHandler(onBack = onClose)
-    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onReturned() }
+    SecureWindow(enabled = (state as? ResultUiState.Content)?.content?.containsSecret == true)
     LaunchedEffect(state is ResultUiState.NoContent) { if (state is ResultUiState.NoContent) onClose() }
     LaunchedEffect(viewModel) {
         val scope = this

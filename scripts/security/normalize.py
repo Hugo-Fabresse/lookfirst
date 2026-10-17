@@ -101,7 +101,8 @@ elif tool == "osv":
                 fp = hashlib.sha256(f"{name}|{version}|{vid}".encode()).hexdigest()[:24]
                 sev = clean(grp.get("max_severity") or v.get("database_specific", {}).get("severity", "?"))
                 aliases = ", ".join(code(a) for a in sorted(grp.get("aliases", [])) if a != vid)
-                summ = clean(v.get("summary", ""))
+                summ = v.get("summary", "")
+                summ = code(summ[:300]) if summ else ""  # inline code: no link, no #n reference rendered
                 dep = f"{name} {version}"
                 body = (f"**Vulnerabilite** : {code(vid)} (severite {sev}) - [osv.dev](https://osv.dev/{quote(vid)})"
                         f"\n\n**Dependance livree dans {shipped}** : {code(dep)} ({code(lock_name)})\n\n{summ}")

@@ -167,7 +167,10 @@ class BrandFraudCorpusTest {
         www.slack.com status.slack.com api.slack.com www.ovh.net
         mobile.de mobile.net mobile.fr telecom.com telecom.fr podcast.com broadcast.com comcasts.example
         monza.it macie.example
-        mon-amelie.fr cafe-amelie.fr t-mobile-arena.com mobile-de.example espace-client.example mobile-service.com
+        espace-amelie.fr support.amelie-boutique.fr secure-email.com support-email.fr email-service.fr aide-fortune.fr
+        reparation-mobile.shop accessoires-mobile.store afone-telecom.online chasse-au-tresor.club
+        creations-amelie.shop espace-sante.fr carte-vitale-info.fr mutuelle-sante.fr
+        mon-amelie.fr cafe-amelie.frt-mobile-arena.com mobile-de.example espace-client.example mobile-service.com
         mon-amelie.com amelie-poulain.fr ma-banque.example connexion-wifi.example
         mediamarkt.example abnamro.example amelie.fr amelia.com antal.fr amelli.fr gmial.fr
         """.trimIndent().split(Regex("\\s+")).filter {
@@ -183,8 +186,16 @@ class BrandFraudCorpusTest {
         for (host in listOf("amelli-info.fr", "mon-amelli.fr", "mobile-service.com", "x-y-z-a.fr")) {
             assertTrue(host, SignalCode.BRAND_LOOKALIKE !in brandCodes(host))
         }
-        val many = List(40) { "ab" }.joinToString("-").take(63)
-        assertTrue(SignalCode.BRAND_LOOKALIKE !in brandCodes("$many.xyz"))
+        val shortParts = List(15) { "ab" }.joinToString("-")
+        assertTrue(SignalCode.BRAND_LOOKALIKE in brandCodes("$shortParts-amelli.xyz"))
+        assertTrue(SignalCode.BRAND_LOOKALIKE !in brandCodes("$shortParts.xyz"))
+        for (host in listOf("ameli-vitale.xyz", "ameli-vitale.com")) {
+            assertEquals(
+                host,
+                LookalikeKind.COMBINED,
+                LookalikeAnalyzer.on("https://$host/").of(SignalCode.BRAND_LOOKALIKE).details.single(),
+            )
+        }
     }
 
     @Test
